@@ -22,9 +22,9 @@ ENV/
 .vscode/
 .history/
 
-# Data and outputs
+# Data and results
 data/
-outputs/
+results/
 *.csv
 *.xlsx
 *.parquet
@@ -41,3 +41,4 @@ desktop.ini
 *.tmp
 *.bak
 *.swp
+
