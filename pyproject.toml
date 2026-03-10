@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E/W: pycodestyle errors and warnings, F: pyflakes, I: isort
+select = ["E", "F", "W", "I"]
+# E501 (line too long) is enforced by the formatter instead
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
