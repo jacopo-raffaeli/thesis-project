@@ -1,7 +1,5 @@
 # TODO:
 # - Core Infrastructure - Logging, error handling, config validation
-# - Avoid explicit import from configs
-# - Parallelization Modes - 3 modes (serial, parallel days, parallel timestamps) with benchmarking
 # - DST Handling - Investigation script first, then handling if needed
 # - Sanity Checks - Input validation, output validation, quality metrics
 # - Production Monitoring - Progress reporting, memory management, metadata
