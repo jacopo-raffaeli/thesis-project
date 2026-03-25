@@ -5,6 +5,9 @@ data/interim/*
 data/processed/*
 #!data/**/.gitkeep
 results
+scripts/run_format.ps1
+scripts/update_requirements.ps1
+notebooks/tmp.ipynb_checkpoints
 
 # Model files
 *.pkl
