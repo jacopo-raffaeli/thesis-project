@@ -156,6 +156,8 @@ def reconstruct_lob(bond_proposals, freq, levels, lob_columns):
         pd.DataFrame: Reconstructed LOB with mid prices
     """
     # Generate timestamp range
+    # NOTE: Likely cause of the first row NaN issue in ctd lob
+    # Maybe using .ceil() instead of floor() could help
     timestamp_start = bond_proposals["updateTS"].min().floor(freq)
     timestamp_end = bond_proposals["endTS"].max().floor(freq)
 
@@ -220,6 +222,7 @@ def count_active_events(ts, bond_proposals, intervals, levels=10):
     bid_items = list(bid_levels.head(levels).items())
 
     # Pad to exactly N levels if needed
+    # NOTE: Likely cause of the first row NaN issue in ctd lob
     while len(bid_items) < levels:
         bid_items.append((np.nan, np.nan))
 
