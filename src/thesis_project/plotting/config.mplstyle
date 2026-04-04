@@ -1,0 +1,55 @@
+# LATEX
+# text.usetex: True
+
+# FONTS
+font.family: serif
+font.size: 10
+
+axes.titlesize: 12
+axes.labelsize: 11
+
+xtick.labelsize: 10
+ytick.labelsize: 10
+
+legend.fontsize: 10
+
+# FIGURE
+figure.figsize: 6.5, 4.0
+# For thesis try also:
+# figure.figsize: 6.5, 3.8
+figure.dpi: 120
+savefig.dpi: 300
+savefig.bbox: tight
+
+# LINES
+lines.linewidth: 1.5
+lines.markersize: 5
+
+# AXES
+axes.grid: True
+grid.alpha: 0.3
+grid.linestyle: --
+
+axes.spines.top: False
+axes.spines.right: False
+
+# TICKS
+xtick.direction: in
+ytick.direction: in
+
+# LEGEND
+legend.frameon: False
+
+# COLORS (clean, muted)
+# axes.prop_cycle: cycler('color', [
+#     '#4C72B0',
+#     '#DD8452',
+#     '#55A868',
+#     '#C44E52',
+#     '#8172B3',
+#     '#937860',
+#     '#DA8BC3',
+#     '#8C8C8C',
+#     '#CCB974',
+#     '#64B5CD'
+# ])
