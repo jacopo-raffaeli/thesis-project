@@ -1,26 +1,27 @@
-"""Organize cache folders: move files into ctd|futures/YYYY/MM/"""
+"""
+Organize lobs by month and year in ctd/YYYY/MM/ and futures/YYYY/MM/.
+Both for FBTp and FBTS.
+"""
 
 import argparse
 import re
-from datetime import datetime
 from pathlib import Path
 
-DEFAULT_CACHES = ["FBTP", "FBTS"]
+DEFAULT_CACHES = ["cache_FBTP", "cache_FBTS"]
 PAT = re.compile(r"(?P<type>ctd|futures).*?(?P<year>\d{4})[_-](?P<month>\d{2})", re.I)
 
+EXCLUDED_FILES = {"daily_cf.csv", "last_trading_dates.csv"}
 
-def detect_type_and_date(name, fallback_mtime=None):
+
+def detect_type_and_date(name):
     m = PAT.search(name)
     if m:
         return m.group("type").lower(), int(m.group("year")), int(m.group("month"))
-    if fallback_mtime:
-        dt = datetime.fromtimestamp(fallback_mtime)
-        return "unknown", dt.year, dt.month
-    return "unknown", datetime.now().year, datetime.now().month
+    raise ValueError(f"Cannot parse filename: {name}")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Organize cache_FBTP/cache_FBTS into type/YYYY/MM")
+    ap = argparse.ArgumentParser(description="Organize cache_FBTP/cache_FBTS into lob_type/YYYY/MM")
     ap.add_argument(
         "--root",
         default="thesis-project/data/raw",
@@ -41,34 +42,28 @@ def main():
             continue
 
         for p in sorted(cache_path.iterdir()):
-            if p.is_dir() or p.name.startswith("."):
+            if p.is_dir() or p.name.startswith(".") or p.name in EXCLUDED_FILES:
                 continue
-            kind, year, month = detect_type_and_date(p.name, p.stat().st_mtime)
-            if kind == "unknown":
-                print(f"[skip] unknown type: {p.name}")
-                continue
+            kind, year, month = detect_type_and_date(p.name)
 
-            target = cache_path / kind / f"{year:04d}" / f"{month:02d}" / p.name
+            # Map cache_<LOB_TYPE> -> <lob_type>
+            target_folder = cache_name.replace("cache_", "").lower()
+            target = root / target_folder / kind / f"{year:04d}" / f"{month:02d}" / p.name
             if args.dry_run or not args.execute:
-                print(f"[plan] {p} -> {target}")
+                if target.exists():
+                    print(f"[plan] {p} -> {target} (replace)")
+                else:
+                    print(f"[plan] {p} -> {target}")
                 continue
 
-            # execute: move file, avoid overwrite by adding numeric suffix
+            # execute: move file, replace if exists
             target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.exists():
+            if target.exists():
+                p.replace(target)
+                print(f"[replaced] {p} -> {target}")
+            else:
                 p.replace(target)
                 print(f"[moved] {p} -> {target}")
-            else:
-                base = target.stem
-                suf = target.suffix
-                i = 1
-                while True:
-                    cand = target.parent / f"{base}_{i}{suf}"
-                    if not cand.exists():
-                        p.replace(cand)
-                        print(f"[moved] {p} -> {cand}")
-                        break
-                    i += 1
 
 
 if __name__ == "__main__":

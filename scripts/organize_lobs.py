@@ -1,11 +1,19 @@
-"""Standardize and reorder raw LOB parquet files for futures and CTD.
+"""
+Standardize and reorder raw LOB parquet files for futures and CTD.
 
-Expected layout for both datasets:
-timestamp (renamed to this exact name)
-mid price column
-For each level L: bid price, bid size, ask price, ask size
+Expected input layout for both datasets:
+'timestamp' and 'Date-Time' respectively for ctd and futures
+'mid' column for mid price
+'L<n>-<Bid|Ask><Price|Size>' columns for n=1..10
+'#RIC', 'Domain', 'GMT Offset', 'Type' columns for futures only
+
+Expected output layout for both datasets:
+'timestamp' is the index
+'MidPrice' column
+'L<n>-<Bid|Ask><Price|Size>' columns for n=1..10
 
 For futures only, if present, these columns are forced to the end:
+- #RIC
 - Domain
 - GMT Offset
 - Type
@@ -23,6 +31,17 @@ FUTURES_TIMESTAMP_COLUMN = "Date-Time"
 MID_PRICE_COLUMN = "mid"
 
 FUTURES_TAIL_COLUMNS = ("#RIC", "Domain", "GMT Offset", "Type")
+
+
+def _find_column_case_insensitive(cols: list[str], target: str) -> str | None:
+    """
+    Find a column name case-insensitively. Returns the actual column name or None.
+    """
+    target_lower = target.lower()
+    for col in cols:
+        if col.lower() == target_lower:
+            return col
+    return None
 
 
 def _build_lob_columns() -> list[str]:
@@ -51,9 +70,12 @@ def _build_ordered_columns(
             f"Expected timestamp index '{timestamp_col}' not found. Found: {df.index.name}"
         )
 
-    if MID_PRICE_COLUMN not in cols:
-        raise ValueError(f"Expected mid price column '{MID_PRICE_COLUMN}' not found.")
-    mid_price_col = MID_PRICE_COLUMN
+    # Find mid price column (case-insensitive)
+    mid_price_col = _find_column_case_insensitive(cols, MID_PRICE_COLUMN)
+    if mid_price_col is None:
+        raise ValueError(
+            f"Expected mid price column '{MID_PRICE_COLUMN}' not found. Available: {cols}"
+        )
 
     lob_cols = [c for c in _build_lob_columns() if c in cols]
 
@@ -79,17 +101,60 @@ def _build_ordered_columns(
     return final_order, rename_map, index_rename
 
 
-def _process_file(src: Path, is_futures: bool) -> None:
-    df = pd.read_parquet(src)
-    ordered_cols, rename_map, index_rename = _build_ordered_columns(df, is_futures=is_futures)
+def _process_file(src: Path, is_futures: bool) -> tuple[bool, str]:
+    """Process a single parquet file. Returns (success, message)."""
+    try:
+        # Read parquet
+        try:
+            df = pd.read_parquet(src)
+        except Exception as e:
+            return False, f"Failed to read parquet: {type(e).__name__}: {e}"
 
-    out_df = df.loc[:, ordered_cols].rename(columns=rename_map)
+        # Check if empty
+        if df.empty:
+            return False, "File is empty (no rows)"
 
-    # Rename index if needed
-    if index_rename:
-        out_df.index.name = index_rename
+        # Validate and build ordered columns
+        try:
+            ordered_cols, rename_map, index_rename = _build_ordered_columns(
+                df, is_futures=is_futures
+            )
+        except ValueError as e:
+            return False, f"Column validation failed: {e}"
 
-    out_df.to_parquet(src, engine="pyarrow")
+        # Transform dataframe
+        try:
+            out_df = df.loc[:, ordered_cols].rename(columns=rename_map)
+            if index_rename:
+                out_df.index.name = index_rename
+        except Exception as e:
+            return False, f"Failed to transform dataframe: {type(e).__name__}: {e}"
+
+        # Write parquet
+        try:
+            out_df.to_parquet(src, engine="pyarrow")
+        except Exception as e:
+            return False, f"Failed to write parquet: {type(e).__name__}: {e}"
+
+        # Verify written file
+        try:
+            verify_df = pd.read_parquet(src)
+            if verify_df.empty:
+                return False, "Verification failed: written file is empty"
+            if len(verify_df) != len(out_df):
+                return (
+                    False,
+                    f"Verification failed: row count mismatch (wrote {len(out_df)}, read {len(verify_df)})",
+                )
+            if list(verify_df.columns) != list(out_df.columns):
+                return False, "Verification failed: column mismatch"
+        except Exception as e:
+            return False, f"Verification failed: {type(e).__name__}: {e}"
+
+        return True, "Success"
+
+    except Exception as e:
+        return False, f"Unexpected error: {type(e).__name__}: {e}"
 
 
 def _collect_parquet_files(root: Path) -> list[Path]:
@@ -101,7 +166,7 @@ def main() -> None:
     parser.add_argument(
         "--input-root",
         type=Path,
-        default=Path("..") / "data" / "raw" / "FBTS",
+        default=Path("..") / "data" / "raw" / "fbtp",
         help="Root folder containing ctd/ and futures/.",
     )
     parser.add_argument(
@@ -123,24 +188,41 @@ def main() -> None:
 
     print(f"Found {len(ctd_files)} CTD files and {len(futures_files)} futures files.")
 
+    success_count = 0
+    fail_count = 0
+
     for src in ctd_files:
         if args.dry_run:
-            print(f"[plan] CTD     {src} (replace in place)")
+            print(f"[plan] CTD     {src}")
             continue
-        _process_file(src=src, is_futures=False)
-        print(f"[done] CTD     {src} (replaced)")
+        success, message = _process_file(src=src, is_futures=False)
+        if success:
+            print(f"[done] CTD     {src}")
+            success_count += 1
+        else:
+            print(f"[fail] CTD     {src}")
+            print(f"       Error: {message}")
+            fail_count += 1
 
     for src in futures_files:
         if args.dry_run:
-            print(f"[plan] FUTURES {src} (replace in place)")
+            print(f"[plan] FUTURES {src}")
             continue
-        _process_file(src=src, is_futures=True)
-        print(f"[done] FUTURES {src} (replaced)")
+        success, message = _process_file(src=src, is_futures=True)
+        if success:
+            print(f"[done] FUTURES {src}")
+            success_count += 1
+        else:
+            print(f"[fail] FUTURES {src}")
+            print(f"       Error: {message}")
+            fail_count += 1
 
     if args.dry_run:
         print("Dry run complete. No files were modified.")
     else:
-        print("Processing complete.")
+        print(f"\nProcessing complete: {success_count} succeeded, {fail_count} failed.")
+        if fail_count > 0:
+            raise SystemExit(f"Processing failed for {fail_count} file(s). See errors above.")
 
 
 if __name__ == "__main__":
