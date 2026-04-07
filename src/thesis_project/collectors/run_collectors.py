@@ -1,7 +1,13 @@
 import warnings
 from datetime import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    Optional,
+)
 
 import pandas as pd
 
@@ -77,21 +83,25 @@ def load_lob_dataframe(
         warnings.warn(f"Error reading {lob_path}: {exc}", UserWarning)
         return None
 
+    # NOTE: Does it make sense, from the pov of analysis to return None?
     if lob_df.empty:
         warnings.warn(f"{lob_path} is empty.", UserWarning)
         return None
 
+    # NOTE: Should I add a conditional cleaning or perform it anyway?
     # Drop useless columns from futures LOBs
     if lob_type == "futures":
         existing = [c for c in _FUTURES_DROP_COLUMNS if c in lob_df.columns]
         if existing:
             lob_df = lob_df.drop(columns=existing, errors="ignore")
 
+    # NOTE: Should I add a conditional cleaning or perform it anyway?
     # Drop first row from ctd LOBs if all NaNs
     # This is a workaround for an issue with ctd lob generation
     if lob_type == "ctd" and lob_df.iloc[0].isna().all():
         lob_df = lob_df.iloc[1:]
 
+    # NOTE: Should I add a conditional cutoff or perform it anyway?
     # Time cutoffs
     if isinstance(lob_df.index, pd.DatetimeIndex):
         lob_df = lob_df.between_time(start_time, end_time, inclusive="both")
