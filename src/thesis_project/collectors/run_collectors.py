@@ -103,7 +103,7 @@ def load_lob_dataframe(
     return lob_df
 
 
-def run_collectors(
+def run_collectors_single(
     base_path: Path,
     lob_type: str,
     extractors: Dict[str, Callable[[pd.DataFrame, str, str], Optional[pd.DataFrame]]],
@@ -136,13 +136,18 @@ def run_collectors(
                 continue
             records_by_extractor[name].append(extracted_df)
 
-    return {
-        name: pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
-        for name, parts in records_by_extractor.items()
-    }
+    result = {}
+    for name, parts in records_by_extractor.items():
+        if parts:
+            df = pd.concat(parts, ignore_index=False).sort_index()
+        else:
+            df = pd.DataFrame()
+        result[name] = df
+
+    return result
 
 
-def run_collectors_multi(
+def run_collectors_double(
     fut_base_path: Path,
     ctd_base_path: Path,
     extractors: Dict[
@@ -201,7 +206,12 @@ def run_collectors_multi(
                 continue
             records_by_extractor[name].append(extracted_df)
 
-    return {
-        name: pd.concat(parts, ignore_index=False) if parts else pd.DataFrame()
-        for name, parts in records_by_extractor.items()
-    }
+    result = {}
+    for name, parts in records_by_extractor.items():
+        if parts:
+            df = pd.concat(parts, ignore_index=False).sort_index()
+        else:
+            df = pd.DataFrame()
+        result[name] = df
+
+    return result
