@@ -1,1 +1,3 @@
-"""thesis_project package."""
+"""
+Thesis project package.
+"""
