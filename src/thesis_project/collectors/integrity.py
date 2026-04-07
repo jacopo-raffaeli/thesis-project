@@ -1,17 +1,17 @@
-# TODO: Add warning statements where necessary
-# TODO: Add minimal comments where needed
-
 import re
+import warnings
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Iterable, Optional, Sequence, Union
 
 import pandas as pd
 
+from thesis_project.utils.dates import filename_to_date
+
 _DATE_PATTERN = re.compile(r"(\d{4})_(\d{2})_(\d{2})")
 _DEFAULT_L1_COLUMNS = ("L1-BidPrice", "L1-BidSize", "L1-AskPrice", "L1-AskSize")
 _PRICE_COL_PATTERN = re.compile(r"^L(\d+)-(Bid|Ask)Price$")
-_SIZE_COL_PATTERN = re.compile(r"^L\d+-(BidSize|AskSize)$")
+_SIZE_COL_PATTERN = re.compile(r"^L\d+-(Bid|Ask)Size$")
 
 
 def _slice_intraday_window(
@@ -19,7 +19,12 @@ def _slice_intraday_window(
     start_time: Union[time, str],
     end_time: Union[time, str],
 ) -> pd.DataFrame:
-    """Return intraday slice when index is datetime-based."""
+    """
+    Return intraday slice when index is datetime-based.
+
+    TODO: Add variables description
+    TODO: Add output description
+    """
     if not isinstance(lob_df.index, pd.DatetimeIndex):
         return lob_df
     start = _coerce_time(start_time)
@@ -28,7 +33,12 @@ def _slice_intraday_window(
 
 
 def _coerce_time(value: Union[time, str]) -> time:
-    """Convert HH:MM or HH:MM:SS strings to time objects."""
+    """
+    Convert HH:MM or HH:MM:SS strings to time objects.
+
+    TODO: Add variables description
+    TODO: Add output description
+    """
     if isinstance(value, time):
         return value
     if isinstance(value, str):
@@ -39,84 +49,6 @@ def _coerce_time(value: Union[time, str]) -> time:
                 continue
         raise ValueError(f"Invalid intraday time value: {value}")
     raise ValueError(f"Unsupported intraday time type: {type(value)!r}")
-
-
-def collect_timestamp_bounds_series(
-    lob_df: pd.DataFrame,
-    filename: str,
-    lob_type: str,
-):
-    """
-    Collect first/last/last-non-nan timestamps for one file.
-
-    TODO: Add variables description
-    TODO: Add output description
-    """
-    mask_non_nan_row = lob_df.notna().any(axis=1)
-    if not mask_non_nan_row.any():
-        print(f"Warning: {filename} has rows but all values are NaN.")
-        return None
-
-    first_ts = pd.Timestamp(lob_df.index[0])
-    last_ts = pd.Timestamp(lob_df.index[-1])
-    last_non_nan_ts = pd.Timestamp(lob_df[mask_non_nan_row].index[-1])
-    # Add other possible timestamps of interest
-
-    # TODO: Index the output df by date
-    return pd.DataFrame(
-        [
-            {
-                "filename": filename,
-                "lob_type": lob_type,
-                "date": first_ts.date(),
-                "first_timestamp": first_ts.time(),
-                "last_timestamp": last_ts.time(),
-                "last_non_nan_timestamp": last_non_nan_ts.time(),
-            }
-        ]
-    )
-
-
-def collect_nan_profile_series(
-    lob_df: pd.DataFrame,
-    filename: str,
-    lob_type: str,
-):
-    """
-    Collect simple NaN profile statistics for one file.
-
-    TODO: Add variables description
-    TODO: Add output description
-    """
-    n_rows = len(lob_df)
-    n_cols = len(lob_df.columns)
-    n_cells = max(1, n_rows * n_cols)
-
-    row_all_nan = lob_df.isna().all(axis=1)
-    row_any_nan = lob_df.isna().any(axis=1)
-    # col_nan_frac = lob_df.isna().mean().sort_values(ascending=False)
-
-    # Create a string with the top 5 columns by NaN fraction
-    # top_nan_cols = ",".join([f"{k}:{v:.3f}" for k, v in col_nan_frac.head(5).items()])
-
-    first_ts = pd.Timestamp(lob_df.index[0])
-
-    # TODO: Index the output df by date
-    return pd.DataFrame(
-        [
-            {
-                "filename": filename,
-                "lob_type": lob_type,
-                "date": first_ts.date(),
-                "n_rows": n_rows,
-                "n_cols": n_cols,
-                "pct_rows_all_nan": float(row_all_nan.mean()),
-                "pct_rows_any_nan": float(row_any_nan.mean()),
-                "pct_nan_total": float(lob_df.isna().sum().sum() / n_cells),
-                # "top_nan_columns": top_nan_cols,
-            }
-        ]
-    )
 
 
 def collect_sampling_gaps_series(
@@ -408,40 +340,6 @@ def collect_missing_dates(
     return pd.DataFrame({"missing_date": missing})
 
 
-def collect_empty_raw_parquet_files(base_path: Path, lob_type: str) -> pd.DataFrame:
-    """Return row counts and empty flags for all raw parquet files under a base path."""
-    records = []
-
-    for file_path in sorted(base_path.rglob("*.parquet")):
-        date_value = None
-        match = _DATE_PATTERN.search(file_path.name)
-        if match is not None:
-            yyyy, mm, dd = match.groups()
-            date_value = pd.Timestamp(year=int(yyyy), month=int(mm), day=int(dd)).date()
-
-        n_rows = None
-        read_error = None
-        try:
-            df = pd.read_parquet(file_path, engine="fastparquet")
-            n_rows = int(len(df))
-        except Exception as exc:
-            read_error = str(exc)
-
-        records.append(
-            {
-                "filename": file_path.name,
-                "relative_path": str(file_path.relative_to(base_path)).replace("\\", "/"),
-                "lob_type": lob_type,
-                "date": date_value,
-                "n_rows": n_rows,
-                "is_empty": bool(n_rows == 0) if n_rows is not None else None,
-                "read_error": read_error,
-            }
-        )
-
-    return pd.DataFrame(records)
-
-
 def collect_negative_volume_series(lob_df: pd.DataFrame, filename: str, lob_type: str):
     """Collect per-file counts of strictly negative LOB sizes (NaNs are ignored)."""
     size_cols = [col for col in lob_df.columns if _SIZE_COL_PATTERN.match(col)]
@@ -575,3 +473,206 @@ def collect_price_ordering_series(lob_df: pd.DataFrame, filename: str, lob_type:
             }
         ]
     )
+
+
+def collect_empty_lobs(
+    df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+) -> Optional[pd.DataFrame]:
+    """
+    Analyze if a lob is empty or not and return a dataframe with the results.
+
+    Args:
+        df: DataFrame with LOB data
+        filename: Name of the file being analyzed
+        lob_type: Type of the LOB ("futures" or "ctd")
+
+    Returns:
+        A DataFrame with the filename, lob_type, date, and empty flag.
+    """
+    date = filename_to_date(filename)
+    date = pd.to_datetime(date) if pd.notna(date) else pd.NaT
+
+    out_df = pd.DataFrame(
+        {
+            "Filename": filename,
+            "LOB type": lob_type,
+            "Empty": df.empty,
+        },
+        index=[date],
+    )
+    out_df.index.name = "Date"
+
+    return out_df
+
+
+def collect_nans(
+    df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+) -> Optional[pd.DataFrame]:
+    """
+    Collect missing elements in the lob and return a dataframe with the results.
+
+    Args:
+        df: DataFrame with LOB data
+        filename: Name of the file being analyzed
+        lob_type: Type of the LOB ("futures" or "ctd")
+
+    Returns:
+        A DataFrame with the filename, lob_type and NaNs statistics.
+    """
+    date = filename_to_date(filename)
+    date = pd.to_datetime(date) if pd.notna(date) else pd.NaT
+
+    # Drop MidPrice since it is derived from other prices columns
+    df = df.drop(columns=["MidPrice"], errors="ignore")
+    n_row, n_col = df.shape
+    na = df.isna()
+
+    # Row stats
+    row_all_nan = na.all(axis=1)
+    row_any_nan = na.any(axis=1)
+    n_row_all_nan = row_all_nan.sum()
+    n_row_any_nan = row_any_nan.sum()
+
+    # Column stats
+    col_all_nan = na.all(axis=0)
+    col_any_nan = na.any(axis=0)
+    n_col_all_nan = col_all_nan.sum()
+    n_col_any_nan = col_any_nan.sum()
+
+    # Total NaNs
+    n_nan = na.sum().sum()
+    total_cells = n_row * n_col
+    n_nan_pct = n_nan / total_cells if total_cells > 0 else 0.0
+
+    out_df = pd.DataFrame(
+        {
+            "Filename": filename,
+            "LOB type": lob_type,
+            "Rows": n_row,
+            "Rows all NaNs": n_row_all_nan,
+            "Rows all NaNs (%)": (n_row_all_nan / n_row * 100) if n_row else 0,
+            "Rows any NaNs": n_row_any_nan,
+            "Rows any NaNs (%)": (n_row_any_nan / n_row * 100) if n_row else 0,
+            "Cols": n_col,
+            "Cols all NaNs": n_col_all_nan,
+            "Cols all NaNs (%)": (n_col_all_nan / n_col * 100) if n_col else 0,
+            "Cols any NaNs": n_col_any_nan,
+            "Cols any NaNs (%)": (n_col_any_nan / n_col * 100) if n_col else 0,
+            "Total NaNs": n_nan,
+            "Total NaNs (%)": n_nan_pct * 100,
+        },
+        index=[date],
+    )
+    out_df.index.name = "Date"
+
+    return out_df
+
+
+def collect_timestamps(
+    lob_df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+):
+    """
+    Collect relevant timestamps in the lov and return a dataframe with the results.
+
+    Args:
+        df: DataFrame with LOB data
+        filename: Name of the file being analyzed
+        lob_type: Type of the LOB ("futures" or "ctd")
+
+    Returns:
+        A DataFrame with the filename, lob_type and relevant timestamps.
+    """
+    date = filename_to_date(filename)
+    date = pd.to_datetime(date) if pd.notna(date) else pd.NaT
+
+    mask_non_nan_row = lob_df.notna().any(axis=1)
+    if not mask_non_nan_row.any():
+        print(f"Warning: {filename} has rows but all values are NaN.")
+        return None
+
+    first_ts = lob_df.index[0].time()
+    last_ts = lob_df.index[-1].time()
+    first_non_nan_ts = lob_df[mask_non_nan_row].index[0].time()
+    last_non_nan_ts = lob_df[mask_non_nan_row].index[-1].time()
+    # Add other possible timestamps of interest
+
+    out_df = pd.DataFrame(
+        {
+            "Filename": filename,
+            "LOB type": lob_type,
+            "First timestamp": first_ts,
+            "First non-empty timestamp": first_non_nan_ts,
+            "Last non-empty timestamp": last_non_nan_ts,
+            "Last timestamp": last_ts,
+        },
+        index=[date],
+    )
+    out_df.index.name = "Date"
+
+    return out_df
+
+
+def collect_fut_integrity(
+    df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+) -> Optional[pd.DataFrame]:
+    """
+    Analyze futures specific integrity issues
+    """
+    date = filename_to_date(filename)
+    date = pd.to_datetime(date) if pd.notna(date) else pd.NaT
+
+    if lob_type != "futures":
+        warnings.warn(
+            f"Expected lob_type 'futures' for collect_fut_integrity, got '{lob_type}'.", UserWarning
+        )
+        return None
+
+    min = time(0, 1, 0)
+    max = time(19, 0, 0)
+    cutoff = (df.index.time < min) | (df.index.time > max)  # type: ignore
+    df = df.loc[cutoff]
+
+    if not df.empty:
+        nans_df = collect_nans(df, filename, lob_type)
+    else:
+        nans_df = collect_nans(pd.DataFrame(), filename, lob_type)
+
+    nans_df = nans_df.drop(columns=["Filename", "LOB type"])  # type: ignore
+
+    out_df = pd.DataFrame(
+        {
+            "Filename": filename,
+            "LOB type": lob_type,
+            "First timestamp": df.index[0].time() if not df.empty else pd.NaT,
+            "Last timestamp": df.index[-1].time() if not df.empty else pd.NaT,
+        },
+        index=[date],
+    )
+
+    out_df = pd.concat([out_df, nans_df], axis=1)
+
+    return out_df
+
+
+def collect_ctd_integrity(
+    df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+) -> Optional[pd.DataFrame]:
+    """
+    Analyze CTD specific integrity issues
+    """
+    date = filename_to_date(filename)
+    date = pd.to_datetime(date) if pd.notna(date) else pd.NaT
+
+    # TODO: Check ctd lobs first row
+
+    return
