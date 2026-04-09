@@ -1,3 +1,4 @@
+import re
 from datetime import time
 from pathlib import Path
 
@@ -43,6 +44,12 @@ FBTP_END_YEAR = 2024
 FBTS_START_YEAR = 2022
 FBTS_END_YEAR = 2025
 
-# OTHER
+# LOB STRUCTURE
 
+LEVELS = 10
+DATE_PATTERN = re.compile(r"(\d{4})_(\d{2})_(\d{2})")
+BID_PRICE_COL_PATTERN = re.compile(r"^L\d+-BidPrice$")
+ASK_PRICE_COL_PATTERN = re.compile(r"^L\d+-AskPrice$")
+BID_SIZE_COL_PATTERN = re.compile(r"^L\d+-BidSize$")
+ASK_SIZE_COL_PATTERN = re.compile(r"^L\d+-AskSize$")
 FUT_COL_TO_DROP = ["#RIC", "Domain", "GMT Offset", "Type"]
