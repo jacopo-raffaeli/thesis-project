@@ -1,9 +1,8 @@
-import re
 import warnings
 from datetime import date
 from typing import Optional
 
-_DATE_PATTERN = re.compile(r"(\d{4})_(\d{2})_(\d{2})")
+from thesis_project import config
 
 
 def filename_to_date(
@@ -18,7 +17,7 @@ def filename_to_date(
     Returns:
         A date object if the filename contains a valid date, otherwise None.
     """
-    match = _DATE_PATTERN.search(filename)
+    match = config.DATE_PATTERN.search(filename)
     if not match:
         warnings.warn(f"Filename '{filename}' does not match expected date pattern.", UserWarning)
         return None
