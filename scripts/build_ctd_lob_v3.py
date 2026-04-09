@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 # Import config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config
+import build_ctd_lob_config as config
 
 
 def generate_lob_columns(levels):
