@@ -131,7 +131,6 @@ def run_collectors_single(
     TODO: Add variables description
     TODO: Add output description
     """
-    context = context or {}
 
     if lob_type not in {"futures", "ctd"}:
         raise ValueError("lob_type must be either 'futures' or 'ctd'")
