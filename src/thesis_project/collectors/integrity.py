@@ -1,6 +1,6 @@
 import warnings
 from datetime import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import pandas as pd
 
@@ -12,6 +12,7 @@ def collect_empty_lobs(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze if a lob is empty or not and return a dataframe with the results.
@@ -44,6 +45,7 @@ def collect_nans(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Collect missing elements in the lob and return a dataframe with the results.
@@ -109,6 +111,7 @@ def collect_timestamps(
     lob_df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ):
     """
     Collect relevant timestamps in the lov and return a dataframe with the results.
@@ -155,6 +158,7 @@ def collect_fut_integrity(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze futures specific integrity issues
@@ -208,6 +212,7 @@ def collect_ctd_integrity(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze CTD specific integrity issues
@@ -246,6 +251,7 @@ def collect_spread_sign(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze bid-ask spread consistency sign for all levels of the LOB
@@ -290,6 +296,7 @@ def collect_volume_sign(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze volume sign consistency for all levels of the LOB
@@ -336,6 +343,7 @@ def collect_bid_ask_order(
     df: pd.DataFrame,
     filename: str,
     lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Analyze bid and ask price ordering consistency for all levels of the LOB

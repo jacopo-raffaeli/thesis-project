@@ -116,11 +116,14 @@ def load_lob_dataframe(
 def run_collectors_single(
     base_path: Path,
     lob_type: str,
-    extractors: Dict[str, Callable[[pd.DataFrame, str, str], Optional[pd.DataFrame]]],
+    extractors: Dict[
+        str, Callable[[pd.DataFrame, str, str, Optional[Dict]], Optional[pd.DataFrame]]
+    ],
     start_year: int,
     end_year: int,
     start_time: time,
     end_time: time,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, pd.DataFrame]:
     """
     Run multiple dataframe-based extractors in one pass over parquet files.
@@ -128,6 +131,8 @@ def run_collectors_single(
     TODO: Add variables description
     TODO: Add output description
     """
+    context = context or {}
+
     if lob_type not in {"futures", "ctd"}:
         raise ValueError("lob_type must be either 'futures' or 'ctd'")
 
@@ -140,7 +145,7 @@ def run_collectors_single(
             continue
 
         for name, extractor in extractors.items():
-            extracted_df = extractor(lob_df, lob_path.name, lob_type)
+            extracted_df = extractor(lob_df, lob_path.name, lob_type, context)
             if extracted_df is None or extracted_df.empty:
                 warnings.warn(f"Extractor '{name}' returned empty for {lob_path.name}", UserWarning)
                 continue
