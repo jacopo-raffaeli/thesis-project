@@ -1,109 +1,132 @@
 # TODO: Add warning statements where necessary
 # TODO: Add minimal comments where needed
 
+
+import warnings
+from typing import Any, Dict, Optional
+
 import pandas as pd
 
+from thesis_project import config
 
-def collect_spread_series(
+
+def compute_spread(
     lob_df: pd.DataFrame,
     filename: str,
     lob_type: str,
-):
+    context: Optional[Dict[str, Any]] = None,
+) -> Optional[pd.DataFrame]:
     """
-    Return timestamped spread series for one file.
+    Compute spread between bid and ask for a specific level of the LOB.
 
-    TODO: Add variables description
-    TODO: Add output description
+    Args:
+        lob_df: DataFrame with LOB data
+        filename: Name of the file being processed
+        lob_type: Type of the LOB ("futures" or "ctd")
+        context: dict containing 'LOB level' with the level to compute the spread for
+
+    Returns:
+        DataFrame with spread series
     """
-    required_cols = {"L1-BidPrice", "L1-AskPrice"}
+    context = context or {}
+
+    if "LOB level" not in context:
+        warnings.warn(f"{filename}: Context 'LOB level' is missing", UserWarning)
+        return None
+
+    lvl = context.get("LOB level")
+    if lvl not in range(1, config.LEVELS + 1):
+        warnings.warn(
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}", UserWarning
+        )
+        return None
+
+    bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    required_cols = {
+        bid_col,
+        ask_col,
+    }
+
     if not required_cols.issubset(lob_df.columns):
-        print(f"Warning: {filename} missing spread columns.")
+        warnings.warn(
+            f"{filename}: The following required columns are missing: {', '.join(required_cols - set(lob_df.columns))}",
+            UserWarning,
+        )
         return None
 
-    spread = (lob_df["L1-AskPrice"] - lob_df["L1-BidPrice"]).dropna()
+    spread = lob_df[ask_col] - lob_df[bid_col]
     if spread.empty:
+        warnings.warn(f"{filename}: Spread series is empty", UserWarning)
         return None
 
-    return pd.DataFrame(
+    out_df = pd.DataFrame(
         {
-            "filename": filename,
-            "lob_type": lob_type,
-            "timestamp": spread.index,
-            "date": pd.to_datetime(spread.index).date,
-            "spread": spread.to_numpy(),
-        }
+            "Spread": spread,
+        },
+        index=lob_df.index,
     )
+    out_df.index.name = lob_df.index.name
+
+    return out_df
 
 
-def collect_mid_returns_series(
+def compute_mid_price(
     lob_df: pd.DataFrame,
     filename: str,
     lob_type: str,
-):
-    """Return timestamped mid and return series for one file."""
-    if "MidPrice" not in lob_df.columns:
-        print(f"Warning: {filename} missing MidPrice column.")
+    context: Optional[Dict[str, Any]] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Compute mid price between bid and ask for a specific level of the LOB.
+
+    Args:
+        lob_df: DataFrame with LOB data
+        filename: Name of the file being processed
+        lob_type: Type of the LOB ("futures" or "ctd")
+        context: dict containing 'LOB level' with the level to compute the spread for
+
+    Returns:
+        DataFrame with spread series
+    """
+    context = context or {}
+
+    if "LOB level" not in context:
+        warnings.warn(f"{filename}: Context 'LOB level' is missing", UserWarning)
         return None
 
-    mid = lob_df["MidPrice"].dropna()
+    lvl = context.get("LOB level")
+    if lvl not in range(1, config.LEVELS + 1):
+        warnings.warn(
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}", UserWarning
+        )
+        return None
+
+    bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    required_cols = {
+        bid_col,
+        ask_col,
+    }
+
+    if not required_cols.issubset(lob_df.columns):
+        warnings.warn(
+            f"{filename}: The following required columns are missing: {', '.join(required_cols - set(lob_df.columns))}",
+            UserWarning,
+        )
+        return None
+
+    mid = lob_df[ask_col] + lob_df[bid_col] / 2
     if mid.empty:
+        warnings.warn(f"{filename}: Mid price series is empty", UserWarning)
         return None
 
-    returns = mid.pct_change().dropna()
-    if returns.empty:
-        return None
-
-    aligned_mid = mid.loc[returns.index]
-    return pd.DataFrame(
+    out_df = pd.DataFrame(
         {
-            "filename": filename,
-            "lob_type": lob_type,
-            "timestamp": returns.index,
-            "date": pd.to_datetime(returns.index).date,
-            "mid": aligned_mid.to_numpy(),
-            "ret": returns.to_numpy(),
-        }
-    )
-
-
-def collect_depth_imbalance_series(
-    lob_df: pd.DataFrame,
-    filename: str,
-    lob_type: str,
-):
-    """Return timestamped depth and imbalance series for one file."""
-    bid_size_cols = [c for c in lob_df.columns if c.startswith("L") and c.endswith("-BidSize")]
-    ask_size_cols = [c for c in lob_df.columns if c.startswith("L") and c.endswith("-AskSize")]
-
-    if not bid_size_cols or not ask_size_cols:
-        print(f"Warning: {filename} missing depth columns.")
-        return None
-
-    bid_depth = pd.Series(
-        lob_df[bid_size_cols].to_numpy(dtype=float).sum(axis=1),
+            "Mid Price": mid,
+        },
         index=lob_df.index,
     )
-    ask_depth = pd.Series(
-        lob_df[ask_size_cols].to_numpy(dtype=float).sum(axis=1),
-        index=lob_df.index,
-    )
+    out_df.index.name = lob_df.index.name
 
-    denom = (bid_depth + ask_depth).replace(0, pd.NA)
-    imbalance = ((bid_depth - ask_depth) / denom).dropna()
-    if imbalance.empty:
-        return None
-
-    aligned_bid = bid_depth.loc[imbalance.index]
-    aligned_ask = ask_depth.loc[imbalance.index]
-
-    return pd.DataFrame(
-        {
-            "filename": filename,
-            "lob_type": lob_type,
-            "timestamp": imbalance.index,
-            "date": pd.to_datetime(imbalance.index).date,
-            "bid_depth": aligned_bid.to_numpy(),
-            "ask_depth": aligned_ask.to_numpy(),
-            "imbalance": imbalance.to_numpy(),
-        }
-    )
+    return out_df
