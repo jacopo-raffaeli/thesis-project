@@ -52,6 +52,7 @@ BID_PRICE_COL_PATTERN = re.compile(r"^L\d+-BidPrice$")
 ASK_PRICE_COL_PATTERN = re.compile(r"^L\d+-AskPrice$")
 BID_SIZE_COL_PATTERN = re.compile(r"^L\d+-BidSize$")
 ASK_SIZE_COL_PATTERN = re.compile(r"^L\d+-AskSize$")
+DATE_TEMPLATE = "{year:04d}_{month:02d}_{day:02d}"
 BID_PRICE_COL_TEMPLATE = "L{lvl}-BidPrice"
 ASK_PRICE_COL_TEMPLATE = "L{lvl}-AskPrice"
 BID_SIZE_COL_TEMPLATE = "L{lvl}-BidSize"

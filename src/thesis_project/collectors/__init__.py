@@ -18,6 +18,7 @@ from .microstructure import (
 )
 from .relationships import (
     compute_basis,
+    compute_implied_repo,
 )
 from .run_collectors import (
     iter_lob_parquets,
@@ -46,4 +47,5 @@ __all__ = [
     "compute_mid_price",
     # relationships.py
     "compute_basis",
+    "compute_implied_repo",
 ]
