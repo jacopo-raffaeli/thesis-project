@@ -1,23 +1,7 @@
 import warnings
-from pathlib import Path
 from typing import Dict, Optional
 
 import pandas as pd
-
-
-def load_daily_cf(cf_path: Path) -> pd.Series:
-    """
-    Load daily conversion factors indexed by date.
-
-    TODO: Add variables description
-    TODO: Add output description
-    """
-    cf_df = pd.read_csv(cf_path)
-    if "Date" not in cf_df.columns or "CF" not in cf_df.columns:
-        raise ValueError("CF CSV must contain 'Date' and 'CF' columns.")
-
-    cf_df["Date"] = [pd.Timestamp(value).date() for value in cf_df["Date"]]
-    return cf_df.set_index("Date")["CF"]
 
 
 def compute_gross_basis(
@@ -274,20 +258,20 @@ def compute_implied_repo(
     """
     Return implied repo rate series at specified frequency.
 
-    Computes R such that: (dirty_price + AI_val) * (1 + R*T) - sum(K*(1+R*t_i)) = invoice_price
+    Computes R such that: (dirty_price + AI_val) * (1 + R*T) - sum(K*(1+R*t_i)) = F(t) * cf + AI_del
 
     Args:
         fut_df: DataFrame with futures LOB data, indexed by timestamp, requires MidPrice
         ctd_df: DataFrame with CTD LOB data, indexed by timestamp, requires MidPrice
         context: Dict with required keys:
-            - 'daily_cf': pd.DataFrame (indexed by date, columns: CF, ISIN)
-            - 'ctd_metadata': pd.DataFrame (full CSV)
-            - 'fut_metadata': pd.DataFrame (full CSV)
-            - 'frequency': str (e.g., "1s", "1h", "1D")
-            - 'notional': float (optional, default 100.0)
+            - 'CF': daily_cf.csv
+            - 'CTD Metadata': ctd_metadata.csv
+            - 'FUT Metadata': fut_metadata.csv
+            - 'Frequency': resampling frequency for the LOBs
+            - 'Notional': Usually 100
 
     Returns:
-        DataFrame with ImpliedRepo column indexed by timestamp, or None on critical failure
+        DataFrame with ImpliedRepo column indexed by timestamp
     """
     context = context or {}
 
@@ -300,47 +284,59 @@ def compute_implied_repo(
             UserWarning,
         )
         return None
-
-    lob_date = fut_date
+    date = fut_date
 
     # Validate required columns
     if "MidPrice" not in fut_df.columns or "MidPrice" not in ctd_df.columns:
         warnings.warn(
-            f"{lob_date}: Missing MidPrice column in futures or CTD LOB.",
+            f"{date}: Missing MidPrice column in futures or CTD LOB.",
             UserWarning,
         )
         return None
 
     # Extract context
-    daily_cf = context.get("daily_cf")
-    ctd_metadata = context.get("ctd_metadata")
-    fut_metadata = context.get("fut_metadata")
-    frequency = context.get("frequency", "1s")
-    notional = context.get("notional", 100.0)
-
-    if daily_cf is None or ctd_metadata is None or fut_metadata is None:
-        warnings.warn(
-            f"{lob_date}: Missing required context keys (daily_cf, ctd_metadata, fut_metadata).",
-            UserWarning,
-        )
+    if "CF" not in context:
+        warnings.warn(f"{date}: Context 'CF' is missing", UserWarning)
         return None
+    cf_series = context.get("CF")
 
-    # Parse metadata date columns if needed
-    if not isinstance(fut_metadata["Delivery Date"].iloc[0], pd.Timestamp):
-        fut_metadata = fut_metadata.copy()
-        fut_metadata["Delivery Date"] = pd.to_datetime(fut_metadata["Delivery Date"])
-    if not isinstance(ctd_metadata["First Coupon Date"].iloc[0], pd.Timestamp):
-        ctd_metadata = ctd_metadata.copy()
-        ctd_metadata["First Coupon Date"] = pd.to_datetime(ctd_metadata["First Coupon Date"])
-        ctd_metadata["Maturity Date"] = pd.to_datetime(ctd_metadata["Maturity Date"])
+    if "CTD Metadata" not in context:
+        warnings.warn(f"{date}: Context 'CTD Metadata' is missing", UserWarning)
+        return None
+    ctd_meta_df = context.get("CTD Metadata")
 
-    # ===== Daily precomputation =====
+    if "FUT Metadata" not in context:
+        warnings.warn(f"{date}: Context 'FUT Metadata' is missing", UserWarning)
+        return None
+    fut_meta_df = context.get("FUT Metadata")
+
+    if "Frequency" not in context:
+        warnings.warn(f"{date}: Context 'Frequency' is missing", UserWarning)
+        return None
+    frequency = context.get("Frequency")
+
+    if "Notional" not in context:
+        warnings.warn(f"{date}: Context 'Notional' is missing", UserWarning)
+        return None
+    notional = context.get("Notional")
+
+    # Parse metadata date columns
+    if not isinstance(fut_meta_df["Delivery Date"].iloc[0], pd.Timestamp):  # type: ignore
+        fut_meta_df = fut_meta_df.copy()  # type: ignore
+        fut_meta_df["Delivery Date"] = pd.to_datetime(fut_meta_df["Delivery Date"])
+
+    if not isinstance(ctd_meta_df["First Coupon Date"].iloc[0], pd.Timestamp):  # type: ignore
+        ctd_meta_df = ctd_meta_df.copy()  # type: ignore
+        ctd_meta_df["First Coupon Date"] = pd.to_datetime(ctd_meta_df["First Coupon Date"])
+        ctd_meta_df["Maturity Date"] = pd.to_datetime(ctd_meta_df["Maturity Date"])
+
     # Extract delivery date for this LOB date
-    delivery_dates_valid = fut_metadata["Delivery Date"].dropna()
-    delivery_dates_valid = delivery_dates_valid[delivery_dates_valid > pd.Timestamp(lob_date)]
+    # NOTE: We consider the very next delivery date
+    delivery_dates_valid = fut_meta_df["Delivery Date"].dropna()  # type: ignore
+    delivery_dates_valid = delivery_dates_valid[delivery_dates_valid > pd.Timestamp(date)]
     if delivery_dates_valid.empty:
         warnings.warn(
-            f"{lob_date}: No valid delivery date found.",
+            f"{date}: No valid delivery date found.",
             UserWarning,
         )
         return None
@@ -349,19 +345,19 @@ def compute_implied_repo(
 
     # Extract ISIN for this date
     try:
-        isin = daily_cf.loc[pd.Timestamp(lob_date), "ISIN"]
+        isin = cf_series.loc[pd.Timestamp(date), "ISIN"]  # type: ignore
     except KeyError:
         warnings.warn(
-            f"{lob_date}: Missing ISIN in daily_cf.",
+            f"{date}: Missing ISIN in daily_cf.csv.",
             UserWarning,
         )
         return None
 
     # Extract bond metadata for this ISIN
-    bond_meta = ctd_metadata[ctd_metadata["ISIN"] == isin]
+    bond_meta = ctd_meta_df[ctd_meta_df["ISIN"] == isin]  # type: ignore
     if bond_meta.empty:
         warnings.warn(
-            f"{lob_date}: Bond metadata not found for ISIN {isin}.",
+            f"{date}: Bond metadata not found for ISIN {isin}.",
             UserWarning,
         )
         return None
@@ -374,10 +370,10 @@ def compute_implied_repo(
 
     # Extract CF for this date
     try:
-        cf_value = float(daily_cf.loc[pd.Timestamp(lob_date), "CF"])
+        cf_value = float(cf_series.loc[pd.Timestamp(date), "CF"])  # type: ignore
     except KeyError:
         warnings.warn(
-            f"{lob_date}: Missing conversion factor.",
+            f"{date}: Missing conversion factor.",
             UserWarning,
         )
         return None
@@ -386,28 +382,40 @@ def compute_implied_repo(
     coupon_schedule = _get_coupon_schedule(first_coupon_date, maturity_date, coupon_freq)
 
     # Get relevant coupons (between LOB date and delivery date)
+    # NOTE: Actually I should consider ex-coupon dates
     coupon_dates_relevant = coupon_schedule[
-        (coupon_schedule > pd.Timestamp(lob_date)) & (coupon_schedule <= delivery_date)
+        (coupon_schedule > pd.Timestamp(date)) & (coupon_schedule <= delivery_date)
     ]
 
     # Compute year fraction (ACT/360)
-    T = (delivery_date - pd.Timestamp(lob_date)).days / 360.0
+    T = (delivery_date - pd.Timestamp(date)).days / 360.0
 
-    # Compute accrued interests (day-wise, no time component)
-    prev_cpn_val, next_cpn_val = _get_prev_next_coupon(coupon_schedule, pd.Timestamp(lob_date))
+    # Compute accrued interests
+    prev_cpn_val, next_cpn_val = _get_prev_next_coupon(coupon_schedule, pd.Timestamp(date))
     ai_val = _compute_accrued_interest(
-        coupon_rate, coupon_freq, prev_cpn_val, next_cpn_val, pd.Timestamp(lob_date), notional
+        coupon_rate,
+        coupon_freq,
+        prev_cpn_val,
+        next_cpn_val,
+        pd.Timestamp(date),
+        notional,  # type: ignore
     )
 
     prev_cpn_del, next_cpn_del = _get_prev_next_coupon(coupon_schedule, delivery_date)
     ai_del = _compute_accrued_interest(
-        coupon_rate, coupon_freq, prev_cpn_del, next_cpn_del, delivery_date, notional
+        coupon_rate,
+        coupon_freq,
+        prev_cpn_del,
+        next_cpn_del,
+        delivery_date,
+        notional,  # type: ignore
     )
 
     # Resample LOBs
+    # NOTE: This can be probably handled better
     if frequency != "1s":
-        fut_lob_resampled = _resample_lob(fut_df, frequency)
-        ctd_lob_resampled = _resample_lob(ctd_df, frequency)
+        fut_lob_resampled = _resample_lob(fut_df, frequency)  # type: ignore
+        ctd_lob_resampled = _resample_lob(ctd_df, frequency)  # type: ignore
     else:
         fut_lob_resampled = fut_df.copy()
         ctd_lob_resampled = ctd_df.copy()
@@ -422,12 +430,12 @@ def compute_implied_repo(
 
     if aligned.empty:
         warnings.warn(
-            f"{lob_date}: No overlapping timestamps after resampling to {frequency}.",
+            f"{date}: No overlapping timestamps after resampling to {frequency}.",
             UserWarning,
         )
         return None
 
-    # ===== Compute repo for each timestamp =====
+    # Actual IRR computation
     results = []
 
     for timestamp, row in aligned.iterrows():
@@ -451,7 +459,7 @@ def compute_implied_repo(
             ai_del=ai_del,
             T=T,
             delivery_date=delivery_date,
-            notional=notional,
+            notional=notional,  # type: ignore
         )
         results.append(repo_rate)
 
