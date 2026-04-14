@@ -17,7 +17,7 @@ from .microstructure import (
     compute_spread,
 )
 from .relationships import (
-    compute_basis,
+    compute_gross_basis,
     compute_implied_repo,
 )
 from .run_collectors import (
@@ -46,6 +46,6 @@ __all__ = [
     "compute_spread",
     "compute_mid_price",
     # relationships.py
-    "compute_basis",
+    "compute_gross_basis",
     "compute_implied_repo",
 ]

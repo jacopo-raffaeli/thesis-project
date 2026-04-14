@@ -20,7 +20,7 @@ def load_daily_cf(cf_path: Path) -> pd.Series:
     return cf_df.set_index("Date")["CF"]
 
 
-def compute_basis(
+def compute_gross_basis(
     fut_df: pd.DataFrame,
     ctd_df: pd.DataFrame,
     context: Optional[Dict],
