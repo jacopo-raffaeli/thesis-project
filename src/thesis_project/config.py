@@ -47,14 +47,19 @@ FBTS_END_YEAR = 2025
 # LOB STRUCTURE
 
 LEVELS = 10
+
 DATE_PATTERN = re.compile(r"(\d{4})_(\d{2})_(\d{2})")
+DATE_TEMPLATE = "{year:04d}_{month:02d}_{day:02d}"
+
 BID_PRICE_COL_PATTERN = re.compile(r"^L\d+-BidPrice$")
 ASK_PRICE_COL_PATTERN = re.compile(r"^L\d+-AskPrice$")
 BID_SIZE_COL_PATTERN = re.compile(r"^L\d+-BidSize$")
 ASK_SIZE_COL_PATTERN = re.compile(r"^L\d+-AskSize$")
-DATE_TEMPLATE = "{year:04d}_{month:02d}_{day:02d}"
 BID_PRICE_COL_TEMPLATE = "L{lvl}-BidPrice"
 ASK_PRICE_COL_TEMPLATE = "L{lvl}-AskPrice"
 BID_SIZE_COL_TEMPLATE = "L{lvl}-BidSize"
 ASK_SIZE_COL_TEMPLATE = "L{lvl}-AskSize"
+
 FUT_COL_TO_DROP = ["#RIC", "Domain", "GMT Offset", "Type"]
+
+SERIES_FILENAME_TEMPLATE = "{series_name}_freq_{freq}_from_{start_date}_to_{end_date}.{ext}"

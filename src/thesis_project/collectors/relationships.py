@@ -16,7 +16,8 @@ def compute_gross_basis(
     Args:
         fut_df: DataFrame with futures LOB data
         ctd_df: DataFrame with CTD LOB data
-        context: Optional dict containing 'CF' series
+        context: Dict with required keys:
+            - 'CF': daily_cf.csv
 
     Returns:
         DataFrame with basis series
@@ -55,11 +56,11 @@ def compute_gross_basis(
     if "CF" not in context:
         warnings.warn(f"{date}: Context 'CF' is missing", UserWarning)
         return None
-    cf_series = context.get("CF")
+    cf_series = context["CF"]
 
     # Look up cf value by date
     try:
-        cf_value = cf_series.loc[date]  # type: ignore
+        cf_value = cf_series.loc[pd.to_datetime(date)]["CF"]
     except KeyError:
         warnings.warn(f"{date}: Missing conversion factor.", UserWarning)
         return None
@@ -73,7 +74,7 @@ def compute_gross_basis(
         return None
 
     # Compute basis
-    basis = aligned["ctd_mid"] - float(cf_value) * aligned["fut_mid"]
+    basis = aligned["CTD MidPrice"] - float(cf_value) * aligned["FUT MidPrice"]
 
     out_df = pd.DataFrame(
         {
@@ -298,7 +299,7 @@ def compute_implied_repo(
     if "CF" not in context:
         warnings.warn(f"{date}: Context 'CF' is missing", UserWarning)
         return None
-    cf_series = context.get("CF")
+    cf_series = context["CF"]
 
     if "CTD Metadata" not in context:
         warnings.warn(f"{date}: Context 'CTD Metadata' is missing", UserWarning)
