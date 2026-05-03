@@ -13,6 +13,7 @@ from .integrity import (
     collect_volume_sign,
 )
 from .microstructure import (
+    compute_micro_price,
     compute_mid_price,
     compute_spread,
 )
@@ -48,4 +49,5 @@ __all__ = [
     # relationships.py
     "compute_gross_basis",
     "compute_implied_repo",
+    "compute_micro_price",
 ]

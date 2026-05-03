@@ -1,6 +1,7 @@
 import warnings
 from typing import Any, Dict, Optional
 
+import numpy as np
 import pandas as pd
 
 from thesis_project import config
@@ -112,7 +113,7 @@ def compute_mid_price(
         )
         return None
 
-    mid = lob_df[ask_col] + lob_df[bid_col] / 2
+    mid = (lob_df[ask_col] + lob_df[bid_col]) / 2
     if mid.empty:
         warnings.warn(f"{filename}: Mid price series is empty", UserWarning)
         return None
@@ -179,10 +180,30 @@ def compute_micro_price(
 
     num = lob_df[ask_col] * lob_df[bid_vol_col] + lob_df[bid_col] * lob_df[ask_vol_col]
     den = lob_df[bid_vol_col] + lob_df[ask_vol_col]
+
+    if (den == 0).any():
+        warnings.warn(
+            f"{filename}: Denominator for micro price contains zeros. Replaced with NaNs",
+            UserWarning,
+        )
+        den.replace(0, np.nan, inplace=True)
+
     micro = num / den
+
     if micro.empty:
-        warnings.warn(f"{filename}: Mid price series is empty", UserWarning)
+        warnings.warn(f"{filename}: Micro price series is empty", UserWarning)
         return None
+
+    if micro.isna().all():
+        warnings.warn(f"{filename}: Micro price series is all NaN", UserWarning)
+        return None
+
+    if (micro == np.inf).any() or (micro == -np.inf).any():
+        warnings.warn(
+            f"{filename}: Micro price series contains infinite values. Replaced with NaNs",
+            UserWarning,
+        )
+        micro.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     out_df = pd.DataFrame(
         {

@@ -159,7 +159,7 @@ def _compute_repo_at_timestamp(
         sum_coupons += coupon_amount
         sum_weighted_coupons += coupon_amount * t_i
 
-    # Apply closed formula: R = (B - A0 + sum(K)) / (A0*T - sum(K*t_i))
+    # R = (B - A0 + sum(K)) / (A0*T - sum(K*t_i))
     numerator = invoice_price - (dirty_price_val - sum_coupons)
     denominator = dirty_price_val * T - sum_weighted_coupons
 
