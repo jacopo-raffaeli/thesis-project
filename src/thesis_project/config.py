@@ -63,3 +63,30 @@ ASK_SIZE_COL_TEMPLATE = "L{lvl}-AskSize"
 FUT_COL_TO_DROP = ["#RIC", "Domain", "GMT Offset", "Type"]
 
 SERIES_FILENAME_TEMPLATE = "{series_name}_freq_{freq}_from_{start_date}_to_{end_date}.{ext}"
+
+# TICK SIZE
+
+FBTP_TICK_SIZE_PERC = 0.01
+FBTP_TICK_SIZE_EURO = 10
+
+FBTS_TICK_SIZE_PERC = 0.005
+FBTS_TICK_SIZE_EURO = 5
+
+CTD_TICK_SIZE_PERC = 0.01
+CTD_TICK_SIZE_EURO = 0.01
+
+# PROBLEMATIC DATES
+
+DATES_TO_EXCLUDE = {
+    "fbtp": [
+        # Structural
+        "2022-08-29",  # FUT LOB stops early
+        "2024-12-02",  # FUT LOB spread violation (1)
+        "2024-06-11",  # CTD LOB spread violation (127)
+        "2023-09-06",  # FUT LOB price order violation (2)
+        "2023-12-06",  # FUT LOB price order violation (9)
+    ],
+    "fbts": [
+        # Structural
+    ],
+}
