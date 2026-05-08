@@ -7,6 +7,152 @@ import pandas as pd
 from thesis_project import config
 
 
+def compute_bid_ask_price(
+    lob_df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Compute (i.e. extract) bid/ask price for a specific level of the LOB.
+
+    Args:
+        lob_df: DataFrame with LOB data
+        filename: Name of the file being processed
+        lob_type: Type of the LOB ("futures" or "ctd")
+        context: dict with requried keys:
+            - 'LOB level': level of the LOB to extract bid/ask from
+            - 'Side': "bid" or "ask"
+
+    Returns:
+        DataFrame with bid/ask price series
+    """
+    context = context or {}
+
+    if "LOB level" not in context:
+        warnings.warn(f"{filename}: Context 'LOB level' is missing", UserWarning)
+        return None
+
+    if "Side" not in context:
+        warnings.warn(f"{filename}: Context 'Side' is missing", UserWarning)
+        return None
+
+    lvl = context.get("LOB level")
+    if lvl not in range(1, config.LEVELS + 1):
+        warnings.warn(
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}", UserWarning
+        )
+        return None
+
+    side = context.get("Side")
+    if side not in {"bid", "ask"}:
+        warnings.warn(
+            f"{filename}: Context 'Side' ({side}) is invalid. Expected 'bid' or 'ask'", UserWarning
+        )
+        return None
+
+    if side == "bid":
+        col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    else:
+        col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+
+    required_cols = {
+        col,
+    }
+
+    if not required_cols.issubset(lob_df.columns):
+        warnings.warn(
+            f"{filename}: The following required columns are missing: {', '.join(required_cols - set(lob_df.columns))}",
+            UserWarning,
+        )
+        return None
+
+    price = lob_df[col]
+
+    out_df = pd.DataFrame(
+        {
+            "Price": price,
+        },
+        index=lob_df.index,
+    )
+    out_df.index.name = lob_df.index.name
+
+    return out_df
+
+
+def compute_bid_ask_size(
+    lob_df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Compute (i.e. extract) bid/ask size for a specific level of the LOB.
+
+    Args:
+        lob_df: DataFrame with LOB data
+        filename: Name of the file being processed
+        lob_type: Type of the LOB ("futures" or "ctd")
+        context: dict with requried keys:
+            - 'LOB level': level of the LOB to extract bid/ask from
+            - 'Side': "bid" or "ask"
+
+    Returns:
+        DataFrame with bid/ask size series
+    """
+    context = context or {}
+
+    if "LOB level" not in context:
+        warnings.warn(f"{filename}: Context 'LOB level' is missing", UserWarning)
+        return None
+
+    if "Side" not in context:
+        warnings.warn(f"{filename}: Context 'Side' is missing", UserWarning)
+        return None
+
+    lvl = context.get("LOB level")
+    if lvl not in range(1, config.LEVELS + 1):
+        warnings.warn(
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}", UserWarning
+        )
+        return None
+
+    side = context.get("Side")
+    if side not in {"bid", "ask"}:
+        warnings.warn(
+            f"{filename}: Context 'Side' ({side}) is invalid. Expected 'bid' or 'ask'", UserWarning
+        )
+        return None
+
+    if side == "bid":
+        col = config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
+    else:
+        col = config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
+
+    required_cols = {
+        col,
+    }
+
+    if not required_cols.issubset(lob_df.columns):
+        warnings.warn(
+            f"{filename}: The following required columns are missing: {', '.join(required_cols - set(lob_df.columns))}",
+            UserWarning,
+        )
+        return None
+
+    size = lob_df[col]
+
+    out_df = pd.DataFrame(
+        {
+            "Size": size,
+        },
+        index=lob_df.index,
+    )
+    out_df.index.name = lob_df.index.name
+
+    return out_df
+
+
 def compute_spread(
     lob_df: pd.DataFrame,
     filename: str,
@@ -204,6 +350,13 @@ def compute_micro_price(
             UserWarning,
         )
         micro.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    if micro.isna().all():
+        warnings.warn(
+            f"{filename}: Micro price series is all NaN after replacing inf with NaN",
+            UserWarning,
+        )
+        return None
 
     out_df = pd.DataFrame(
         {
