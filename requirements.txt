@@ -1,6 +1,12 @@
-ipython
+dataframe_image
+joblib
 matplotlib
 numpy
 pandarallel
 pandas
+polars
+QuantLib
+scikit_learn
+scipy
+statsmodels
 tqdm
