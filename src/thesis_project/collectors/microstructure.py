@@ -550,7 +550,7 @@ def compute_ofi(
         default=np.nan,
     )
 
-    out_df["OFI"] = out_df["bOF"] - out_df["aOF"]
+    out_df["OFI"] = out_df["bOF"] + out_df["aOF"]
 
     if out_df["OFI"].empty:
         warnings.warn(f"{filename}: OFI series is empty", UserWarning)
