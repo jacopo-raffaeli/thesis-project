@@ -17,6 +17,8 @@ from .microstructure import (
     compute_bid_ask_size,
     compute_micro_price,
     compute_mid_price,
+    compute_obi,
+    compute_ofi,
     compute_spread,
 )
 from .relationships import (
@@ -51,6 +53,8 @@ __all__ = [
     "compute_spread",
     "compute_mid_price",
     "compute_micro_price",
+    "compute_obi",
+    "compute_ofi",
     # relationships.py
     "compute_gross_basis",
     "compute_implied_repo",
