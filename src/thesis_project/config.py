@@ -2,6 +2,8 @@ import re
 from datetime import time
 from pathlib import Path
 
+import pandas as pd
+
 # DIRECTORIES
 
 # Project root directory
@@ -77,6 +79,13 @@ CTD_TICK_SIZE_EURO = 0.01
 
 # DATES TO EXCLUDE
 
+fbts_fut_meta_df = pd.read_csv(
+    RAW_DIR / "fbtp" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
+)
+# fbts_fut_meta_df = pd.read_csv(
+#     RAW_DIR / "fbts" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
+# )
+
 DATES_TO_EXCLUDE = {
     "fbtp": {
         "structural": [
@@ -86,8 +95,7 @@ DATES_TO_EXCLUDE = {
             "2023-09-06",  # FUT LOB price order violation (2)
             "2023-12-06",  # FUT LOB price order violation (9)
         ],
+        "fut_last_trading_days": fbts_fut_meta_df["Last Trading Date"].dt.date.unique().tolist(),
     },
-    "fbts": {
-        "structural": [],
-    },
+    "fbts": {"structural": [], "last_trading_days": []},
 }
