@@ -26,7 +26,7 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
     # Target data paths
     targets = {
         "basis": ms_path / "basis" / "gross_basis_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "irr": ms_path / "irr" / "irr_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "irr": ms_path / "irr" / "irr_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
     }
 
     # Feature data paths
@@ -34,7 +34,9 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
         "fut_mid_price": ms_path
         / "mid-price"
         / "fut_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        # "ctd_mid_price": ms_path / "mid-price" / "ctd_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        "ctd_mid_price": ms_path
+        / "mid-price"
+        / "ctd_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_micro_price": ms_path / "micro-price" / "fut_micro_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "ctd_micro_price": ms_path / "micro-price" / "ctd_micro_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_spread": ms_path / "spread" / "fut_spread_freq_1s_from_2022_08_01_to_2024_12_30.parquet",

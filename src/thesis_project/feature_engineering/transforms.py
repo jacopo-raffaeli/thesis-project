@@ -1,6 +1,7 @@
 """Feature transform classes for preprocessing pipeline."""
 
 import logging
+from math import nan
 from typing import List
 
 import pandas as pd
@@ -8,8 +9,16 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def get_first_valid(series: pd.Series) -> float:
+    """Get first non-zero, non-NaN value, backward-filling to find it."""
+    if len(series) == 0:
+        return nan
+    filled = series.replace(0, nan).bfill()
+    return filled.iloc[0]
+
+
 class DeltaTransform:
-    """Compute time-delta features within daily sessions."""
+    """Compute differenced features within daily sessions."""
 
     def __init__(self, columns: List[str], time_deltas: List[int]):
         """Initialize with columns and time delta values (seconds)."""
@@ -37,7 +46,7 @@ class DeltaTransform:
 
 
 class RollingTransform:
-    """Compute rolling statistics within daily sessions."""
+    """Compute rolling features within daily sessions."""
 
     def __init__(self, columns: List[str], windows: List[int], stats: List[str]):
         """Initialize with columns, windows (seconds), and stats."""
@@ -72,5 +81,60 @@ class RollingTransform:
                             "   - Failed: %s, %s not available in rolling object", col_name, stat
                         )
                         continue
+
+        return pd.DataFrame(features, index=df.index)
+
+
+class RatioTransform:
+    """Compute ratio features x_t / reference_value."""
+
+    def __init__(self, columns: list[str], references: list[str]):
+        """Initialize with columns and references."""
+        self.columns = columns
+        self.references = references
+        valid_references = {"day_start", "hour_start"}
+        for reference in self.references:
+            if reference not in valid_references:
+                raise ValueError(f"Invalid reference: {reference}. Valid: {valid_references}")
+
+    def compute(self, df: pd.DataFrame, grouped_by_session) -> pd.DataFrame:
+        """Compute ratio features within daily session."""
+        features = {}
+
+        for col in self.columns:
+            if col not in df.columns:
+                logger.warning("   - Skipped: %s not found in DataFrame", col)
+                continue
+
+            for reference in self.references:
+                col_name = f"{col}_ratio_{reference}"
+
+                try:
+                    if reference == "day_start":
+                        first_values = grouped_by_session[col].transform(get_first_valid)
+
+                    elif reference == "hour_start":
+                        results = []
+                        for _, day_group in grouped_by_session:
+                            hourly_first = (
+                                day_group[col]
+                                .groupby(day_group.index.hour)
+                                .transform(get_first_valid)
+                            )
+                            results.append(hourly_first)
+                        first_values = pd.concat(results)
+
+                    ratio = df[col] / first_values
+                    features[col_name] = ratio
+                    nan_perc = features[col_name].isna().mean() * 100
+                    logger.debug("   - Computed: %s (%.2f%% NaN)", col_name, nan_perc)
+                except Exception as e:
+                    logger.warning(
+                        "   - Failed: %s with reference %s: %s",
+                        col_name,
+                        reference,
+                        str(e),
+                    )
+                    continue
 
         return pd.DataFrame(features, index=df.index)
