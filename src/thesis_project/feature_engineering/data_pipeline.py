@@ -9,7 +9,11 @@ import pandas as pd
 
 from thesis_project import config
 from thesis_project.feature_engineering.config import AnalysisConfig
-from thesis_project.feature_engineering.transforms import DeltaTransform, RollingTransform
+from thesis_project.feature_engineering.transforms import (
+    DeltaTransform,
+    RatioTransform,
+    RollingTransform,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +177,11 @@ def preprocess_series(
         stats = transform_configs["rolling"].get("stats", ["mean", "std"])
         if windows:
             transforms.append(RollingTransform(columns, windows, stats))
+
+    if "ratio" in transform_configs and transform_configs["ratio"]:
+        references = transform_configs["ratio"].get("references", [])
+        if references:
+            transforms.append(RatioTransform(columns, references))
 
     # Compute features from transforms
     feature_blocks = []
