@@ -281,11 +281,11 @@ def run_analysis(config: AnalysisConfig) -> pd.DataFrame:
     # Generate run number
     run_num = generate_run_name(config)
     assert config.output_path is not None
-    run_dir = config.output_path / f"run_{run_num}"
+    run_dir = config.output_path / f"run_{run_num:03d}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Add file handler to log to run-specific file
-    log_file = run_dir / f"run_{run_num}.log"
+    log_file = run_dir / f"run_{run_num:03d}.log"
     file_handler = logging.FileHandler(log_file)
     fmt = logging.Formatter(
         "%(asctime)-23s | %(levelname)-8s | %(filename)-20s:%(lineno)-4d | %(message)s"
@@ -293,7 +293,7 @@ def run_analysis(config: AnalysisConfig) -> pd.DataFrame:
     file_handler.setFormatter(fmt)
     logger.addHandler(file_handler)
 
-    logger.info("Run number: %d", run_num)
+    logger.info("Run number: %s", run_num)
     logger.info("Output directory: %s", run_dir.relative_to(global_config.ROOT))
     logger.info("Logging to: %s", log_file.relative_to(global_config.ROOT))
 
