@@ -561,3 +561,111 @@ def compute_ofi(
         return None
 
     return out_df
+
+
+def compute_slope(
+    lob_df: pd.DataFrame,
+    filename: str,
+    lob_type: str,
+    context: Optional[Dict[str, Any]] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Compute slope of the order book as in "Della Vedova, Gao, Grant and Westerholm (working paper)".
+
+    Args:
+        lob_df: DataFrame with LOB data
+        filename: Name of the file being processed
+        lob_type: Type of the LOB ("futures" or "ctd")
+        context: dict containing keys:
+            - 'LOB level' the deepest level to include
+            - 'Side' with the side to compute the slope for ("bid" or "ask")
+
+    Returns:
+        DataFrame with slope series
+    """
+    context = context or {}
+
+    if "LOB level" not in context:
+        warnings.warn(f"{filename}: Context 'LOB level' is missing", UserWarning)
+        return None
+
+    if "Side" not in context:
+        warnings.warn(f"{filename}: Context 'Side' is missing", UserWarning)
+        return None
+
+    lvl = context.get("LOB level")
+    if lvl not in range(1, config.LEVELS + 1):
+        warnings.warn(
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}", UserWarning
+        )
+        return None
+
+    side = context.get("Side")
+    if side not in {"bid", "ask"}:
+        warnings.warn(
+            f"{filename}: Context 'Side' ({side}) is invalid. Expected 'bid' or 'ask'", UserWarning
+        )
+        return None
+
+    best_bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=1)
+    best_ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=1)
+    if side == "bid":
+        price_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+        size_cols = [
+            config.BID_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, config.LEVELS + 1)
+        ]
+    if side == "ask":
+        price_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+        size_cols = [
+            config.ASK_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, config.LEVELS + 1)
+        ]
+
+    required_cols = {best_bid_col, best_ask_col, price_col} | set(size_cols)
+    if not required_cols.issubset(lob_df.columns):
+        warnings.warn(
+            f"{filename}: The following required columns are missing: {', '.join(required_cols - set(lob_df.columns))}",
+            UserWarning,
+        )
+        return None
+
+    best_bid = lob_df[best_bid_col]
+    best_ask = lob_df[best_ask_col]
+    mid_price = (best_bid + best_ask) / 2
+    sizes = lob_df[size_cols]
+    price = lob_df[price_col]
+
+    total_size = sizes.sum(axis=1)
+    price_diff = np.abs(price - mid_price)
+    slope = total_size / price_diff
+
+    if slope.empty:
+        warnings.warn(f"{filename}: Slope series is empty", UserWarning)
+        return None
+
+    if slope.isna().all():
+        warnings.warn(f"{filename}: Slope series is all NaN", UserWarning)
+        return None
+
+    if (slope == np.inf).any() or (slope == -np.inf).any():
+        warnings.warn(
+            f"{filename}: Slope series contains infinite values. Replaced with NaNs",
+            UserWarning,
+        )
+        slope.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+    if slope.isna().all():
+        warnings.warn(
+            f"{filename}: Slope series is all NaN after replacing inf with NaN",
+            UserWarning,
+        )
+        return None
+
+    out_df = pd.DataFrame(
+        {
+            "Slope": slope,
+        },
+        index=lob_df.index,
+    )
+    out_df.index.name = lob_df.index.name
+
+    return out_df
