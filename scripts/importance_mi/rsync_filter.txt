@@ -1,0 +1,11 @@
+# -----------------------------------------------------------------------------
+# Remote runs folder
+# -----------------------------------------------------------------------------
+
++ data/
++ data/interim/
++ data/interim/*/
++ data/interim/*/importance-mi/
++ data/interim/*/importance-mi/runs/***
+
+- *
