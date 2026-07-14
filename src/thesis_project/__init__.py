@@ -1,3 +1,0 @@
-"""
-Thesis project package.
-"""

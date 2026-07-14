@@ -2,7 +2,7 @@ import warnings
 from datetime import date
 from typing import Optional
 
-from thesis_project import config
+from thesis_project import config as global_config
 
 
 def filename_to_date(
@@ -17,7 +17,7 @@ def filename_to_date(
     Returns:
         A date object if the filename contains a valid date, otherwise None.
     """
-    match = config.DATE_PATTERN.search(filename)
+    match = global_config.DATE_PATTERN.search(filename)
     if not match:
         warnings.warn(f"Filename '{filename}' does not match expected date pattern.", UserWarning)
         return None

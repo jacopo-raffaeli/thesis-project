@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from thesis_project import config
+from thesis_project import config as global_config
 from thesis_project.utils.dates import filename_to_date
 
 
@@ -276,8 +276,8 @@ def collect_spread_sign(
     )
     out_df.index.name = "Date"
 
-    bid_cols = [c for c in df.columns if config.BID_PRICE_COL_PATTERN.match(c)]
-    ask_cols = [c for c in df.columns if config.ASK_PRICE_COL_PATTERN.match(c)]
+    bid_cols = [c for c in df.columns if global_config.BID_PRICE_COL_PATTERN.match(c)]
+    ask_cols = [c for c in df.columns if global_config.ASK_PRICE_COL_PATTERN.match(c)]
 
     spread_check = {
         i: bool(((df[ask_col] - df[bid_col]).dropna() >= 0).all())
@@ -321,8 +321,8 @@ def collect_volume_sign(
     )
     out_df.index.name = "Date"
 
-    bid_cols = [c for c in df.columns if config.BID_SIZE_COL_PATTERN.match(c)]
-    ask_cols = [c for c in df.columns if config.ASK_SIZE_COL_PATTERN.match(c)]
+    bid_cols = [c for c in df.columns if global_config.BID_SIZE_COL_PATTERN.match(c)]
+    ask_cols = [c for c in df.columns if global_config.ASK_SIZE_COL_PATTERN.match(c)]
 
     bid_check = {i: bool((df[col].dropna() >= 0).all()) for i, col in enumerate(bid_cols, start=1)}
     ask_check = {i: bool((df[col].dropna() >= 0).all()) for i, col in enumerate(ask_cols, start=1)}
@@ -368,8 +368,8 @@ def collect_bid_ask_order(
     )
     out_df.index.name = "Date"
 
-    bid_cols = [c for c in df.columns if config.BID_PRICE_COL_PATTERN.match(c)]
-    ask_cols = [c for c in df.columns if config.ASK_PRICE_COL_PATTERN.match(c)]
+    bid_cols = [c for c in df.columns if global_config.BID_PRICE_COL_PATTERN.match(c)]
+    ask_cols = [c for c in df.columns if global_config.ASK_PRICE_COL_PATTERN.match(c)]
 
     bid_df = df[bid_cols]
     ask_df = df[ask_cols]

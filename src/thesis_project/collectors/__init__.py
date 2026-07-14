@@ -19,6 +19,8 @@ from .microstructure import (
     compute_mid_price,
     compute_obi,
     compute_ofi,
+    compute_slope_v1,
+    compute_slope_v2,
     compute_spread,
 )
 from .relationships import (
@@ -55,6 +57,8 @@ __all__ = [
     "compute_micro_price",
     "compute_obi",
     "compute_ofi",
+    "compute_slope_v1",
+    "compute_slope_v2",
     # relationships.py
     "compute_gross_basis",
     "compute_implied_repo",
