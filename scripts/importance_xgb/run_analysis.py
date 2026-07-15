@@ -15,18 +15,6 @@ def parse_args():
     )
     parser.add_argument("--sample-ratio", type=float, help="Sampling ratio for data", required=True)
     parser.add_argument(
-        "--use-base-target",
-        action=argparse.BooleanOptionalAction,
-        help="Use the base target series or the transformation specified in config",
-        required=True,
-    )
-    parser.add_argument(
-        "--use-tscv",
-        action=argparse.BooleanOptionalAction,
-        help="Use time series cross-validation or hold-out validation",
-        required=True,
-    )
-    parser.add_argument(
         "--n_quantile", type=int, help="Number of quantiles for the classification task", default=3
     )
     parser.add_argument(
@@ -36,6 +24,14 @@ def parse_args():
         required=True,
     )
     parser.add_argument("--n-jobs-xgb", type=int, help="Parallel jobs for XGBoost", required=True)
+    parser.add_argument(
+        "--optuna-n-trials",
+        type=int,
+        help="Number of optimization trials for Optuna",
+        required=True,
+    )
+    parser.add_argument("--use-base-target", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--use-tscv", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument(
         "--log-level",
         type=str,
