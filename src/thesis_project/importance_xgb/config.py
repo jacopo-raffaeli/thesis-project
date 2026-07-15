@@ -22,10 +22,6 @@ class AnalysisConfig:
     seed: int = 42
     base_dir: str = "importance-xgb"
 
-    # Parallelization
-    n_jobs_preprocessing: int = 4
-    n_jobs_xgb: int = -1
-
     # Market specific
     min_time: str = "09:00:00"
     max_time: str = "17:00:00"
@@ -66,9 +62,10 @@ class AnalysisConfig:
                 name="delta",
                 params={
                     "deltas": [
-                        10,
+                        # 10,
                         60,
-                        600,
+                        300,
+                        # 600,
                     ],
                 },
             ),
@@ -78,7 +75,7 @@ class AnalysisConfig:
                     "windows": [
                         300,
                         600,
-                        1800,
+                        # 1800,
                     ],
                     "stats": [
                         "mean",
@@ -103,10 +100,10 @@ class AnalysisConfig:
     # Calendar features
     calendar_features: List[str] = field(
         default_factory=lambda: [
-            "year",
+            # "year",
             "month",
-            "week_of_year",
-            "day_of_year",
+            # "week_of_year",
+            # "day_of_year",
             "day_of_month",
             "day_of_week",
             "hour_of_day",
@@ -171,6 +168,11 @@ class AnalysisConfig:
         }
     )
 
+    # Parallelization
+    n_jobs_preprocessing: int = 4
+    n_jobs_xgb: int = -1
+    n_jobs_seed: int = 5
+
     # Training
     perc_train: float = 0.7
     perc_val: float = 0.2
@@ -182,6 +184,7 @@ class AnalysisConfig:
     n_quantile: int = 3
 
     # Optuna
+    optuna_n_seeds: int = 5
     optuna_n_trials: int = 150
     optuna_sampler_n_startup_trials: int = 20
     optuna_pruner_n_startup_trials: int = 25
@@ -212,7 +215,6 @@ def get_xgb_fixed_params(config_obj: AnalysisConfig):
         "eval_metric": "mlogloss",
         "tree_method": "hist",
         "verbosity": 0,
-        "random_state": config_obj.seed,
         "n_jobs": config_obj.n_jobs_xgb,
     }
 
