@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import optuna
 import pandas as pd
+from joblib import Parallel, delayed
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 def objective(
     trial: optuna.Trial,
     config_obj: config.AnalysisConfig,
+    seeds,
     X: pd.DataFrame,
     y: pd.DataFrame,
     splits: list[tuple[np.ndarray, np.ndarray]],
@@ -36,16 +38,67 @@ def objective(
         "early_stopping_rounds": 100,
         # Tree Booster
         "learning_rate": trial.suggest_float("learning_rate", 1e-3, 2e-1, log=True),
-        "max_depth": trial.suggest_int("max_depth", 3, 12),
+        "max_depth": trial.suggest_int("max_depth", 3, 13, step=2),
         "min_child_weight": trial.suggest_float("min_child_weight", 1e-2, 1e2, log=True),
         "lambda": trial.suggest_float("lambda", 1e-8, 1e1, log=True),
         "alpha": trial.suggest_float("alpha", 1e-8, 1e1, log=True),
-        "gamma": trial.suggest_float("gamma", 0, 10),
+        "gamma": trial.suggest_float("gamma", 1e-8, 1, log=True),
         # Sampling
-        "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+        "subsample": 0.7,
+        "colsample_bytree": 0.7,
     }
 
+    # Parallelize over seeds
+    results = Parallel(
+        n_jobs=config_obj.n_jobs_seed,
+        backend="loky",
+    )(
+        delayed(train)(
+            config_obj=config_obj,
+            X=X,
+            y=y,
+            params=params,
+            splits=splits,
+            seed=seed,
+        )
+        for seed in seeds
+    )
+
+    scores = []
+    best_iterations = []
+    metrics = {
+        "accuracy": [],
+        "balanced_accuracy": [],
+        "precision": [],
+        "recall": [],
+        "f1": [],
+        "mcc": [],
+    }
+
+    for seed_scores, seed_best_iterations, seed_metrics in results:  # type: ignore
+        scores.extend(seed_scores)
+        best_iterations.extend(seed_best_iterations)
+
+        for k in metrics:
+            metrics[k].extend(seed_metrics[k])
+
+    for k, values in metrics.items():
+        trial.set_user_attr(k, values)
+
+    trial.set_user_attr("scores", [float(v) for v in scores])
+    trial.set_user_attr("best_iterations", [int(v) for v in best_iterations])
+
+    return float(np.mean(scores))
+
+
+def train(
+    config_obj: config.AnalysisConfig,
+    X,
+    y,
+    params,
+    splits,
+    seed: int,
+):
     scores = []
     best_iterations = []
     metrics = {
@@ -64,7 +117,7 @@ def objective(
         y_train = y.iloc[idx_train]
         y_val = y.iloc[idx_val]
 
-        model = XGBClassifier(**params)
+        model = XGBClassifier(random_state=seed, **params)
         model.fit(X_train, y_train.iloc[:, 0], eval_set=[(X_val, y_val.iloc[:, 0])], verbose=False)
 
         y_val_proba = model.predict_proba(X_val)
@@ -80,20 +133,7 @@ def objective(
         for k, v in fold_metrics.items():
             metrics[k].append(v)
 
-        mean_score = float(np.mean(scores))
-        trial.report(value=mean_score, step=fold)
-
-        if trial.should_prune():
-            raise optuna.TrialPruned()
-
-    trial.set_user_attr("scores", [float(v) for v in scores])
-
-    trial.set_user_attr("best_iterations", [int(v) for v in best_iterations])
-
-    for k, v_list in metrics.items():
-        trial.set_user_attr(k, [float(v) for v in v_list])
-
-    return float(np.mean(scores))
+    return scores, best_iterations, metrics
 
 
 def compute_metrics(y_true, y_pred):
