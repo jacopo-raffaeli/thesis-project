@@ -1,7 +1,7 @@
 import datetime
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -241,18 +241,35 @@ def preprocess_timestamps(
 
 
 def build_transforms(
-    transform_specs: List[config.TransformSpec] | config.TransformSpec, columns: str
-) -> List:
+    transform_specs: List[config.TransformSpec] | config.TransformSpec, feature_name: str
+) -> List[Tuple[Any, config.TransformSpec]]:
     if isinstance(transform_specs, config.TransformSpec):
         transform_specs = [transform_specs]
 
     transforms = []
     for spec in transform_specs:
+        # Apply filters
+        if spec.apply_to is not None and feature_name not in spec.apply_to:
+            continue
+
         transform_cls = registry.TRANSFORM_REGISTRY[spec.name]
-        transform = transform_cls(columns=[columns], **spec.params)
-        transforms.append(transform)
+        transform = transform_cls(columns=[feature_name], **spec.params)
+        transforms.append((transform, spec))
 
     return transforms
+
+
+def apply_lags(df: pd.DataFrame, lags: list[int]) -> pd.DataFrame:
+    assert isinstance(df.index, pd.DatetimeIndex)
+    grouped = df.groupby(df.index.normalize())
+
+    blocks = []
+    for lag in lags:
+        lagged = grouped.shift(lag)
+        lagged.columns = [f"{col}_lag_{lag}" for col in df.columns]
+        blocks.append(lagged)
+
+    return pd.concat(blocks, axis=1)
 
 
 def preprocess_target(
@@ -267,7 +284,7 @@ def preprocess_target(
     # Search target transform if enabled
     if not config_obj.use_base_target:
         columns = target_df.columns[0]
-        transform = build_transforms(config_obj.target_transform, columns)[0]
+        transform, _ = build_transforms(config_obj.target_transform, columns)[0]
         target_df = transform.compute(target_df, grouped)
         assert isinstance(target_df.index, pd.DatetimeIndex)
         target_idx_norm = target_df.index.normalize()
@@ -304,8 +321,14 @@ def preprocess_market_feature(
     transforms = build_transforms(config_obj.feature_transforms, feat_name)
 
     derived_blocks = []
-    for transform in transforms:
-        derived_blocks.append(transform.compute(feat_df, grouped_by_session))
+    for transform, spec in transforms:
+        derived_df = transform.compute(feat_df, grouped_by_session)
+
+        # Aplly lags if any
+        if spec.lags:
+            derived_df = apply_lags(derived_df, spec.lags)
+
+        derived_blocks.append(derived_df)
 
     if derived_blocks:
         derived_df = pd.concat(
