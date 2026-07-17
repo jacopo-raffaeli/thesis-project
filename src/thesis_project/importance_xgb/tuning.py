@@ -43,9 +43,6 @@ def objective(
         "lambda": trial.suggest_float("lambda", 1e-8, 1e1, log=True),
         "alpha": trial.suggest_float("alpha", 1e-8, 1e1, log=True),
         "gamma": trial.suggest_float("gamma", 1e-8, 1, log=True),
-        # Sampling
-        "subsample": 0.7,
-        "colsample_bytree": 0.7,
     }
 
     # Parallelize over seeds

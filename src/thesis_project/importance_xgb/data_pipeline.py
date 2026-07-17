@@ -423,7 +423,7 @@ def preprocess_features(
 ) -> pd.DataFrame:
     logger.info("Preprocessing market features")
     mrkt_df = preprocess_market_features(config_obj, idx_sampled, dates_sampled)
-    logger.info("Market features preprocessed")
+    logger.info("Market features preprocessed (%d)", len(mrkt_df))
     logger.debug("List of market features:")
     for col in mrkt_df.columns:
         data = mrkt_df[col]
@@ -434,7 +434,7 @@ def preprocess_features(
 
     logger.info("Preprocessing temporal features")
     temp_df = preprocess_temporal_features(config_obj, idx_sampled, dates_sampled)
-    logger.info("Temporal features preprocessed")
+    logger.info("Temporal features preprocessed (%d)", len(temp_df))
     logger.debug("List of temporal features:")
     for col in temp_df.columns:
         data = temp_df[col]
