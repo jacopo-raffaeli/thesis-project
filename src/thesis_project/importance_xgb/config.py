@@ -192,7 +192,7 @@ class AnalysisConfig:
     optuna_pruner_n_startup_trials: int = 25
     optuna_pruner_n_warmup_steps: int = 30
 
-    # SHAP ANalysis
+    # SHAP Analysis
     shap_n_samples = 2500
 
 
