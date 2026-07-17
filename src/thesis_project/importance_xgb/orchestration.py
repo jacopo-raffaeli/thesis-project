@@ -82,11 +82,18 @@ def run_analysis(config_obj: config.AnalysisConfig):
 
     # Preprocess target
     logger.info("Preprocessing target")
-    y, idx_sampled, dates_sampled = data_pipeline.preprocess_target(
+    y = data_pipeline.preprocess_target(
         config_obj,
         target_df,
     )
     logger.info("Target preprocessed")
+
+    # Sample timestamps
+    assert isinstance(y.index, pd.DatetimeIndex)
+    idx_sampled, dates_sampled = data_pipeline.preprocess_timestamps(config_obj, y.index)
+
+    # Retain only sampled target
+    y = y.loc[idx_sampled]
 
     # Preprocess market features
     logger.info("Preprocessing features")

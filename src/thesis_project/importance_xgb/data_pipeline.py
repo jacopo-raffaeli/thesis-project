@@ -275,7 +275,7 @@ def apply_lags(df: pd.DataFrame, lags: list[int]) -> pd.DataFrame:
 def preprocess_target(
     config_obj: config.AnalysisConfig,
     target_df: pd.DataFrame,
-) -> Tuple[pd.DataFrame, pd.DatetimeIndex, pd.DatetimeIndex]:
+) -> pd.DataFrame:
     """ """
     assert isinstance(target_df.index, pd.DatetimeIndex)
     target_idx_norm = target_df.index.normalize()
@@ -292,13 +292,9 @@ def preprocess_target(
 
     target_shifted_df = grouped.shift(-config_obj.horizon)
     mask = target_shifted_df.notna().all(axis=1)
-    target_shifted_df = target_shifted_df[mask]
+    y = target_shifted_df[mask]
 
-    assert isinstance(target_shifted_df.index, pd.DatetimeIndex)
-    idx_sampled, dates_sampled = preprocess_timestamps(config_obj, target_shifted_df.index)
-    y = target_shifted_df.loc[idx_sampled]
-
-    return y, idx_sampled, dates_sampled
+    return y
 
 
 def preprocess_market_feature(
@@ -317,14 +313,14 @@ def preprocess_market_feature(
     feat_df = feat_df.loc[mask]
     feat_idx_norm = feat_idx_norm[mask]
 
-    grouped_by_session = feat_df.groupby(feat_idx_norm)
+    grouped = feat_df.groupby(feat_idx_norm)
     transforms = build_transforms(config_obj.feature_transforms, feat_name)
 
     derived_blocks = []
     for transform, spec in transforms:
-        derived_df = transform.compute(feat_df, grouped_by_session)
+        derived_df = transform.compute(feat_df, grouped)
 
-        # Aplly lags if any
+        # Apply lags if any
         if spec.lags:
             derived_df = apply_lags(derived_df, spec.lags)
 

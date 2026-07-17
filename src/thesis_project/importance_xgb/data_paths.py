@@ -34,12 +34,8 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
         "basis": ms_path / "basis" / "gross_basis_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         "irr": ms_path / "irr" / "irr_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Mid Prices
-        "fut_mid_price": ms_path
-        / "mid-price"
-        / "fut_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_mid_price": ms_path
-        / "mid-price"
-        / "ctd_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_mid_price": ms_path / "mid-price" / "fut_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_mid_price": ms_path / "mid-price" / "ctd_mid_price_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Micro Prices
         "fut_micro_price": ms_path
         / "micro-price"
@@ -74,43 +70,19 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
         / "obi"
         / "ctd_obi_lvl_3_scaled_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Bid Order Flow
-        "fut_bof_lvl_1": ms_path
-        / "ofi"
-        / "fut_bof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_bof_lvl_1": ms_path
-        / "ofi"
-        / "ctd_bof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_bof_lvl_2": ms_path
-        / "ofi"
-        / "fut_bof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_bof_lvl_2": ms_path
-        / "ofi"
-        / "ctd_bof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_bof_lvl_3": ms_path
-        / "ofi"
-        / "fut_bof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_bof_lvl_3": ms_path
-        / "ofi"
-        / "ctd_bof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_bof_lvl_1": ms_path / "ofi" / "fut_bof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_bof_lvl_1": ms_path / "ofi" / "ctd_bof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_bof_lvl_2": ms_path / "ofi" / "fut_bof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_bof_lvl_2": ms_path / "ofi" / "ctd_bof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_bof_lvl_3": ms_path / "ofi" / "fut_bof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_bof_lvl_3": ms_path / "ofi" / "ctd_bof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Ask Order Flow
-        "fut_aof_lvl_1": ms_path
-        / "ofi"
-        / "fut_aof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_aof_lvl_1": ms_path
-        / "ofi"
-        / "ctd_aof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_aof_lvl_2": ms_path
-        / "ofi"
-        / "fut_aof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_aof_lvl_2": ms_path
-        / "ofi"
-        / "ctd_aof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_aof_lvl_3": ms_path
-        / "ofi"
-        / "fut_aof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_aof_lvl_3": ms_path
-        / "ofi"
-        / "ctd_aof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_aof_lvl_1": ms_path / "ofi" / "fut_aof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_aof_lvl_1": ms_path / "ofi" / "ctd_aof_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_aof_lvl_2": ms_path / "ofi" / "fut_aof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_aof_lvl_2": ms_path / "ofi" / "ctd_aof_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_aof_lvl_3": ms_path / "ofi" / "fut_aof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_aof_lvl_3": ms_path / "ofi" / "ctd_aof_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Order Flow Imbalance
         "fut_ofi_lvl_1": ms_path
         / "ofi"
@@ -131,18 +103,10 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
         / "ofi"
         / "ctd_ofi_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Slope v1
-        "fut_ask_slope_v1_lvl_1": ms_path
-        / "slope"
-        / "fut_ask_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_ask_slope_v1_lvl_1": ms_path
-        / "slope"
-        / "ctd_ask_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_bid_slope_v1_lvl_1": ms_path
-        / "slope"
-        / "fut_bid_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_bid_slope_v1_lvl_1": ms_path
-        / "slope"
-        / "ctd_bid_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_ask_slope_v1_lvl_1": ms_path / "slope" / "fut_ask_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_ask_slope_v1_lvl_1": ms_path / "slope" / "ctd_ask_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_bid_slope_v1_lvl_1": ms_path / "slope" / "fut_bid_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_bid_slope_v1_lvl_1": ms_path / "slope" / "ctd_bid_slope_v1_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_ask_slope_v1_lvl_2": ms_path / "slope" / "fut_ask_slope_v1_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "ctd_ask_slope_v1_lvl_2": ms_path / "slope" / "ctd_ask_slope_v1_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_bid_slope_v1_lvl_2": ms_path / "slope" / "fut_bid_slope_v1_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
@@ -152,18 +116,10 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
         # "fut_bid_slope_v1_lvl_3": ms_path / "slope" / "fut_bid_slope_v1_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "ctd_bid_slope_v1_lvl_3": ms_path / "slope" / "ctd_bid_slope_v1_lvl_3_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # Slope v2
-        "fut_ask_slope_v2_lvl_1": ms_path
-        / "slope"
-        / "fut_ask_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_ask_slope_v2_lvl_1": ms_path
-        / "slope"
-        / "ctd_ask_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "fut_bid_slope_v2_lvl_1": ms_path
-        / "slope"
-        / "fut_bid_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
-        "ctd_bid_slope_v2_lvl_1": ms_path
-        / "slope"
-        / "ctd_bid_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_ask_slope_v2_lvl_1": ms_path / "slope" / "fut_ask_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_ask_slope_v2_lvl_1": ms_path / "slope" / "ctd_ask_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "fut_bid_slope_v2_lvl_1": ms_path / "slope" / "fut_bid_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
+        # "ctd_bid_slope_v2_lvl_1": ms_path / "slope"/ "ctd_bid_slope_v2_lvl_1_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_ask_slope_v2_lvl_2": ms_path / "slope" / "fut_ask_slope_v2_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "ctd_ask_slope_v2_lvl_2": ms_path / "slope" / "ctd_ask_slope_v2_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",
         # "fut_bid_slope_v2_lvl_2": ms_path / "slope" / "fut_bid_slope_v2_lvl_2_freq_1s_from_2022_08_01_to_2024_12_30.parquet",

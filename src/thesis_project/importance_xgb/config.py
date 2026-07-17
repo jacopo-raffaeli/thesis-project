@@ -9,6 +9,8 @@ from thesis_project.importance_xgb import registry
 class TransformSpec:
     name: str
     params: Dict[str, Any]
+    apply_to: List[str] | None = None
+    lags: List[int] | None = None
 
 
 @dataclass
@@ -60,22 +62,20 @@ class AnalysisConfig:
         default_factory=lambda: [
             TransformSpec(
                 name="delta",
+                apply_to=["basis"],
                 params={
                     "deltas": [
-                        # 10,
                         60,
-                        300,
-                        # 600,
                     ],
                 },
+                lags=list(range(0, (20 + 1) * 60, 60)),
             ),
             TransformSpec(
                 name="rolling",
                 params={
                     "windows": [
                         300,
-                        600,
-                        # 1800,
+                        1800,
                     ],
                     "stats": [
                         "mean",
@@ -117,12 +117,12 @@ class AnalysisConfig:
 
     calendar_features_encoded: List[str] = field(
         default_factory=lambda: [
-            "hour_of_day",
-            "minute_of_day",
-            "minute_of_hour",
-            "second_of_day",
-            "second_of_hour",
-            "second_of_minute",
+            # "hour_of_day",
+            # "minute_of_day",
+            # "minute_of_hour",
+            # "second_of_day",
+            # "second_of_hour",
+            # "second_of_minute",
         ]
     )
 
@@ -134,11 +134,11 @@ class AnalysisConfig:
                 "column": "Last Trading Date",
                 "transforms": ["days_to_next", "days_to_prev"],
             },
-            "fut_delivery_day": {
-                "file": "fut_metadata.csv",
-                "column": "Delivery Date",
-                "transforms": ["days_to_next", "days_to_prev"],
-            },
+            # "fut_delivery_day": {
+            #     "file": "fut_metadata.csv",
+            #     "column": "Delivery Date",
+            #     "transforms": ["days_to_next", "days_to_prev"],
+            # },
             # "FUT Option Maturity Day": {
             #     "file": None,
             #     "column": None,
@@ -330,6 +330,30 @@ def _validate_transform_params(name, params):
             f"Invalid target parameters '{set(params.keys())}', "
             f"valid transforms [{', '.join(sorted(registry.TRANSFORM_PARAMETER_REGISTRY[name]))}]"
         )
+
+
+# def _validate_transform_apply_to(apply_to):
+#     if apply_to is None:
+#         return
+
+#     if not isinstance(apply_to, list):
+#         raise ValueError("'apply_to' must be a list of feature names or None")
+
+#     if len(apply_to) == 0:
+#         raise ValueError("'apply_to' cannot be an empty list")
+
+#     if any(type(x) is not str for x in apply_to):
+#         raise ValueError("'apply_to' must contain only strings")
+
+#     if len(set(apply_to)) != len(apply_to):
+#         raise ValueError("'apply_to' contains duplicated feature names")
+
+#     invalid = sorted(set(apply_to) - set(data_paths.get_data_paths()))
+#     if invalid:
+#         raise ValueError(
+#             f"Unknown feature(s) in apply_to: {invalid}. "
+#             f"Valid features are {sorted(global_config.BASE_FEATURES)}"
+#         )
 
 
 def _validate_transform_delta(params):
