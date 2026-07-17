@@ -1,6 +1,7 @@
 import logging
 from dataclasses import asdict
 from functools import partial
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -29,6 +30,9 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     n_run = utils.generate_run_number(config_obj)
     output_path = utils.generate_run_path(config_obj)
 
+    # Get feature and target data paths
+    paths = data_paths.get_data_paths(config_obj.ticker)
+
     logger.info(f"""
 
     XGBoost importance analysis:
@@ -36,11 +40,11 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     Ticker:                 {config_obj.ticker}
     Time window:            {config_obj.min_time} - {config_obj.max_time}
     Sample ratio:           {config_obj.sampling_params["sample_ratio"]}
+    N seeds:                {config_obj.optuna_n_seeds}
     Use base target:        {config_obj.use_base_target}
     Use tscv:               {config_obj.use_tscv}
     N jobs preprocessing:   {config_obj.n_jobs_preprocessing}
     N jobs xgboost:         {config_obj.n_jobs_xgb}
-    N seeds:                {config_obj.optuna_n_seeds}
     N jobs seed:            {config_obj.n_jobs_seed}
     Quantiles:              {config_obj.n_quantile}
     Optuna trials:          {config_obj.optuna_n_trials}
@@ -51,74 +55,32 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     """)
 
     # Save experiment config
-    with open(output_path / "config.json", "w") as f:
-        yaml.safe_dump(asdict(config_obj), f, sort_keys=False)
-    logger.info("Experiment config saved to '%s'", "config.json")
-
-    # Get feature and target data paths
-    paths = data_paths.get_data_paths(config_obj.ticker)
+    filename = "config.yaml"
+    _save_config(config_obj, output_path, filename)
+    logger.info("Experiment config saved to '%s'", filename)
 
     # Save experiment data paths
-    with open(output_path / "data_paths.yaml", "w") as f:
-        k, v = paths.target
-        paths_dict = {
-            "target": {k: str(v)},
-            "features": {k: str(v) for k, v in paths.features.items()},
-        }
-        yaml.safe_dump(paths_dict, f, sort_keys=False)
-    logger.info("Experiment data paths saved to '%s'", "data_paths.yaml")
+    filename = "data_paths.yaml"
+    _save_paths(paths, output_path, filename)
+    logger.info("Experiment data paths saved to '%s'", filename)
 
     # Generate seeds
     rng = np.random.default_rng(np.random.randint(0, 9999))
     seeds = rng.integers(0, 9999, size=config_obj.optuna_n_seeds)
 
-    # Load target
-    (target_name, target_path) = paths.target
-    target_df = data_pipeline.load_data(target_name, target_path)
-    logger.info(
-        "Base target '%s' loaded from '%s'",
-        target_name,
-        target_path.relative_to(global_config.ROOT),
-    )
-
-    # Preprocess target
-    logger.info("Preprocessing target")
-    y = data_pipeline.preprocess_target(
-        config_obj,
-        target_df,
-    )
-    logger.info("Target preprocessed")
-
-    # Sample timestamps
-    assert isinstance(y.index, pd.DatetimeIndex)
-    idx_sampled, dates_sampled = data_pipeline.preprocess_timestamps(config_obj, y.index)
-
-    # Retain only sampled target
-    y = y.loc[idx_sampled]
-
-    # Preprocess market features
-    logger.info("Preprocessing features")
-    X = data_pipeline.preprocess_features(config_obj, idx_sampled, dates_sampled)
-    logger.info("Features preprocessed")
-
-    # Match features and target
-    X, y = data_pipeline.match_X_y(config_obj, X, y)
-    logger.info("Target and features datasets aligned")
-
-    # Split data
-    X_Y_split = data_pipeline.split_data(config_obj, X, y)
-    logger.info("Dataset splitted for training")
+    # Prepare dataset
+    data_splits = _prepare_data(config_obj, paths)
 
     # Extract the features sets
-    X_train = X_Y_split["train"]["features"]
-    X_val = X_Y_split["validation"]["features"]
-    X_test = X_Y_split["test"]["features"]
+    X_train = data_splits["train"]["features"]
+    X_val = data_splits["validation"]["features"]
+    X_test = data_splits["test"]["features"]
     X_train_val = pd.concat([X_train, X_val])
 
     # Extract the target sets
-    y_train = X_Y_split["train"]["target"]
-    y_val = X_Y_split["validation"]["target"]
-    y_test = X_Y_split["test"]["target"]
+    y_train = data_splits["train"]["target"]
+    y_val = data_splits["validation"]["target"]
+    y_test = data_splits["test"]["target"]
     y_train_val = pd.concat([y_train, y_val])
 
     # Compute bins for classification
@@ -225,7 +187,7 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
 
     # Save metadata
     metadata = {
-        "n_features": len(X.columns),
+        "n_features": len(X_train.columns),
         "train_size": len(X_train),
         "val_size": len(X_val),
         "test_size": len(X_test),
@@ -243,6 +205,49 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
 
 def run_analysis_selection():
     pass
+
+
+def _prepare_data(
+    config_obj: config.AnalysisConfig, paths: data_paths.DataPathsConfig
+) -> dict[str, dict[str, pd.DataFrame]]:
+    # Load target
+    (target_name, target_path) = paths.target
+    target_df = data_pipeline.load_data(target_name, target_path)
+    logger.info(
+        "Base target '%s' loaded from '%s'",
+        target_name,
+        target_path.relative_to(global_config.ROOT),
+    )
+
+    # Preprocess target
+    logger.info("Preprocessing target")
+    y = data_pipeline.preprocess_target(
+        config_obj,
+        target_df,
+    )
+    logger.info("Target preprocessed")
+
+    # Sample timestamps
+    assert isinstance(y.index, pd.DatetimeIndex)
+    idx_sampled, dates_sampled = data_pipeline.preprocess_timestamps(config_obj, y.index)
+
+    # Retain only sampled target
+    y = y.loc[idx_sampled]
+
+    # Preprocess market features
+    logger.info("Preprocessing features")
+    X = data_pipeline.preprocess_features(config_obj, idx_sampled, dates_sampled)
+    logger.info("Features preprocessed")
+
+    # Match features and target
+    X, y = data_pipeline.match_X_y(config_obj, X, y)
+    logger.info("Target and features datasets aligned")
+
+    # Split data
+    X_y_split = data_pipeline.split_data(config_obj, X, y)
+    logger.info("Dataset splitted for training")
+
+    return X_y_split
 
 
 def _train_best_model(
@@ -285,3 +290,18 @@ def _train_best_model(
         index=y_test.index,
     ).to_parquet(path / filename)
     logger.info("Target test set predicted probabilities saved to '%s'", filename)
+
+
+def _save_config(config_obj: config.AnalysisConfig, path: Path, filename: str):
+    with open(path / filename, "w") as f:
+        yaml.safe_dump(asdict(config_obj), f, sort_keys=False)
+
+
+def _save_paths(paths: data_paths.DataPathsConfig, path: Path, filename: str):
+    with open(path / filename, "w") as f:
+        k, v = paths.target
+        paths_dict = {
+            "target": {k: str(v)},
+            "features": {k: str(v) for k, v in paths.features.items()},
+        }
+        yaml.safe_dump(paths_dict, f, sort_keys=False)
