@@ -20,6 +20,7 @@ class AnalysisConfig:
     """
 
     # General
+    analysis: str
     ticker: str = "fbtp"
     seed: int = 42
     base_dir: str = "importance-xgb"
@@ -182,6 +183,7 @@ class AnalysisConfig:
     # XGBoost
     keep_features_nan: bool = True
     n_quantile: int = 3
+    xgb_importance = "gain"
 
     # Optuna
     optuna_n_seeds: int = 5
@@ -189,6 +191,9 @@ class AnalysisConfig:
     optuna_sampler_n_startup_trials: int = 20
     optuna_pruner_n_startup_trials: int = 25
     optuna_pruner_n_warmup_steps: int = 30
+
+    # SHAP ANalysis
+    shap_n_samples = 2500
 
 
 def create_config(**overrides) -> AnalysisConfig:
@@ -209,14 +214,38 @@ def create_config(**overrides) -> AnalysisConfig:
 
 
 def get_xgb_fixed_params(config_obj: AnalysisConfig):
-    return {
-        "objective": "multi:softprob",
-        "num_class": config_obj.n_quantile,
-        "eval_metric": "mlogloss",
-        "tree_method": "hist",
-        "verbosity": 0,
-        "n_jobs": config_obj.n_jobs_xgb,
-    }
+    params = {}
+
+    if config_obj.analysis == "importance":
+        params = {
+            "objective": "multi:softprob",
+            "num_class": config_obj.n_quantile,
+            "eval_metric": "mlogloss",
+            "tree_method": "hist",
+            "verbosity": 0,
+            "n_jobs": config_obj.n_jobs_xgb,
+            "subsample": 0.7,
+            "colsample_bytree": 0.7,
+        }
+    elif config_obj.analysis == "selection":
+        params = {
+            "objective": "reg:squarederror",
+            "eval_metric": "rmse",
+            "verbosity": 0,
+            "n_jobs": config_obj.n_jobs_xgb,
+            "n_estimators": 3000,
+            "early_stopping_rounds": 100,
+            "learning_rate": 1e-2,
+            "max_depth": 9,
+            "min_child_weight": 10,
+            "lambda": 1e-3,
+            "alpha": 1e-3,
+            "gamma": 1e-3,
+            "subsample": 0.7,
+            "colsample_bytree": 0.7,
+        }
+
+    return params
 
 
 def validate_config(config_obj: AnalysisConfig):

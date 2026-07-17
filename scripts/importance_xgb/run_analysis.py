@@ -3,9 +3,7 @@
 import argparse
 import sys
 
-from thesis_project.importance_xgb import config
-from thesis_project.importance_xgb.orchestration import run_analysis
-from thesis_project.importance_xgb.utils import setup_logging
+from thesis_project.importance_xgb import config, orchestration, utils
 
 
 def parse_args():
@@ -33,6 +31,13 @@ def parse_args():
     parser.add_argument("--use-base-target", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--use-tscv", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument(
+        "--analysis",
+        type=str,
+        help="Choose between importance and selection analysis",
+        choices=["importance", "selection"],
+        required=True,
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -45,12 +50,13 @@ def parse_args():
 
 def main():
     args = parse_args()
-    logger = setup_logging(level=args.log_level)
+    logger = utils.setup_logging(level=args.log_level)
 
     try:
         overrides = {k: v for k, v in vars(args).items() if v is not None and k != "log_level"}
         config_obj = config.create_config(**overrides)
-        run_analysis(config_obj)
+        orchestration.run_analysis(config_obj)
+
         return 0
 
     except Exception as e:
