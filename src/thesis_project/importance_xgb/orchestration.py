@@ -7,6 +7,7 @@ import numpy as np
 import optuna
 import pandas as pd
 import yaml
+from joblib import Parallel, delayed
 from sklearn.model_selection import TimeSeriesSplit
 from xgboost import XGBClassifier
 
@@ -23,7 +24,7 @@ from thesis_project.importance_xgb import (
 logger = logging.getLogger(__name__)
 
 
-def run_analysis(config_obj: config.AnalysisConfig):
+def run_analysis_importance(config_obj: config.AnalysisConfig):
     # Get experiment number and output path
     n_run = utils.generate_run_number(config_obj)
     output_path = utils.generate_run_path(config_obj)
@@ -185,41 +186,32 @@ def run_analysis(config_obj: config.AnalysisConfig):
         "n_estimators": int(np.mean(study.best_trial.user_attrs["best_iterations"])) + 1,
     }
 
+    # Sample subset for shap analysys (for computational reasons)
+    rng = np.random.default_rng(config_obj.seed)
+    shap_n_samples = min(config_obj.shap_n_samples, len(X_test))
+    idx = rng.choice(
+        X_test.index,
+        size=shap_n_samples,
+        replace=False,
+    )
+    X_test_shap = X_test.loc[idx]
+
     # Retrain best model
-    importance_xgb = {}
-    importance_shap = {}
     logger.info("Retraining best configuration on Training + Validation data")
-    for seed in seeds:
-        best_model = XGBClassifier(random_state=seed, **best_params)
-        best_model.fit(X_train_val, y_cls_train_val.iloc[:, 0])
-        # logger.info("Best configuration retrained")
-
-        # Save best model
-        best_model.save_model(output_path / f"model_seed_{seed}.ubj")
-        logger.info("Best model saved to '%s'", f"model_seed_{seed}.ubj")
-
-        # Perform and save xgb importance analysis
-        importance_xgb[seed] = importance.importance_xgb(best_model)
-        importance_xgb[seed].to_csv(output_path / f"importance_xgb_seed_{seed}.csv", index=False)
-        logger.info("XGBoost importance metrics saved to '%s'", f"importance_xgb.csv_seed_{seed}")
-
-        # Perfom and save shap importance analysis
-        importance_shap[seed] = importance.importance_shap(config_obj, best_model, X_test)
-        joblib.dump(
-            importance_shap[seed], output_path / f"importance_shap_seed_{seed}.pkl", compress=True
+    Parallel(n_jobs=config_obj.n_jobs_seed, backend="loky")(
+        delayed(_train_best_model)(
+            config_obj=config_obj,
+            X_train=X_train_val,
+            y_train=y_cls_train_val,
+            X_test=X_test,
+            y_test=y_test,
+            X_test_shap=X_test_shap,
+            best_params=best_params,
+            seed=seed,
+            path=output_path,
         )
-        logger.info("Shap importance metrics saved to '%s'", f"importance_shap_{seed}.csv")
-
-        # Save predicted probabilities
-        pd.DataFrame(
-            best_model.predict_proba(X_test),
-            columns=[f"{y_test.columns[0]}_class_{i}" for i in range(config_obj.n_quantile)],
-            index=y_test.index,
-        ).to_parquet(output_path / f"y_cls_proba_test_seed_{seed}.parquet")
-        logger.info(
-            "Target test set predicted probabilities saved to '%s'",
-            f"y_cls_proba_test_seed_{seed}.parquet",
-        )
+        for seed in seeds
+    )
 
     # Save target
     y_test.to_parquet(output_path / "y_test.parquet")
@@ -237,6 +229,7 @@ def run_analysis(config_obj: config.AnalysisConfig):
         "train_size": len(X_train),
         "val_size": len(X_val),
         "test_size": len(X_test),
+        "test_shap_size": len(X_test_shap),
         "n_quantile": config_obj.n_quantile,
         "quantile_edges": bins.tolist(),
         "seeds": seeds.tolist(),
@@ -246,3 +239,49 @@ def run_analysis(config_obj: config.AnalysisConfig):
     logger.info("Metadata saved to '%s'", "metadata.yaml")
 
     return 0
+
+
+def run_analysis_selection():
+    pass
+
+
+def _train_best_model(
+    config_obj: config.AnalysisConfig,
+    X_train: pd.DataFrame,
+    y_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_test: pd.DataFrame,
+    X_test_shap: pd.DataFrame,
+    best_params,
+    seed,
+    path,
+):
+    # Retrain best model
+    best_model = XGBClassifier(random_state=seed, **best_params)
+    best_model.fit(X_train, y_train.iloc[:, 0])
+
+    # Save best model
+    filename = f"model_seed_{seed}.ubj"
+    best_model.save_model(path / filename)
+    logger.info("Best model saved to '%s'", filename)
+
+    # Perform and save xgb importance analysis
+    importance_xgb = importance.importance_xgb(best_model)
+    filename = f"importance_xgb_seed_{seed}.csv"
+    importance_xgb.to_csv(path / filename, index=False)
+    logger.info("XGBoost importance metrics saved to '%s'", filename)
+
+    # Perfom and save shap importance analysis
+    importance_shap = importance.importance_shap(config_obj, best_model, X_test_shap)
+    filename = f"importance_shap_seed_{seed}.pkl"
+    joblib.dump(importance_shap, path / filename, compress=True)
+    logger.info("Shap importance metrics saved to '%s'", filename)
+
+    # Save predicted probabilities
+    filename = f"y_cls_proba_test_seed_{seed}.parquet"
+    pd.DataFrame(
+        best_model.predict_proba(X_test),
+        columns=[f"{y_test.columns[0]}_class_{i}" for i in range(config_obj.n_quantile)],
+        index=y_test.index,
+    ).to_parquet(path / filename)
+    logger.info("Target test set predicted probabilities saved to '%s'", filename)
