@@ -195,6 +195,10 @@ class AnalysisConfig:
     # SHAP Analysis
     shap_n_samples = 2500
 
+    # Feature selection
+    patience = 5
+    tol = 1e-3
+
 
 def create_config(**overrides) -> AnalysisConfig:
     """

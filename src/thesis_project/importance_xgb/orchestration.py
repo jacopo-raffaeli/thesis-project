@@ -435,9 +435,9 @@ def _feature_selection_loop(
     best_features = None
 
     # Initialize stopping critieria params
-    patience = 5
+    patience = config_obj.patience
     counter = 0
-    tol = 1e-3
+    tol = config_obj.tol
 
     history = []
     should_stop = False
