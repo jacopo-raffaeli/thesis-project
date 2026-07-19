@@ -19,47 +19,98 @@ from thesis_project.importance_xgb import (
 logger = logging.getLogger(__name__)
 
 
-def get_min_time_offset(config_obj: config.AnalysisConfig) -> int:
+def get_sampling_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
     """
-    Get the cutoff offset from start of day in seconds
+    Get valid sampling window
 
     # Args:
-        - config_obj: Analysis configuration file
+    - config_obj: Analysis configuration file
 
     # Return:
-        - Offset
+    - Tuple of 2 strings in the format hh:mm:ss
+    """
+    min_time = config_obj.min_time
+
+    max_time = pd.Timedelta(config_obj.max_time)
+    max_time = max_time - pd.Timedelta(config_obj.horizon, unit="seconds")
+    max_time = str(max_time).split()[-1]
+
+    return (min_time, max_time)
+
+
+def get_feature_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
+    """
+    Get valid preprocessing window for features
+
+    # Args:
+    - config_obj: Analysis configuration file
+
+    # Return:
+    - Tuple of 2 strings in the format hh:mm:ss
+    """
+    lookback = get_lookback_buffer(config_obj.feature_transforms)
+    min_time = pd.Timedelta(config_obj.min_time)
+    min_time = min_time - pd.Timedelta(lookback, unit="seconds")
+    min_time = str(min_time).split()[-1]
+
+    max_time = pd.Timedelta(config_obj.max_time)
+    max_time = max_time - pd.Timedelta(config_obj.horizon, unit="seconds")
+    max_time = str(max_time).split()[-1]
+
+    return (min_time, max_time)
+
+
+def get_target_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
+    """
+    Get valid preprocessing window for target
+
+    # Args:
+    - config_obj: Analysis configuration file
+
+    # Return:
+    - Tuple of 2 strings in the format hh:mm:ss
+    """
+    lookback = get_lookback_buffer(config_obj.target_transform)
+    min_time = pd.Timedelta(config_obj.min_time)
+    min_time = min_time - pd.Timedelta(lookback, unit="seconds")
+    min_time = str(min_time).split()[-1]
+
+    max_time = config_obj.max_time
+
+    return (min_time, max_time)
+
+
+def get_lookback_buffer(transforms: config.TransformSpec | List[config.TransformSpec]) -> int:
+    """
+    Get the lookback necessary for a certain set of transforms
+
+    # Args:
+    - transforms: List or single object of type TransformSpec
+
+    # Return
+    - int representing the lookback in seconds
     """
 
-    # Initialize to avoid bounds errors
+    if isinstance(transforms, config.TransformSpec):
+        transforms = [transforms]
+
+    max_lag = 0
     max_delta = 0
     max_window = 0
 
-    for feature_transform in config_obj.feature_transforms:
-        if feature_transform.name == "delta":
-            deltas = feature_transform.params["deltas"]
+    for transform in transforms:
+        if transform.lags:
+            max_lag = max(max_lag, max(transform.lags))
+
+        if transform.name == "delta":
+            deltas = transform.params["deltas"]
             max_delta = max(deltas) if deltas is not None else 0
 
-        if feature_transform.name == "rolling":
-            windows = feature_transform.params["windows"]
+        if transform.name == "rolling":
+            windows = transform.params["windows"]
             max_window = max(windows) if windows is not None else 0
 
-    offset = max(max_delta, max_window)
-
-    return offset
-
-
-def get_max_time_offset(config_obj: config.AnalysisConfig) -> int:
-    """
-    Get the cutoff offset from end of day in seconds
-
-    # Args:
-        - config_obj: Analysis configuration object
-
-    # Return:
-        - Offset
-    """
-
-    offset = config_obj.horizon
+    offset = max(max_delta, max_window) + max_lag
 
     return offset
 
@@ -73,13 +124,13 @@ def filter_time(
     Filter DataFrame by time of day with optional buffer.
 
     # Args:
-        - idx: Index to filter
-        - min_time: Minimum time to keep
-        - max_time: Maximum time to keep
-        - buffer_seconds: Additional buffer to substract to min_time
+    - idx: Index to filter
+    - min_time: Minimum time to keep
+    - max_time: Maximum time to keep
+    - buffer_seconds: Additional buffer to substract to min_time
 
     # Return:
-        - Filtered index
+    - Filtered index
     """
     if not isinstance(idx, pd.DatetimeIndex):
         raise TypeError("Index must be a pd.DatetimeIndex")
@@ -102,12 +153,12 @@ def filter_dates(
     Filter DataFrame by structural dates and futures last trading days.
 
     # Args:
-        - idx: Index to filter
-        - ticker: Asset ticker, either 'fbtp' or 'fbts'
-        - date_filters_offset: Dictionary containing an identifier and the number of days to filter before and after dates of such category
+    - idx: Index to filter
+    - ticker: Asset ticker, either 'fbtp' or 'fbts'
+    - date_filters_offset: Dictionary containing an identifier and the number of days to filter before and after dates of such category
 
     # Return:
-        - Filtered index
+    - Filtered index
     """
     if not isinstance(idx, pd.DatetimeIndex):
         raise TypeError("DataFrame index must be a DatetimeIndex")
@@ -171,11 +222,11 @@ def load_data(name: str, path: Path) -> pd.DataFrame:
     Load a single column pd.DataFrame and execute preliminary checks
 
     # Args:
-        - name: String used to rename the column
-        - path: Path object to the file
+    - name: String used to rename the column
+    - path: Path object to the file
 
     # Return:
-        - Pandas dataframe with the series
+    - Pandas dataframe with the series
     """
 
     if not path.exists():
@@ -196,48 +247,6 @@ def load_data(name: str, path: Path) -> pd.DataFrame:
 
     df = df.rename(columns={df.columns[0]: name})
     return df
-
-
-def preprocess_timestamps(
-    config_obj: config.AnalysisConfig, idx: pd.DatetimeIndex
-) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
-    """
-    Preprocess timestamp series. Filter days and time, sample subset
-
-    # Args:
-        - config_obj: Analysis configuration object
-        - idx: pd.DatetimeIndex to process
-
-    # Return:
-        - Sampled timestamps series
-    """
-    if not isinstance(idx, pd.DatetimeIndex):
-        raise ValueError("Index must be a pd.DateTimeIndex")
-
-    # Find min valid sample time
-    min_time = config_obj.min_time
-    min_time_offset = get_min_time_offset(config_obj)
-    min_time_sample = pd.Timedelta(min_time) + pd.Timedelta(min_time_offset, unit="seconds")
-    min_time_sample = str(min_time_sample).split()[-1]
-
-    # Find max valid sample time
-    max_time = config_obj.max_time
-    max_time_offset = get_max_time_offset(config_obj)
-    max_time_sample = pd.Timedelta(max_time) - pd.Timedelta(max_time_offset, unit="seconds")
-    max_time_sample = str(max_time_sample).split()[-1]
-
-    # Filter timestamp series
-    idx_filtered = filter_time(idx, min_time=min_time_sample, max_time=max_time_sample)
-    idx_filtered = filter_dates(idx_filtered, config_obj.ticker, config_obj.date_filters_offsets)
-
-    # Sample timestamps
-    strategy = config_obj.sampling_strategy
-    sampling_params = config_obj.sampling_params
-    idx_sampled = sampling.sample_timestamps(idx_filtered, strategy, sampling_params)
-    idx_sampled = idx_sampled.sort_values()
-    dates_sampled = idx_sampled.normalize().unique()
-
-    return idx_sampled, dates_sampled
 
 
 def build_transforms(
@@ -272,16 +281,69 @@ def apply_lags(df: pd.DataFrame, lags: list[int]) -> pd.DataFrame:
     return pd.concat(blocks, axis=1)
 
 
+def preprocess_timestamps(
+    config_obj: config.AnalysisConfig, idx: pd.DatetimeIndex
+) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
+    """
+    Preprocess timestamp series. Filter days and time, sample subset.
+
+    # Args:
+    - config_obj: Analysis configuration object
+    - idx: pd.DatetimeIndex to process
+
+    # Return:
+    - Sampled timestamps series
+    """
+    if not isinstance(idx, pd.DatetimeIndex):
+        raise ValueError("Index must be a pd.DatetimeIndex")
+
+    min_time, max_time = get_sampling_window(config_obj)
+
+    # Filter timestamp series
+    idx_filtered = filter_time(idx, min_time, max_time)
+    idx_filtered = filter_dates(idx_filtered, config_obj.ticker, config_obj.date_filters_offsets)
+
+    # Sample timestamps
+    idx_sampled = sampling.sample_timestamps(
+        idx_filtered,
+        strategy=config_obj.sampling_strategy,
+        sampling_params=config_obj.sampling_params,
+    )
+    idx_sampled = idx_sampled.sort_values()
+    dates_sampled = idx_sampled.normalize().unique()
+
+    return idx_sampled, dates_sampled
+
+
 def preprocess_target(
     config_obj: config.AnalysisConfig,
     target_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """ """
+    """
+    Preprocess target:
+    - Filter between valid time window
+    - Group by day
+    - Compute transform if enabled
+    - Drop NaNs
+    - Shift target by horizon
+
+    # Args:
+    - config_obj: Analysis configuration object
+    - target_df: Single column dataframe
+
+    # Return:
+    - Preprocessed target dataframe
+    """
+    # Restrict target to valid preprocess window
+    min_time, max_time = get_target_window(config_obj)
+    target_df = target_df.between_time(min_time, max_time)
+
+    # Group by day
     assert isinstance(target_df.index, pd.DatetimeIndex)
     target_idx_norm = target_df.index.normalize()
     grouped = target_df.groupby(target_idx_norm)
 
-    # Search target transform if enabled
+    # Compute target transform if enabled
     if not config_obj.use_base_target:
         columns = target_df.columns[0]
         transform, _ = build_transforms(config_obj.target_transform, columns)[0]
@@ -290,11 +352,12 @@ def preprocess_target(
         target_idx_norm = target_df.index.normalize()
         grouped = target_df.groupby(target_idx_norm)
 
+    # Shift target
     target_shifted_df = grouped.shift(-config_obj.horizon)
     mask = target_shifted_df.notna().all(axis=1)
-    y = target_shifted_df[mask]
+    target_shifted_df = target_shifted_df[mask]
 
-    return y
+    return target_shifted_df
 
 
 def preprocess_market_feature(
@@ -304,18 +367,25 @@ def preprocess_market_feature(
     idx_sampled: pd.DatetimeIndex,
     dates_sampled: pd.DatetimeIndex,
 ) -> pd.DataFrame:
+    # Load feature
     feat_df = load_data(feat_name, feat_path)
 
+    # Restrict feature to valid preprocess window
+    min_time, max_time = get_feature_window(config_obj)
+    feat_df = feat_df.between_time(min_time, max_time)
+
+    # Filter for dates sampled
     assert isinstance(feat_df.index, pd.DatetimeIndex)
     feat_idx_norm = feat_df.index.normalize()
     mask = feat_idx_norm.isin(dates_sampled)
-
     feat_df = feat_df.loc[mask]
     feat_idx_norm = feat_idx_norm[mask]
 
+    # Group by day
     grouped = feat_df.groupby(feat_idx_norm)
     transforms = build_transforms(config_obj.feature_transforms, feat_name)
 
+    # Compute transforms
     derived_blocks = []
     for transform, spec in transforms:
         derived_df = transform.compute(feat_df, grouped)
