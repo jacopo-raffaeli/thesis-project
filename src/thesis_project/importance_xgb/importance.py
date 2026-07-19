@@ -25,6 +25,4 @@ def importance_xgb(
         scores = booster.get_score(importance_type=importance)
         importance_df[importance] = pd.Series(scores).reindex(feature_names).fillna(np.nan)
 
-    importance_df = importance_df.reset_index()
-
     return importance_df
