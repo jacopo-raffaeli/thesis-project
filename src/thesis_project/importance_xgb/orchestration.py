@@ -428,25 +428,30 @@ def _feature_selection_loop(
     # Initialize features sets
     ranking_features = list(X_train.columns)
     regression_features = []
-    res = y_train.copy().iloc[:, 0]
 
-    best_rmse = None
-    best_model = None
-    best_features = None
+    # Initialize residuals
+    res_train = y_train.copy().iloc[:, 0]
+    res_val = y_val.copy().iloc[:, 0]
 
     # Initialize stopping critieria params
     patience = config_obj.patience
     counter = 0
     tol = config_obj.tol
 
+    # Others
+    best_rmse = None
+    best_model = None
+    best_features = None
     history = []
+
     should_stop = False
     while not should_stop:
         # Train the ranking model
         ranking_model = XGBRegressor(random_state=seed, **params)
         ranking_model.fit(
             X_train[ranking_features],
-            res,
+            res_train,
+            eval_set=[(X_val[ranking_features], res_val)],
             verbose=False,
         )
 
@@ -467,18 +472,20 @@ def _feature_selection_loop(
         regression_model.fit(
             X_train[regression_features],
             y_train.iloc[:, 0],
+            eval_set=[(X_val[regression_features], y_val.iloc[:, 0])],
             verbose=False,
         )
 
         # Compute training residuals for the next ranking iteration
         y_train_pred = regression_model.predict(X_train[regression_features])
-        res = y_train.iloc[:, 0] - y_train_pred
+        res_train = y_train.iloc[:, 0] - y_train_pred
 
-        # Compute validation error for stopping
+        # Compute validationresiduals for the next ranking iteration
         y_val_pred = regression_model.predict(X_val[regression_features])
-        current_rmse = root_mean_squared_error(y_val, y_val_pred)
+        res_val = y_val.iloc[:, 0] - y_val_pred
 
-        # Exepction for the first iteration
+        # Verify the stopping criteria
+        current_rmse = root_mean_squared_error(y_val, y_val_pred)
         if best_rmse is None:
             best_rmse = current_rmse
             best_model = regression_model
@@ -497,7 +504,6 @@ def _feature_selection_loop(
 
             continue
 
-        # Compute realtive improvement in rmse
         improvement = (best_rmse - current_rmse) / best_rmse
 
         history.append(
@@ -519,13 +525,13 @@ def _feature_selection_loop(
         else:
             counter += 1
 
-        should_stop = counter > patience or len(ranking_features) == 0
+        should_stop = (counter > patience) or (len(ranking_features) == 0)
 
     # Retrain best model
     X_train_val = pd.concat([X_train, X_val])
     y_train_val = pd.concat([y_train, y_val])
     best_model = XGBRegressor(random_state=seed, **params)
-    best_model.fit(X_train_val, y_train_val.iloc[:, 0], verbose=0)
+    best_model.fit(X_train_val[best_features], y_train_val.iloc[:, 0], verbose=0)
 
     # Save best model
     assert isinstance(best_model, XGBRegressor)
@@ -559,6 +565,12 @@ def _feature_selection_loop(
         index=y_test.index,
     ).to_parquet(path / filename)
     logger.info("Test predictions saved to '%s'", filename)
+
+    # Perform and save xgb importance analysis
+    importance_xgb = importance.importance_xgb(best_model)
+    filename = f"importance_xgb_seed_{seed}.csv"
+    importance_xgb.to_csv(path / filename, index=False)
+    logger.info("XGBoost importance metrics saved to '%s'", filename)
 
     # Perform and save SHAP analysis
     importance_shap = importance.importance_shap(
