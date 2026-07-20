@@ -527,16 +527,22 @@ def _feature_selection_loop(
 
         should_stop = (counter > patience) or (len(ranking_features) == 0)
 
+    # Set parameters for final training
+    final_params = params.copy()
+    final_params.pop("early_stopping_rounds", None)
+    assert isinstance(best_model, XGBRegressor)
+    final_params["n_estimators"] = best_model.best_iteration + 1
+
     # Retrain best model
     X_train_val = pd.concat([X_train, X_val])
     y_train_val = pd.concat([y_train, y_val])
-    best_model = XGBRegressor(random_state=seed, **params)
-    best_model.fit(X_train_val[best_features], y_train_val.iloc[:, 0], verbose=0)
+    best_model_final = XGBRegressor(random_state=seed, **final_params)
+    best_model_final.fit(X_train_val[best_features], y_train_val.iloc[:, 0], verbose=0)
 
     # Save best model
-    assert isinstance(best_model, XGBRegressor)
+    assert isinstance(best_model_final, XGBRegressor)
     filename = f"model_seed_{seed}.ubj"
-    best_model.save_model(path / filename)
+    best_model_final.save_model(path / filename)
     logger.info("Best model saved to '%s'", filename)
 
     # Save selected features
@@ -556,7 +562,7 @@ def _feature_selection_loop(
     logger.info("Selection history saved to '%s'", filename)
 
     # Evaluate on the test set
-    y_test_pred = best_model.predict(X_test[best_features])
+    y_test_pred = best_model_final.predict(X_test[best_features])
 
     filename = f"y_test_pred_seed_{seed}.parquet"
     pd.DataFrame(
@@ -567,7 +573,7 @@ def _feature_selection_loop(
     logger.info("Test predictions saved to '%s'", filename)
 
     # Perform and save xgb importance analysis
-    importance_xgb = importance.importance_xgb(best_model)
+    importance_xgb = importance.importance_xgb(best_model_final)
     filename = f"importance_xgb_seed_{seed}.csv"
     importance_xgb.to_csv(path / filename, index=False)
     logger.info("XGBoost importance metrics saved to '%s'", filename)
@@ -575,7 +581,7 @@ def _feature_selection_loop(
     # Perform and save SHAP analysis
     importance_shap = importance.importance_shap(
         config_obj,
-        best_model,
+        best_model_final,
         X_test_shap[best_features],
     )
     filename = f"importance_shap_seed_{seed}.pkl"
