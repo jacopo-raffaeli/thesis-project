@@ -9,7 +9,7 @@ import optuna
 import pandas as pd
 import yaml
 from joblib import Parallel, delayed
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 from xgboost import XGBClassifier, XGBRegressor
 
@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 def run_analysis(config_obj: config.AnalysisConfig):
-    if config_obj.analysis == "importance":
+    if config_obj.analysis == "importance_cls":
+        run_analysis_importance(config_obj)
+    elif config_obj.analysis == "importance_reg":
         run_analysis_importance(config_obj)
     elif config_obj.analysis == "selection":
         run_analysis_selection(config_obj)
@@ -88,32 +90,82 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     X_test = data_splits["test"]["features"]
     X_train_val = pd.concat([X_train, X_val])
 
+    # Sample subset for shap analysis (for computational reasons)
+    rng = np.random.default_rng(config_obj.seed)
+    shap_n_samples = min(config_obj.shap_n_samples, len(X_test))
+    idx = rng.choice(
+        X_test.index,
+        size=shap_n_samples,
+        replace=False,
+    )
+    X_test_shap = X_test.loc[idx]
+
     # Extract the target sets
     y_train = data_splits["train"]["target"]
     y_val = data_splits["validation"]["target"]
     y_test = data_splits["test"]["target"]
     y_train_val = pd.concat([y_train, y_val])
 
-    # Compute bins for classification
+    # Compute splits
     if config_obj.use_tscv:
-        # If tscv is used Extract the smallest training set to compute future agnostic quantile
         splitter = TimeSeriesSplit(n_splits=config_obj.n_splits_tscv)
         splits = list(splitter.split(X_train_val))
-        first_train_idxs, _ = splits[0]
-        bins = data_pipeline.compute_bins(
-            y_train_val.iloc[first_train_idxs, 0], config_obj.n_quantile
-        )
     else:
-        # If only one validation set is used compute the classification on the whole training set
         splits = [(np.arange(len(X_train)), np.arange(len(X_train), len(X_train_val)))]
-        bins = data_pipeline.compute_bins(y_train.iloc[:, 0], config_obj.n_quantile)
 
-    # Classify target
-    y_cls_train = data_pipeline.classify_target(y_train, bins)
-    y_cls_val = data_pipeline.classify_target(y_val, bins)
-    y_cls_train_val = pd.concat([y_cls_train, y_cls_val])
-    y_cls_test = data_pipeline.classify_target(y_test, bins)
-    logger.info("Target classified")
+    # Compute bins for classification
+    if config_obj.analysis == "importance_cls":
+        if config_obj.use_tscv:
+            # If tscv is used Extract the smallest training set to compute future agnostic quantile
+            first_train_idxs, _ = splits[0]
+            bins = data_pipeline.compute_bins(
+                y_train_val.iloc[first_train_idxs, 0], config_obj.n_quantile
+            )
+        else:
+            # If only one validation set is used compute the classification on the whole training set
+            bins = data_pipeline.compute_bins(y_train.iloc[:, 0], config_obj.n_quantile)
+
+        # Classify target
+        y_cls_train = data_pipeline.classify_target(y_train, bins)
+        y_cls_val = data_pipeline.classify_target(y_val, bins)
+        y_cls_train_val = pd.concat([y_cls_train, y_cls_val])
+        y_cls_test = data_pipeline.classify_target(y_test, bins)
+        logger.info("Target classified")
+
+    # Define the target for optuna optimizaton
+    if config_obj.analysis == "importance_reg":
+        y_optuna = y_train_val
+    elif config_obj.analysis == "importance_cls":
+        y_optuna = y_cls_train_val
+
+    # Save target
+    filename = "y_test.parquet"
+    y_test.to_parquet(output_path / filename)
+    logger.info("Target test set saved to '%s'", filename)
+
+    # Save classified target
+    if config_obj.analysis == "importance_cls":
+        filename = "y_cls_test.parquet"
+        pd.DataFrame(y_cls_test, columns=[y_test.columns[0]], index=y_test.index).to_parquet(
+            output_path / filename
+        )
+        logger.info("Target test set classified saved to '%s'", filename)
+
+    # Save metadata
+    filename = "metadata.yaml"
+    metadata = {
+        "n_features": len(X_train.columns),
+        "train_size": len(X_train),
+        "val_size": len(X_val),
+        "test_size": len(X_test),
+        "test_shap_size": len(X_test_shap),
+        "n_quantile": config_obj.n_quantile if config_obj.analysis == "importance_cls" else None,
+        "quantile_edges": bins.tolist() if config_obj.analysis == "importance_cls" else None,
+        "seeds": seeds.tolist(),
+    }
+    with open(output_path / filename, "w") as f:
+        yaml.safe_dump(metadata, f, sort_keys=False)
+    logger.info("Metadata saved to '%s'", filename)
 
     # Generate optuna study
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -122,7 +174,7 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
         config_obj=config_obj,
         seeds=seeds,
         X=X_train_val,
-        y=y_cls_train_val,
+        y=y_optuna,
         splits=splits,
     )
     study = optuna.create_study(
@@ -159,15 +211,11 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
         "n_estimators": int(np.mean(study.best_trial.user_attrs["best_iterations"])) + 1,
     }
 
-    # Sample subset for shap analysis (for computational reasons)
-    rng = np.random.default_rng(config_obj.seed)
-    shap_n_samples = min(config_obj.shap_n_samples, len(X_test))
-    idx = rng.choice(
-        X_test.index,
-        size=shap_n_samples,
-        replace=False,
-    )
-    X_test_shap = X_test.loc[idx]
+    # Define the target for final retraining
+    if config_obj.analysis == "importance_reg":
+        y_final = y_train_val
+    elif config_obj.analysis == "importance_cls":
+        y_final = y_cls_train_val
 
     # Retrain best model
     logger.info("Retraining best configuration on Training + Validation data")
@@ -175,7 +223,7 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
         delayed(_train_best_model)(
             config_obj=config_obj,
             X_train=X_train_val,
-            y_train=y_cls_train_val,
+            y_train=y_final,
             X_test=X_test,
             y_test=y_test,
             X_test_shap=X_test_shap,
@@ -185,34 +233,6 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
         )
         for seed in seeds
     )
-
-    # Save target
-    filename = "y_test.parquet"
-    y_test.to_parquet(output_path / filename)
-    logger.info("Target test set saved to '%s'", filename)
-
-    # Save classified target
-    filename = "y_cls_test.parquet"
-    pd.DataFrame(y_cls_test, columns=[y_test.columns[0]], index=y_test.index).to_parquet(
-        output_path / filename
-    )
-    logger.info("Target test set classified saved to '%s'", filename)
-
-    # Save metadata
-    filename = "metadata.yaml"
-    metadata = {
-        "n_features": len(X_train.columns),
-        "train_size": len(X_train),
-        "val_size": len(X_val),
-        "test_size": len(X_test),
-        "test_shap_size": len(X_test_shap),
-        "n_quantile": config_obj.n_quantile,
-        "quantile_edges": bins.tolist(),
-        "seeds": seeds.tolist(),
-    }
-    with open(output_path / filename, "w") as f:
-        yaml.safe_dump(metadata, f, sort_keys=False)
-    logger.info("Metadata saved to '%s'", filename)
 
     return 0
 
@@ -239,8 +259,6 @@ def run_analysis_selection(config_obj: config.AnalysisConfig):
     N jobs preprocessing:   {config_obj.n_jobs_preprocessing}
     N jobs xgboost:         {config_obj.n_jobs_xgb}
     N jobs seed:            {config_obj.n_jobs_seed}
-    Quantiles:              {config_obj.n_quantile}
-    Optuna trials:          {config_obj.optuna_n_trials}
 
     Run:                    {n_run:03d}
     Output path:            {output_path.relative_to(global_config.ROOT)}
@@ -288,6 +306,25 @@ def run_analysis_selection(config_obj: config.AnalysisConfig):
 
     fixed_params = config.get_xgb_fixed_params(config_obj)
 
+    # Save target
+    filename = "y_test.parquet"
+    y_test.to_parquet(output_path / filename)
+    logger.info("Target test set saved to '%s'", filename)
+
+    # Save metadata
+    filename = "metadata.yaml"
+    metadata = {
+        "n_features": len(X_train.columns),
+        "train_size": len(X_train),
+        "val_size": len(X_val),
+        "test_size": len(X_test),
+        # "test_shap_size": len(X_test_shap),
+        "seeds": seeds.tolist(),
+    }
+    with open(output_path / filename, "w") as f:
+        yaml.safe_dump(metadata, f, sort_keys=False)
+    logger.info("Metadata saved to '%s'", filename)
+
     Parallel(n_jobs=config_obj.n_jobs_seed, backend="loky")(
         delayed(_feature_selection_loop)(
             config_obj=config_obj,
@@ -304,25 +341,6 @@ def run_analysis_selection(config_obj: config.AnalysisConfig):
         )
         for seed in seeds
     )
-
-    # Save target
-    filename = "y_test.parquet"
-    y_test.to_parquet(output_path / filename)
-    logger.info("Target test set saved to '%s'", filename)
-
-    # Save metadata
-    filename = "metadata.yaml"
-    metadata = {
-        "n_features": len(X_train.columns),
-        "train_size": len(X_train),
-        "val_size": len(X_val),
-        "test_size": len(X_test),
-        "test_shap_size": len(X_test_shap),
-        "seeds": seeds.tolist(),
-    }
-    with open(output_path / filename, "w") as f:
-        yaml.safe_dump(metadata, f, sort_keys=False)
-    logger.info("Metadata saved to '%s'", filename)
 
     return 0
 
@@ -382,7 +400,10 @@ def _train_best_model(
     path,
 ):
     # Retrain best model
-    best_model = XGBClassifier(random_state=seed, **params)
+    if config_obj.analysis == "importance_reg":
+        best_model = XGBRegressor(random_state=seed, **params)
+    elif config_obj.analysis == "importance_cls":
+        best_model = XGBClassifier(random_state=seed, **params)
     best_model.fit(X_train, y_train.iloc[:, 0])
 
     # Save best model
@@ -402,14 +423,25 @@ def _train_best_model(
     joblib.dump(importance_shap, path / filename, compress=True)
     logger.info("Shap importance metrics saved to '%s'", filename)
 
-    # Save predicted probabilities
-    filename = f"y_cls_proba_test_seed_{seed}.parquet"
-    pd.DataFrame(
-        best_model.predict_proba(X_test),
-        columns=[f"{y_test.columns[0]}_class_{i}" for i in range(config_obj.n_quantile)],
-        index=y_test.index,
-    ).to_parquet(path / filename)
-    logger.info("Target test set predicted probabilities saved to '%s'", filename)
+    # Save predicted values/probabilities
+    if config_obj.analysis == "importance_reg":
+        filename = f"y_pred_test_seed_{seed}.parquet"
+        pd.DataFrame(
+            best_model.predict(X_test),
+            columns=[y_test.columns[0]],
+            index=y_test.index,
+        ).to_parquet(path / filename)
+        logger.info("Target test set predicted values saved to '%s'", filename)
+
+    elif config_obj.analysis == "importance_cls":
+        assert isinstance(best_model, XGBClassifier)
+        filename = f"y_cls_proba_test_seed_{seed}.parquet"
+        pd.DataFrame(
+            best_model.predict_proba(X_test),
+            columns=[f"{y_test.columns[0]}_class_{i}" for i in range(config_obj.n_quantile)],
+            index=y_test.index,
+        ).to_parquet(path / filename)
+        logger.info("Target test set predicted probabilities saved to '%s'", filename)
 
 
 def _feature_selection_loop(
@@ -434,18 +466,22 @@ def _feature_selection_loop(
     res_val = y_val.copy().iloc[:, 0]
 
     # Initialize stopping critieria params
-    patience = config_obj.patience
-    counter = 0
-    tol = config_obj.tol
+    # patience = config_obj.patience
+    # counter = 0
+    # tol = config_obj.tol
 
     # Others
-    best_rmse = None
-    best_model = None
-    best_features = None
+    # best_rmse = None
+    # best_model = None
+    # best_features = None
     history = []
-
+    filename_xlsx = path / f"ranking_history_seed_{seed}.xlsx"
     should_stop = False
+
+    iteration = 0
     while not should_stop:
+        iteration += 1
+
         # Train the ranking model
         ranking_model = XGBRegressor(random_state=seed, **params)
         ranking_model.fit(
@@ -467,6 +503,22 @@ def _feature_selection_loop(
         ranking_features.remove(best_feature)
         regression_features.append(best_feature)
 
+        # Save ranking for live inspection
+        sheet_name = f"{iteration:03d}"
+        ranking_to_save = ranking.reset_index()
+        mode = "a" if filename_xlsx.exists() else "w"
+
+        with pd.ExcelWriter(
+            filename_xlsx,
+            engine="openpyxl",
+            mode=mode,
+        ) as writer:
+            ranking_to_save.to_excel(
+                writer,
+                sheet_name=sheet_name,
+                index=False,
+            )
+
         # Train the regressor model
         regression_model = XGBRegressor(random_state=seed, **params)
         regression_model.fit(
@@ -476,121 +528,134 @@ def _feature_selection_loop(
             verbose=False,
         )
 
-        # Compute training residuals for the next ranking iteration
+        # Compute residuals for the next ranking iteration
         y_train_pred = regression_model.predict(X_train[regression_features])
         res_train = y_train.iloc[:, 0] - y_train_pred
-
-        # Compute validationresiduals for the next ranking iteration
         y_val_pred = regression_model.predict(X_val[regression_features])
         res_val = y_val.iloc[:, 0] - y_val_pred
 
         # Verify the stopping criteria
-        current_rmse = root_mean_squared_error(y_val, y_val_pred)
-        if best_rmse is None:
-            best_rmse = current_rmse
-            best_model = regression_model
-            best_features = regression_features.copy()
-            counter = 0
-            history.append(
-                {
-                    "iteration": len(regression_features),
-                    "selected_feature": best_feature,
-                    "gain": ranking.loc[best_feature, config_obj.xgb_importance],
-                    "validation_rmse": current_rmse,
-                    "relative_improvement": np.nan,
-                    "n_selected_features": len(regression_features),
-                }
-            )
+        train_rmse = root_mean_squared_error(y_train.iloc[:, 0], y_train_pred)
+        val_rmse = root_mean_squared_error(y_val.iloc[:, 0], y_val_pred)
+        # if best_rmse is None:
+        #     best_rmse = val_rmse
+        #     best_model = regression_model
+        #     best_features = regression_features.copy()
+        # counter = 0
+        # history.append(
+        #     {
+        #         "iteration": len(regression_features),
+        #         "selected_feature": best_feature,
+        #         "gain": ranking.loc[best_feature, config_obj.xgb_importance],
+        #         "validation_rmse": current_rmse,
+        #         "relative_improvement": np.nan,
+        #         "n_selected_features": len(regression_features),
+        #     }
+        # )
+        # continue
 
-            continue
-
-        improvement = (best_rmse - current_rmse) / best_rmse
-
+        # improvement = (best_rmse - current_rmse) / best_rmse
         history.append(
             {
                 "iteration": len(regression_features),
                 "selected_feature": best_feature,
                 "gain": ranking.loc[best_feature, config_obj.xgb_importance],
-                "validation_rmse": current_rmse,
-                "relative_improvement": (np.nan if best_rmse is None else improvement),
-                "n_selected_features": len(regression_features),
+                "train_rmse": train_rmse,
+                "val_rmse": val_rmse,
+                "train_r2": r2_score(y_train.iloc[:, 0], y_train_pred),
+                "val_r2": r2_score(y_val.iloc[:, 0], y_val_pred),
+                "ranking_trees": ranking_model.best_iteration + 1,
+                "regression_trees": regression_model.best_iteration + 1,
+                # "relative_improvement": (np.nan if best_rmse is None else improvement),
+                # "n_selected_features": len(regression_features),
             }
         )
 
-        if improvement > tol:
-            best_rmse = current_rmse
-            best_model = regression_model
-            best_features = regression_features.copy()
-            counter = 0
-        else:
-            counter += 1
+        # if improvement > tol:
+        # best_rmse = current_rmse
+        # best_model = regression_model
+        # best_features = regression_features.copy()
+        # counter = 0
+        # else:
+        # counter += 1
 
-        should_stop = (counter > patience) or (len(ranking_features) == 0)
+        should_stop = len(ranking_features) == 0
+        # should_stop = (counter > patience) or (len(ranking_features) == 0)
 
-    # Set parameters for final training
-    final_params = params.copy()
-    final_params.pop("early_stopping_rounds", None)
-    assert isinstance(best_model, XGBRegressor)
-    final_params["n_estimators"] = best_model.best_iteration + 1
+        # logger.info(
+        #     "[seed=%4d] iter=%3d  feature=%-30s  rmse=%.6f  improvement=%+.4f%%  trees=%4d",
+        #     seed,
+        #     len(regression_features),
+        #     best_feature,
+        #     val_rmse,
+        #     improvement * 100 if best_rmse is not None else np.nan,
+        #     regression_model.best_iteration + 1,
+        # )
 
-    # Retrain best model
-    X_train_val = pd.concat([X_train, X_val])
-    y_train_val = pd.concat([y_train, y_val])
-    best_model_final = XGBRegressor(random_state=seed, **final_params)
-    best_model_final.fit(X_train_val[best_features], y_train_val.iloc[:, 0], verbose=0)
+        assert isinstance(regression_model, XGBRegressor)
 
-    # Save best model
-    assert isinstance(best_model_final, XGBRegressor)
-    filename = f"model_seed_{seed}.ubj"
-    best_model_final.save_model(path / filename)
-    logger.info("Best model saved to '%s'", filename)
+        # # Set parameters for final training
+        # final_params = params.copy()
+        # final_params.pop("early_stopping_rounds", None)
+        # final_params["n_estimators"] = best_model.best_iteration + 1
 
-    # Save selected features
-    assert isinstance(best_features, list)
-    filename = f"selected_features_seed_{seed}.csv"
-    pd.DataFrame(
-        {
-            "rank": np.arange(1, len(best_features) + 1),
-            "feature": best_features,
-        }
-    ).to_csv(path / filename, index=False)
-    logger.info("Selected features saved to '%s'", filename)
+        # # Retrain best model
+        # X_train_val = pd.concat([X_train, X_val])
+        # y_train_val = pd.concat([y_train, y_val])
+        # best_model_final = XGBRegressor(random_state=seed, **final_params)
+        # best_model_final.fit(X_train_val[best_features], y_train_val.iloc[:, 0], verbose=0)
 
-    # Save selection history
-    filename = f"selection_history_seed_{seed}.csv"
-    pd.DataFrame(history).to_csv(path / filename, index=False)
-    logger.info("Selection history saved to '%s'", filename)
+        # # Save best model
+        # assert isinstance(best_model_final, XGBRegressor)
+        # filename = f"model_seed_{seed}.ubj"
+        # best_model_final.save_model(path / filename)
+        # logger.info("Best model saved to '%s'", filename)
 
-    # Evaluate on the test set
-    y_test_pred = best_model_final.predict(X_test[best_features])
+        # Save selected features
+        # assert isinstance(best_features, list)
+        # filename = f"selected_features_seed_{seed}.csv"
+        # pd.DataFrame(
+        #     {
+        #         "rank": np.arange(1, len(best_features) + 1),
+        #         "feature": best_features,
+        #     }
+        # ).to_csv(path / filename, index=False)
+        # logger.info("Selected features saved to '%s'", filename)
 
-    filename = f"y_test_pred_seed_{seed}.parquet"
-    pd.DataFrame(
-        y_test_pred,
-        columns=y_test.columns,
-        index=y_test.index,
-    ).to_parquet(path / filename)
-    logger.info("Test predictions saved to '%s'", filename)
+        # Save selection history
+        filename = f"selection_history_seed_{seed}.csv"
+        pd.DataFrame(history).to_csv(path / filename, index=False)
+        # logger.info("Selection history saved to '%s'", filename)
 
-    # Perform and save xgb importance analysis
-    importance_xgb = importance.importance_xgb(best_model_final)
-    filename = f"importance_xgb_seed_{seed}.csv"
-    importance_xgb.to_csv(path / filename, index=False)
-    logger.info("XGBoost importance metrics saved to '%s'", filename)
+        # Evaluate on the test set
+        y_test_pred = regression_model.predict(X_test[regression_features])
+        filename = f"y_test_pred_seed_{seed}.parquet"
+        pd.DataFrame(
+            y_test_pred,
+            columns=y_test.columns,
+            index=y_test.index,
+        ).to_parquet(path / filename)
+        # logger.info("Test predictions saved to '%s'", filename)
 
-    # Perform and save SHAP analysis
-    importance_shap = importance.importance_shap(
-        config_obj,
-        best_model_final,
-        X_test_shap[best_features],
-    )
-    filename = f"importance_shap_seed_{seed}.pkl"
-    joblib.dump(
-        importance_shap,
-        path / filename,
-        compress=True,
-    )
-    logger.info("SHAP importance saved to '%s'", filename)
+        # Perform and save xgb importance analysis
+        # importance_xgb = importance.importance_xgb(regression_model)
+        # filename = f"importance_xgb_seed_{seed}.csv"
+        # importance_xgb.to_csv(path / filename, index=False)
+        # logger.info("XGBoost importance metrics saved to '%s'", filename)
+
+        # Perform and save SHAP analysis
+        # importance_shap = importance.importance_shap(
+        #     config_obj,
+        #     best_model,
+        #     X_test_shap[best_features],
+        # )
+        # filename = f"importance_shap_seed_{seed}.pkl"
+        # joblib.dump(
+        #     importance_shap,
+        #     path / filename,
+        #     compress=True,
+        # )
+        # logger.info("SHAP importance saved to '%s'", filename)
 
 
 def _save_config(config_obj: config.AnalysisConfig, path: Path, filename: str):
