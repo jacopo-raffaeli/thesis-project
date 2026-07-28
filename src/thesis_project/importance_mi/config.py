@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
-from thesis_project import global_config as global_config
+from thesis_project import config as global_config
 
 
 @dataclass

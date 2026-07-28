@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from tqdm_joblib import tqdm_joblib
 
-from thesis_project import global_config as global_config
+from thesis_project import config as global_config
 
 from .config import AnalysisConfig
 from .data_paths import DataPathsConfig, get_data_paths

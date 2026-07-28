@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from thesis_project import global_config
+from thesis_project import config as global_config
 
 
 @dataclass
