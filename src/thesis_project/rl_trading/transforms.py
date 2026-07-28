@@ -60,7 +60,7 @@ class BaseTransform(ABC):
         if not isinstance(series.index, pd.DatetimeIndex):
             raise ValueError("The series index is not a DatetimeIndex")
 
-        grouped = series.groupby(pd.Grouper("D"))
+        grouped = series.groupby(pd.Grouper(freq="D"))
 
         lagged = {}
         for lag in self.lags:
@@ -206,7 +206,7 @@ class Ratio(BaseTransform):
     def _hour_reference(self, series: pd.Series, grouped: SeriesGroupBy) -> pd.Series:
         reference_values = []
         for _, day in grouped:
-            temp = day.groupby(pd.Grouper("H")).transform(self._get_first_valid)
+            temp = day.groupby(pd.Grouper(freq="h")).transform(self._get_first_valid)
             reference_values.append(temp)
 
         reference_values = pd.concat(reference_values).reindex(series.index)
