@@ -1,9 +1,0 @@
-{
-  "ticker": "fbtp",
-  "sample-ratio": 0.01,
-  "use-base-target": false,
-  "use-tscv": false,
-  "n-jobs-preprocessing": 4,
-  "n-jobs-xgb": 8,
-  "log-level": "DEBUG"
-}
