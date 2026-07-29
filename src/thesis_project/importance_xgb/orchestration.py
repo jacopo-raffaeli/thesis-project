@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 def run_analysis(config_obj: config.AnalysisConfig):
     if config_obj.analysis == "importance_cls":
         run_analysis_importance(config_obj)
+
     elif config_obj.analysis == "importance_reg":
         run_analysis_importance(config_obj)
+
     elif config_obj.analysis == "selection":
         run_analysis_selection(config_obj)
 
@@ -113,8 +115,8 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     else:
         splits = [(np.arange(len(X_train)), np.arange(len(X_train), len(X_train_val)))]
 
-    # Compute bins for classification
     if config_obj.analysis == "importance_cls":
+        # Compute bins for classification
         if config_obj.use_tscv:
             # If tscv is used Extract the smallest training set to compute future agnostic quantile
             first_train_idxs, _ = splits[0]
@@ -414,7 +416,7 @@ def _train_best_model(
     # Perform and save xgb importance analysis
     importance_xgb = importance.importance_xgb(best_model)
     filename = f"importance_xgb_seed_{seed}.csv"
-    importance_xgb.to_csv(path / filename, index=False)
+    importance_xgb.to_csv(path / filename)
     logger.info("XGBoost importance metrics saved to '%s'", filename)
 
     # Perfom and save shap importance analysis
