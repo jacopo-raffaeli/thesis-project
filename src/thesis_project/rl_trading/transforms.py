@@ -28,17 +28,19 @@ class BaseTransform(ABC):
         """
 
     @abstractmethod
-    def n_base_outputs(self) -> int:
-        """
-        Number of non-lagged transformed features computed
-        """
-
-    @abstractmethod
     def _transform_name(self, base_id: str, *args) -> str:
         """
         Return transform name
         """
 
+    @property
+    @abstractmethod
+    def n_base_outputs(self) -> int:
+        """
+        Number of non-lagged transformed features computed
+        """
+
+    @property
     def n_total_outputs(self) -> int:
         """
         Number of transformed features computed
@@ -49,7 +51,7 @@ class BaseTransform(ABC):
         if self.keep_original:
             multiplier += 1
 
-        return self.n_base_outputs() * multiplier
+        return self.n_base_outputs * multiplier
 
     def apply_lags(self, series: pd.Series, id: str) -> dict[str, pd.Series]:
         assert isinstance(self.lags, list)
@@ -99,6 +101,7 @@ class Identity(BaseTransform):
         out[name] = series
         return out
 
+    @property
     def n_base_outputs(self) -> int:
         return 1
 
@@ -126,6 +129,7 @@ class Delta(BaseTransform):
 
         return out
 
+    @property
     def n_base_outputs(self) -> int:
         assert isinstance(self.deltas, list)
         return len(self.deltas)
@@ -163,6 +167,7 @@ class Rolling(BaseTransform):
 
         return out
 
+    @property
     def n_base_outputs(self) -> int:
         assert isinstance(self.stats, list)
         assert isinstance(self.windows, list)
@@ -233,6 +238,7 @@ class Ratio(BaseTransform):
 
         return out
 
+    @property
     def n_base_outputs(self) -> int:
         return len(self.references)
 
