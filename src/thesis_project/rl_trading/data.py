@@ -10,10 +10,25 @@ SUFFIX = "freq_1s_from_2022_08_01_to_2024_12_30.parquet"
 
 @dataclass(frozen=True)
 class BaseFeature:
-    name: str
+    base_id: str
     filename: str
     directory: Path
     description: str | None = None
+
+    def __post_init__(self):
+        if not self.directory.exists():
+            raise ValueError(
+                f"Missing directory: '{self.directory.relative_to(global_config.ROOT)}'"
+            )
+
+        if not self.directory.is_dir():
+            raise ValueError(f"Not a directory: '{self.directory.relative_to(global_config.ROOT)}'")
+
+        if not self.path.exists():
+            raise ValueError(f"Missing file '{self.path.relative_to(global_config.ROOT)}'")
+
+        if not self.path.is_file():
+            raise ValueError(f"Not a file '{self.path.relative_to(global_config.ROOT)}'")
 
     @property
     def path(self) -> Path:
