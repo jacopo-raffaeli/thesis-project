@@ -40,6 +40,22 @@ class FeatureSpec:
 
         return names
 
+    @property
+    def max_lag(self) -> int:
+        max_lag = 0
+        for transform in self.transforms:
+            max_lag = max(max_lag, transform.max_lag)
+
+        return max_lag
+
+    @property
+    def max_lookback(self) -> int:
+        max_lookback = 0
+        for transform in self.transforms:
+            max_lookback = max(max_lookback, transform.max_lookback)
+
+        return max_lookback
+
 
 # fmt: off
 FEATURES: list[FeatureSpec] = [
