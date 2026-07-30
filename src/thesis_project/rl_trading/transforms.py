@@ -33,27 +33,16 @@ class BaseTransform(ABC):
         Return transform name
         """
 
-    @property
-    @abstractmethod
-    def n_base_outputs(self) -> int:
+    def _lag_name(self, base_id: str, lag: int) -> str:
         """
-        Number of non-lagged transformed features computed
+        Return lagged name
         """
-
-    @property
-    def n_total_outputs(self) -> int:
-        """
-        Number of transformed features computed
-        """
-        assert isinstance(self.lags, list)
-        multiplier = len(self.lags)
-
-        if self.keep_original:
-            multiplier += 1
-
-        return self.n_base_outputs * multiplier
+        return f"{base_id}_lag_{lag}s"
 
     def apply_lags(self, series: pd.Series, id: str) -> dict[str, pd.Series]:
+        """
+        Lag trasnformed outputs
+        """
         assert isinstance(self.lags, list)
 
         if not self.has_lags:
@@ -66,12 +55,15 @@ class BaseTransform(ABC):
 
         lagged = {}
         for lag in self.lags:
-            name = f"{id}_lag_{lag}s"
+            name = self._lag_name(id, lag)
             lagged[name] = grouped.shift(lag)
 
         return lagged
 
     def transform(self, base: pd.Series, grouped: SeriesGroupBy):
+        """
+        Perform transformation and lagging
+        """
         out = {}
 
         transformed = self.compute(base, grouped)
@@ -83,6 +75,48 @@ class BaseTransform(ABC):
                 out.update(self.apply_lags(transform, name))
 
         return out
+
+    @abstractmethod
+    def base_output_names(self, base_id: str) -> list[str]:
+        """
+        Output list of non-lagged transform names
+        """
+
+    def output_names(self, base_id: str) -> list[str]:
+        """
+        Output list of transform names
+        """
+        assert isinstance(self.lags, list)
+        base_names = self.base_output_names(base_id)
+        names = []
+        for base_name in base_names:
+            if self.keep_original:
+                names.append(base_name)
+
+            for lag in self.lags:
+                names.append(self._lag_name(base_name, lag))
+
+        return names
+
+    @property
+    @abstractmethod
+    def n_base_outputs(self) -> int:
+        """
+        Number of non-lagged transformed features computed
+        """
+
+    @property
+    def n_outputs(self) -> int:
+        """
+        Number of transformed features computed
+        """
+        assert isinstance(self.lags, list)
+        multiplier = len(self.lags)
+
+        if self.keep_original:
+            multiplier += 1
+
+        return self.n_base_outputs * multiplier
 
     @property
     def has_lags(self) -> bool:
@@ -107,6 +141,9 @@ class Identity(BaseTransform):
 
     def _transform_name(self, base_id: str) -> str:
         return base_id
+
+    def base_output_names(self, base_id: str) -> list[str]:
+        return [self._transform_name(base_id)]
 
 
 @dataclass(frozen=True)
@@ -137,6 +174,11 @@ class Delta(BaseTransform):
     def _transform_name(self, base_id: str, delta: int) -> str:
         return f"{base_id}_delta_{delta}s"
 
+    def base_output_names(self, base_id: str) -> list[str]:
+        assert isinstance(self.deltas, list)
+
+        return [self._transform_name(base_id, delta) for delta in self.deltas]
+
 
 @dataclass(frozen=True)
 class Rolling(BaseTransform):
@@ -166,6 +208,16 @@ class Rolling(BaseTransform):
                 out[name] = getattr(rolled, stat)().droplevel(0)
 
         return out
+
+    def base_output_names(self, base_id: str) -> list[str]:
+        assert isinstance(self.stats, list)
+        assert isinstance(self.windows, list)
+
+        return [
+            self._transform_name(base_id, stat, window)
+            for stat in self.stats
+            for window in self.windows
+        ]
 
     @property
     def n_base_outputs(self) -> int:
@@ -237,6 +289,11 @@ class Ratio(BaseTransform):
             out[name] = series / reference_values
 
         return out
+
+    def base_output_names(self, base_id: str) -> list[str]:
+        assert isinstance(self.references, list)
+
+        return [self._transform_name(base_id, reference) for reference in self.references]
 
     @property
     def n_base_outputs(self) -> int:
@@ -340,11 +397,3 @@ def _validate_references(references: list[str]) -> None:
 
     if any(reference not in Ratio.VALID_REFERENCES for reference in references):
         raise ValueError(f"Ratio references must be in [{Ratio.VALID_REFERENCES}]")
-
-
-if __name__ == "__main__":
-    obj = Identity(
-        lags=[60, 120],
-    )
-
-    print(obj.lags)
