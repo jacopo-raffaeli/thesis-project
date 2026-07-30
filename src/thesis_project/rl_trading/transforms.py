@@ -39,7 +39,9 @@ class BaseTransform(ABC):
         """
         return f"{base_id}_lag_{lag}s"
 
-    def apply_lags(self, series: pd.Series, id: str) -> dict[str, pd.Series]:
+    def _apply_lags(
+        self, series: pd.Series, grouped: SeriesGroupBy, id: str
+    ) -> dict[str, pd.Series]:
         """
         Lag trasnformed outputs
         """
@@ -50,8 +52,6 @@ class BaseTransform(ABC):
 
         if not isinstance(series.index, pd.DatetimeIndex):
             raise ValueError("The series index is not a DatetimeIndex")
-
-        grouped = series.groupby(pd.Grouper(freq="D"))
 
         lagged = {}
         for lag in self.lags:
@@ -72,7 +72,7 @@ class BaseTransform(ABC):
 
         if self.has_lags:
             for name, transform in transformed.items():
-                out.update(self.apply_lags(transform, name))
+                out.update(self._apply_lags(transform, grouped, name))
 
         return out
 
