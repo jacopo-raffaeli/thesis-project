@@ -1,8 +1,9 @@
 import pandas as pd
 from pandas.api.typing import SeriesGroupBy
 
-from thesis_project.rl_trading.data import BASE_FEATURES
+from thesis_project.rl_trading.data import BASE_FEATURES, BaseFeature
 from thesis_project.rl_trading.dataset_config import DatasetConfig
+from thesis_project.rl_trading.env_config import EnvConfig, RLDataset
 from thesis_project.rl_trading.features import FeatureSpec
 
 
@@ -26,11 +27,10 @@ def _validate_feature_specs(feature_specs: list[FeatureSpec]):
             seen.add(name)
 
 
-def _load_feature(spec: FeatureSpec) -> pd.Series:
+def _load_feature(base: BaseFeature) -> pd.Series:
     """
     Load a base feature and perform preliminary checks.
     """
-    base = BASE_FEATURES[spec.base_id]
     df = pd.read_parquet(base.path)
 
     if df.empty:
@@ -42,16 +42,8 @@ def _load_feature(spec: FeatureSpec) -> pd.Series:
         )
 
     series = df.squeeze("columns")
-
-    if not isinstance(series, pd.Series):
-        raise ValueError(
-            f"BaseFeature '{base.base_id}': expected a Series after squeeze, found {type(series)} instead"
-        )
-
-    if not isinstance(series.index, pd.DatetimeIndex):
-        raise ValueError(
-            f"BaseFeature '{base.base_id}': expected a DatetimeIndex, found {type(series.index)} instead"
-        )
+    assert isinstance(series, pd.Series)
+    _validate_series(series)
 
     series = series.rename(base.base_id)
 
@@ -79,6 +71,9 @@ def _filter_dates(idx: pd.DatetimeIndex, excluded: set[pd.Timestamp]) -> pd.Date
 
 
 def _validate_series(s: pd.Series):
+    if not isinstance(s, pd.Series):
+        raise ValueError("Object must be a Series")
+
     if not isinstance(s.index, pd.DatetimeIndex):
         raise TypeError("Index must be a DatetimeIndex")
 
@@ -96,13 +91,12 @@ def _validate_grouped(grouped: SeriesGroupBy):
             raise ValueError("Gaps found in index")
 
 
-def _build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]:
+def build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]:
     """ """
     # Load and validate base feature
-    s = _load_feature(spec)
+    s = _load_feature(BASE_FEATURES[spec.base_id])
     if not s.index.is_monotonic_increasing:
         s = s.sort_index()
-    _validate_series(s)
 
     # Filter dates
     assert isinstance(s.index, pd.DatetimeIndex)
@@ -130,13 +124,13 @@ def _build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series
     return transformed
 
 
-def build_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> pd.DataFrame:
+def build_features_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> pd.DataFrame:
     _validate_feature_specs(specs)
 
     transformed = {}
     # TODO: Implement parallel version
     for spec in specs:
-        transformed.update(_build_spec(config, spec))
+        transformed.update(build_spec(config, spec))
 
     df = pd.DataFrame(transformed)
     df = df.between_time(config.min_time, config.max_time)
@@ -145,3 +139,37 @@ def build_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> pd.DataFra
         raise ValueError("The DataFrame is empty")
 
     return df
+
+
+def build_rl_dataset(
+    dataset_config: DatasetConfig, env_config: EnvConfig, specs: list[FeatureSpec]
+) -> RLDataset:
+    features = build_features_dataset(dataset_config, specs)
+    assert isinstance(features.index, pd.DatetimeIndex)
+
+    basis = _load_aligned_feature(BASE_FEATURES["basis"], features.index)
+
+    ctd_spread = None
+    fut_spread = None
+    if env_config.include_cost:
+        ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index)
+        fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index)
+
+    return RLDataset(
+        features=features,
+        basis=basis,
+        ctd_spread=ctd_spread,
+        fut_spread=fut_spread,
+    )
+
+
+def _load_aligned_feature(base: BaseFeature, idx: pd.DatetimeIndex) -> pd.Series:
+    s = _load_feature(base)
+    s = s.loc[idx]
+
+    if not s.index.equals(idx):
+        raise ValueError(
+            f"Loaded feature '{base.base_id}' could not be aligned to the dataset index"
+        )
+
+    return s
