@@ -22,7 +22,9 @@ class BaseTransform(ABC):
             raise ValueError("Invalid transform: no base feature and no lags present")
 
     @abstractmethod
-    def compute(self, series: pd.Series, grouped: SeriesGroupBy) -> dict[str, pd.Series]:
+    def compute(
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         """
         Compute transformed features
         """
@@ -40,7 +42,7 @@ class BaseTransform(ABC):
         return f"{base_id}_lag_{lag}s"
 
     def _apply_lags(
-        self, series: pd.Series, grouped: SeriesGroupBy, id: str
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
     ) -> dict[str, pd.Series]:
         """
         Lag trasnformed outputs
@@ -55,18 +57,18 @@ class BaseTransform(ABC):
 
         lagged = {}
         for lag in self.lags:
-            name = self._lag_name(id, lag)
+            name = self._lag_name(base_id, lag)
             lagged[name] = grouped.shift(lag)
 
         return lagged
 
-    def transform(self, base: pd.Series, grouped: SeriesGroupBy):
+    def transform(self, base: pd.Series, grouped: SeriesGroupBy, base_id: str):
         """
         Perform transformation and lagging
         """
         out = {}
 
-        transformed = self.compute(base, grouped)
+        transformed = self.compute(base, grouped, base_id)
         if self.keep_original:
             out.update(transformed)
 
@@ -129,9 +131,11 @@ class Identity(BaseTransform):
     def __post_init__(self):
         super().__post_init__()
 
-    def compute(self, series: pd.Series, grouped: SeriesGroupBy) -> dict[str, pd.Series]:
+    def compute(
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         out = {}
-        name = self._transform_name(str(series.name))
+        name = self._transform_name(base_id)
         out[name] = series
         return out
 
@@ -156,12 +160,14 @@ class Delta(BaseTransform):
         deltas = _init_data(self.deltas, _normalize_deltas, _validate_deltas)
         object.__setattr__(self, "deltas", deltas)
 
-    def compute(self, series: pd.Series, grouped: SeriesGroupBy) -> dict[str, pd.Series]:
+    def compute(
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         assert isinstance(self.deltas, list)
 
         out = {}
         for delta in self.deltas:
-            name = self._transform_name(str(series.name), delta)
+            name = self._transform_name(base_id, delta)
             out[name] = grouped.diff(delta)
 
         return out
@@ -196,7 +202,9 @@ class Rolling(BaseTransform):
         windows = _init_data(self.windows, _normalize_windows, _validate_windows)
         object.__setattr__(self, "windows", windows)
 
-    def compute(self, series: pd.Series, grouped: SeriesGroupBy) -> dict[str, pd.Series]:
+    def compute(
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         assert isinstance(self.stats, list)
         assert isinstance(self.windows, list)
 
@@ -204,7 +212,7 @@ class Rolling(BaseTransform):
         for window in self.windows:
             rolled = grouped.rolling(window=window, min_periods=window // 2)
             for stat in self.stats:
-                name = self._transform_name(str(series.name), stat, window)
+                name = self._transform_name(base_id, stat, window)
                 out[name] = getattr(rolled, stat)().droplevel(0)
 
         return out
@@ -270,12 +278,14 @@ class Ratio(BaseTransform):
 
         return reference_values
 
-    def compute(self, series: pd.Series, grouped: SeriesGroupBy) -> dict[str, pd.Series]:
+    def compute(
+        self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         assert isinstance(self.references, list)
 
         out = {}
         for reference in self.references:
-            name = self._transform_name(str(series.name), reference)
+            name = self._transform_name(base_id, reference)
             match reference:
                 case "day":
                     reference_values = self._day_reference(series, grouped)
