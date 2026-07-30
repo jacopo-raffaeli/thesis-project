@@ -62,7 +62,9 @@ class BaseTransform(ABC):
 
         return lagged
 
-    def transform(self, base: pd.Series, grouped: SeriesGroupBy, base_id: str):
+    def transform(
+        self, base: pd.Series, grouped: SeriesGroupBy, base_id: str
+    ) -> dict[str, pd.Series]:
         """
         Perform transformation and lagging
         """
