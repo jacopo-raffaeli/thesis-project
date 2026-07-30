@@ -127,6 +127,19 @@ class BaseTransform(ABC):
         assert isinstance(self.lags, list)
         return len(self.lags) > 0
 
+    @property
+    def max_lag(self) -> int:
+        assert isinstance(self.lags, list)
+        if not self.has_lags:
+            return 0
+
+        return max(self.lags)
+
+    @property
+    @abstractmethod
+    def max_lookback(self) -> int:
+        """"""
+
 
 @dataclass(frozen=True)
 class Identity(BaseTransform):
@@ -150,6 +163,10 @@ class Identity(BaseTransform):
 
     def base_output_names(self, base_id: str) -> list[str]:
         return [self._transform_name(base_id)]
+
+    @property
+    def max_lookback(self) -> int:
+        return 0
 
 
 @dataclass(frozen=True)
@@ -186,6 +203,11 @@ class Delta(BaseTransform):
         assert isinstance(self.deltas, list)
 
         return [self._transform_name(base_id, delta) for delta in self.deltas]
+
+    @property
+    def max_lookback(self) -> int:
+        assert isinstance(self.deltas, list)
+        return max(self.deltas)
 
 
 @dataclass(frozen=True)
@@ -238,6 +260,11 @@ class Rolling(BaseTransform):
 
     def _transform_name(self, base_id: str, stat: str, window: int) -> str:
         return f"{base_id}_roll_{stat}_{window}s"
+
+    @property
+    def max_lookback(self) -> int:
+        assert isinstance(self.windows, list)
+        return max(self.windows)
 
 
 @dataclass(frozen=True)
@@ -313,6 +340,10 @@ class Ratio(BaseTransform):
 
     def _transform_name(self, base_id: str, reference: str) -> str:
         return f"{base_id}_{reference}_ratio"
+
+    @property
+    def max_lookback(self) -> int:
+        return 0
 
 
 def _init_data(value: Any, normalize: Callable, validate: Callable):
