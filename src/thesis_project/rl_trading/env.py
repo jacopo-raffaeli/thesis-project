@@ -88,8 +88,8 @@ class BasisTradingEnv(gym.Env):
         self.gross_reward: float
         self.cost: float
 
-        self.terminated: bool = False
-        self.truncated: bool = False
+        self.terminated: bool
+        self.truncated: bool
 
         self.dataset = dataset
         self.ep_dataset: RLDataset | None = None
@@ -105,6 +105,7 @@ class BasisTradingEnv(gym.Env):
         self.n_actions = 3
         self.action_space = gym.spaces.Discrete(self.n_actions)
 
+    # Main
     def reset(self, *, seed: int | None = None, options=None) -> tuple[np.ndarray, dict]:
         super().reset(seed=seed)
         self.allocation = 0
@@ -118,7 +119,7 @@ class BasisTradingEnv(gym.Env):
         self.date = self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
         self.trajectory_offset_min = int(self.np_random.integers(self.config.persistence_min))
         self.t = self.trajectory_offset_sec
-        self.ep_dataset = self._get_episode_rl_dataset()
+        self.ep_dataset = self._build_episode_rl_dataset()
 
         if self.t >= len(self.ep_dataset.features):
             raise ValueError("Sampled trajectory exceeds episode length")
@@ -139,7 +140,7 @@ class BasisTradingEnv(gym.Env):
 
         info = {}
         if self._is_last_mrkt_t:
-            info["closing"] = self._liquidate()
+            info["closing"] = self._liquidation()
 
         observation = self._get_observation()
         info.update(self._get_info())
@@ -152,15 +153,16 @@ class BasisTradingEnv(gym.Env):
     def render(self):
         pass
 
+    # Observation utilities
     def _get_observation(self) -> np.ndarray:
         if not self.terminated:
-            observation = self._get_env_observation()
+            observation = self._get_regular_observation()
         else:
             observation = self._get_terminal_observation()
 
         return observation
 
-    def _get_env_observation(self) -> np.ndarray:
+    def _get_regular_observation(self) -> np.ndarray:
         assert isinstance(self.ep_dataset, RLDataset)
         features = self.ep_dataset.features.iloc[self.t].to_numpy(dtype=self.config.obs_dtype)
         position = self._encoded_position
@@ -173,6 +175,7 @@ class BasisTradingEnv(gym.Env):
     def _get_terminal_observation(self) -> np.ndarray:
         return np.zeros(self.obs_space_size, dtype=self.config.obs_dtype)
 
+    # Info utilities
     def _get_info(self) -> dict[str, Any]:
         return {
             "step": self.t,
@@ -198,6 +201,7 @@ class BasisTradingEnv(gym.Env):
             "closing_cost": closing_reward.cost,
         }
 
+    # Reward utilities
     def _compute_gross_reward(self, t: int, next_t: int, position: int) -> float:
         assert isinstance(self.ep_dataset, RLDataset)
         basis = self.ep_dataset.basis
@@ -226,13 +230,15 @@ class BasisTradingEnv(gym.Env):
 
         return Reward(reward, gross_reward, cost)
 
+    # Action <-> Position utilities
     def _act_to_pos(self, action: int) -> int:
         return self._ACT_TO_POS[action]
 
     def _pos_to_act(self, position: int) -> int:
         return self._POS_TO_ACT[position]
 
-    def _get_episode_rl_dataset(self) -> RLDataset:
+    # Build episode dataset
+    def _build_episode_rl_dataset(self) -> RLDataset:
         rows = self.dataset.date_to_slice[self.date]
         features = self.dataset.features.iloc[rows]
         basis = self.dataset.basis.iloc[rows]
@@ -249,7 +255,8 @@ class BasisTradingEnv(gym.Env):
             features=features, basis=basis, ctd_spread=ctd_spread, fut_spread=fut_spread
         )
 
-    def _liquidate(self) -> dict[str, Any]:
+    # Manage terminal step
+    def _liquidation(self) -> dict[str, Any]:
         closing_reward = self._compute_reward(
             self.t, self.mrkt_close_t, self._FLAT_POSITION, self.position
         )
