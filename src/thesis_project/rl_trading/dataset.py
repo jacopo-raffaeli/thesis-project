@@ -4,7 +4,7 @@ from pandas.api.typing import SeriesGroupBy
 from thesis_project.rl_trading.data import BASE_FEATURES, BaseFeature
 from thesis_project.rl_trading.dataset_config import DatasetConfig
 from thesis_project.rl_trading.env import RLDataset
-from thesis_project.rl_trading.env_config import RLConfig
+from thesis_project.rl_trading.env_config import EnvConfig
 from thesis_project.rl_trading.features import FeatureSpec
 
 
@@ -143,7 +143,7 @@ def build_features_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> p
 
 
 def build_rl_dataset(
-    dataset_config: DatasetConfig, env_config: RLConfig, specs: list[FeatureSpec]
+    dataset_config: DatasetConfig, env_config: EnvConfig, specs: list[FeatureSpec]
 ) -> RLDataset:
     features = build_features_dataset(dataset_config, specs)
     assert isinstance(features.index, pd.DatetimeIndex)
