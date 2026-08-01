@@ -118,7 +118,7 @@ def build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]
 
     # Create and validate group
     assert isinstance(s.index, pd.DatetimeIndex)
-    g = s.groupby(s.index.floor("D"))
+    g = s.groupby(s.index.floor(freq="D"))
     _validate_grouped(g)
 
     # Compute transforms
