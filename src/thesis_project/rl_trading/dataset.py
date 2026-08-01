@@ -87,6 +87,9 @@ def _validate_series(s: pd.Series):
 
 def _validate_grouped(grouped: SeriesGroupBy):
     for _, day in grouped:
+        if day.empty:
+            raise ValueError("Day is empty")
+
         diffs = day.index[1:] - day.index[:-1]
         if (diffs != pd.Timedelta(seconds=1)).any():
             raise ValueError("Gaps found in index")
@@ -114,7 +117,8 @@ def build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]
         raise ValueError("The Series is empty")
 
     # Create and validate group
-    g = s.groupby(pd.Grouper("D"))
+    assert isinstance(s.index, pd.DatetimeIndex)
+    g = s.groupby(s.index.normalize())
     _validate_grouped(g)
 
     # Compute transforms
