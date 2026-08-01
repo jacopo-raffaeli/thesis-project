@@ -300,7 +300,8 @@ class Ratio(BaseTransform):
     def _hour_reference(self, series: pd.Series, grouped: SeriesGroupBy) -> pd.Series:
         reference_values = []
         for _, day in grouped:
-            temp = day.groupby(pd.Grouper(freq="h")).transform(self._get_first_valid)
+            assert isinstance(day.index, pd.DatetimeIndex)
+            temp = day.groupby(day.index.floor("h")).transform(self._get_first_valid)
             reference_values.append(temp)
 
         reference_values = pd.concat(reference_values).reindex(series.index)
