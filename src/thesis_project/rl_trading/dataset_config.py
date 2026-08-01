@@ -17,7 +17,9 @@ class DatasetConfig:
     min_time_data: str = str(global_config.CTD_MRKT_OPEN)
     max_time_data: str = str(global_config.CTD_MRKT_CLOSE)
 
-    offsets: dict[str, tuple[int, int]] = field(default_factory=dict[str, tuple[int, int]])
+    offsets: dict[str, tuple[int, int]] = field(
+        default_factory=lambda: {"fut_last_trading_days": (5, 0)}
+    )
     dates_to_exclude: set[pd.Timestamp] = field(init=False)
 
     def __post_init__(self):
