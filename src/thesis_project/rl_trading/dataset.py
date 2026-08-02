@@ -65,7 +65,7 @@ def _filter_dates(idx: pd.DatetimeIndex, excluded: set[pd.Timestamp]) -> pd.Date
     if not isinstance(idx, pd.DatetimeIndex):
         raise TypeError("Index must be a DatetimeIndex")
 
-    dates = idx.normalize().tz_localize(None)
+    dates = idx.floor("D").tz_localize(None)
     mask = ~dates.isin(excluded)
 
     return idx[mask]
