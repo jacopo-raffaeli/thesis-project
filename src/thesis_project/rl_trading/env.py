@@ -10,13 +10,6 @@ from thesis_project.rl_trading.env_config import EnvConfig
 from thesis_project.rl_trading.features import FEATURES
 
 
-@dataclass(frozen=True, slots=True)
-class Reward:
-    reward: float
-    gross_reward: float
-    cost: float
-
-
 @dataclass(frozen=True)
 class RLDataset:
     features: pd.DataFrame = field(default_factory=pd.DataFrame)
@@ -55,6 +48,38 @@ class RLDataset:
         return len(self.features.columns)
 
 
+@dataclass(frozen=True)
+class EpDataset:
+    features: pd.DataFrame = field(default_factory=pd.DataFrame)
+    basis: pd.Series = field(default_factory=pd.Series)
+    ctd_spread: pd.Series | None = None
+    fut_spread: pd.Series | None = None
+
+    def __post_init__(self):
+        assert isinstance(self.features.index, pd.DatetimeIndex)
+        assert isinstance(self.basis.index, pd.DatetimeIndex)
+        assert self.features.index.equals(self.basis.index)
+
+        if self.ctd_spread is not None:
+            assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
+            assert self.features.index.equals(self.ctd_spread.index)
+
+        if self.fut_spread is not None:
+            assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
+            assert self.features.index.equals(self.fut_spread.index)
+
+    @property
+    def n_features(self) -> int:
+        return len(self.features.columns)
+
+
+@dataclass(frozen=True, slots=True)
+class StepReward:
+    reward: float
+    gross_reward: float
+    cost: float
+
+
 class BasisTradingEnv(gym.Env):
     # positions
     _SHORT_POSITION = -1
@@ -79,11 +104,12 @@ class BasisTradingEnv(gym.Env):
         super().__init__()
 
         self.date: pd.Timestamp
-        self.trajectory_offset_min: int
+        self._date_idx: int = -1
+        self.trajectory_min: int
         self.t: int
 
-        self.allocation: int
-        self.position: int
+        self.prev_position: int
+        self.curr_position: int
         self.reward: float
         self.gross_reward: float
         self.cost: float
@@ -92,7 +118,7 @@ class BasisTradingEnv(gym.Env):
         self.truncated: bool
 
         self.dataset = dataset
-        self.ep_dataset: RLDataset | None = None
+        self.ep_dataset: EpDataset | None = None
 
         self.config = config
 
@@ -108,17 +134,17 @@ class BasisTradingEnv(gym.Env):
     # Main
     def reset(self, *, seed: int | None = None, options=None) -> tuple[np.ndarray, dict]:
         super().reset(seed=seed)
-        self.allocation = 0
-        self.position = 0
+        self.prev_position = 0
+        self.curr_position = 0
         self.reward = 0
         self.gross_reward = 0
         self.cost = 0
         self.terminated = False
         self.truncated = False
 
-        self.date = self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
-        self.trajectory_offset_min = int(self.np_random.integers(self.config.persistence_min))
-        self.t = self.trajectory_offset_sec
+        self.date = self._reset_date()
+        self.trajectory_min = self._reset_trajectory_min()
+        self.t = self.trajectory_sec
         self.ep_dataset = self._build_episode_rl_dataset()
 
         if self.t >= len(self.ep_dataset.features):
@@ -130,12 +156,15 @@ class BasisTradingEnv(gym.Env):
         return observation, info
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
-        self.allocation = self.position
-        self.position = self._act_to_pos(action)
-        reward = self._compute_reward(self.t, self.next_t, self.position, self.allocation)
-        self.reward = reward.reward
-        self.gross_reward = reward.gross_reward
-        self.cost = reward.cost
+        self.prev_position = self.curr_position
+        self.curr_position = self._act_to_pos(action)
+        step_reward = self._compute_reward(
+            self.t, self.next_t, self.curr_position, self.prev_position
+        )
+
+        self.reward = step_reward.reward
+        self.gross_reward = step_reward.gross_reward
+        self.cost = step_reward.cost
         self.t = self.next_t
 
         info = {}
@@ -153,7 +182,7 @@ class BasisTradingEnv(gym.Env):
     def render(self):
         pass
 
-    # Observation utilities
+    # Observation
     def _get_observation(self) -> np.ndarray:
         if not self.terminated:
             observation = self._get_regular_observation()
@@ -175,23 +204,24 @@ class BasisTradingEnv(gym.Env):
     def _get_terminal_observation(self) -> np.ndarray:
         return np.zeros(self.obs_space_size, dtype=self.config.obs_dtype)
 
-    # Info utilities
+    # Info
     def _get_info(self) -> dict[str, Any]:
         return {
             "step": self.t,
             "time": self.timestamp,
             "date": self.date,
-            "allocation": self.allocation,
-            "position": self.position,
+            "steps_to_go": self.steps_to_go,
+            "allocation": self.prev_position,
+            "position": self.curr_position,
             "reward": self.reward,
             "gross_reward": self.gross_reward,
             "cost": self.cost,
             "terminal": self.terminated,
         }
 
-    def _get_terminal_info(self, closing_reward: Reward) -> dict[str, Any]:
+    def _get_terminal_info(self, closing_reward: StepReward) -> dict[str, Any]:
         return {
-            "terminal_allocation": self.position,
+            "terminal_allocation": self.curr_position,
             "terminal_position": self._FLAT_POSITION,
             "agent_reward": self.reward,
             "agent_gross_reward": self.gross_reward,
@@ -201,7 +231,7 @@ class BasisTradingEnv(gym.Env):
             "closing_cost": closing_reward.cost,
         }
 
-    # Reward utilities
+    # Rewards
     def _compute_gross_reward(self, t: int, next_t: int, position: int) -> float:
         assert isinstance(self.ep_dataset, RLDataset)
         basis = self.ep_dataset.basis
@@ -221,24 +251,24 @@ class BasisTradingEnv(gym.Env):
 
         return size * spread
 
-    def _compute_reward(self, t: int, next_t: int, position: int, allocation: int) -> Reward:
+    def _compute_reward(self, t: int, next_t: int, position: int, allocation: int) -> StepReward:
         gross_reward = self._compute_gross_reward(t, next_t, position)
         cost = 0.0
         if self.config.include_cost:
             cost = self._compute_cost(t, position, allocation)
         reward = gross_reward - cost
 
-        return Reward(reward, gross_reward, cost)
+        return StepReward(reward, gross_reward, cost)
 
-    # Action <-> Position utilities
+    # action <-> position
     def _act_to_pos(self, action: int) -> int:
         return self._ACT_TO_POS[action]
 
     def _pos_to_act(self, position: int) -> int:
         return self._POS_TO_ACT[position]
 
-    # Build episode dataset
-    def _build_episode_rl_dataset(self) -> RLDataset:
+    # Episode
+    def _build_episode_rl_dataset(self) -> EpDataset:
         rows = self.dataset.date_to_slice[self.date]
         features = self.dataset.features.iloc[rows]
         basis = self.dataset.basis.iloc[rows]
@@ -251,14 +281,14 @@ class BasisTradingEnv(gym.Env):
             ctd_spread = self.dataset.ctd_spread.iloc[rows]
             fut_spread = self.dataset.fut_spread.iloc[rows]
 
-        return RLDataset(
+        return EpDataset(
             features=features, basis=basis, ctd_spread=ctd_spread, fut_spread=fut_spread
         )
 
-    # Manage terminal step
+    # Terminal
     def _liquidation(self) -> dict[str, Any]:
         closing_reward = self._compute_reward(
-            self.t, self.mrkt_close_t, self._FLAT_POSITION, self.position
+            self.t, self.mrkt_close_t, self._FLAT_POSITION, self.curr_position
         )
         closing_info = self._get_terminal_info(closing_reward)
         self.reward += closing_reward.reward
@@ -268,15 +298,55 @@ class BasisTradingEnv(gym.Env):
 
         return closing_info
 
+    # Reset
+    def _reset_date(self) -> pd.Timestamp:
+        match self.config.mode:
+            case "random":
+                return self._random_date()
+
+            case "serial":
+                return self._serial_date()
+
+            case _:
+                raise ValueError(f"Invalid evaluation mode: '{self.config.mode}'")
+
+    def _random_date(self) -> pd.Timestamp:
+        return self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
+
+    def _serial_date(self) -> pd.Timestamp:
+        self._date_idx += 1
+        if self._date_idx == len(self.dataset.dates):
+            raise StopIteration("Evaluation complete")
+
+        return self.dataset.dates[self._date_idx]
+
+    def _reset_trajectory_min(self) -> int:
+        match self.config.mode:
+            case "random":
+                return self._random_trajectory()
+
+            case "serial":
+                return self._serial_trajectory()
+
+            case _:
+                raise ValueError(f"Invalid evalutation mode: '{self.config.mode}'")
+
+    def _random_trajectory(self) -> int:
+        return int(self.np_random.integers(self.config.persistence_min))
+
+    def _serial_trajectory(self) -> int:
+        assert isinstance(self.config.trajectory_min, int)
+        return self.config.trajectory_min
+
     @property
     def _encoded_position(self):
         match self.config.position_encoding:
             case "int":
-                return np.array([self.position], dtype=self.config.obs_dtype)
+                return np.array([self.curr_position], dtype=self.config.obs_dtype)
 
             case "ohe":
                 return np.eye(self.n_actions, dtype=self.config.obs_dtype)[
-                    self._pos_to_act(self.position)
+                    self._pos_to_act(self.curr_position)
                 ]
 
             case _:
@@ -299,43 +369,35 @@ class BasisTradingEnv(gym.Env):
         return n
 
     @property
-    def trajectory_offset_sec(self) -> int:
-        return self.trajectory_offset_min * 60
+    def trajectory_sec(self) -> int:
+        return self.trajectory_min * 60
 
     @property
     def next_t(self) -> int:
         return self.t + self.config.persistence_sec
 
     @property
-    def residual_time_min(self) -> int:
-        return self.config.persistence_min - self.trajectory_offset_min
+    def offset_to_close_min(self) -> int:
+        return self.config.persistence_min - self.trajectory_min
 
     @property
-    def residual_time_sec(self) -> int:
-        return self.residual_time_min * 60
+    def offset_to_close_sec(self) -> int:
+        return self.offset_to_close_min * 60
 
     @property
     def mrkt_close_t(self) -> int:
         assert isinstance(self.ep_dataset, RLDataset)
-        return len(self.ep_dataset.features) - 1
+        return self.episode_length - 1
 
     @property
     def last_mrkt_t(self) -> int:
         assert isinstance(self.ep_dataset, RLDataset)
-        return self.mrkt_close_t - self.residual_time_sec
+        return self.mrkt_close_t - self.offset_to_close_sec
 
     @property
     def last_agent_t(self) -> int:
         assert isinstance(self.ep_dataset, RLDataset)
         return self.last_mrkt_t - self.config.persistence_sec
-
-    @property
-    def _is_mrkt_close(self) -> bool:
-        return self.t == self.mrkt_close_t
-
-    @property
-    def _is_last_agent_t(self) -> bool:
-        return self.t == self.last_agent_t
 
     @property
     def _is_last_mrkt_t(self) -> bool:
@@ -352,9 +414,13 @@ class BasisTradingEnv(gym.Env):
         return self.ep_dataset.features.index[self.next_t]
 
     @property
-    def current_basis(self):
+    def episode_length(self) -> int:
         assert isinstance(self.ep_dataset, RLDataset)
-        return self.ep_dataset.basis.iloc[self.t]
+        return len(self.ep_dataset.features)
+
+    @property
+    def steps_to_go(self) -> int:
+        return self.last_agent_t - self.t
 
 
 if __name__ == "__main__":
@@ -377,7 +443,7 @@ if __name__ == "__main__":
         ticker="fbtp",
     )
 
-    env_config = EnvConfig(include_cost=True, persistence_min=10)
+    env_config = EnvConfig(mode="random", include_cost=True, persistence_min=10)
 
     rl_dataset = build_rl_dataset(dataset_config, env_config, FEATURES)
 
