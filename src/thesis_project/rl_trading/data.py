@@ -35,6 +35,7 @@ class BaseFeature:
         return self.directory / self.filename
 
 
+# fmt: off
 BASE_FEATURES: dict[str, BaseFeature] = {
     # Cross asset
     "basis": BaseFeature(
@@ -47,283 +48,117 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         filename=f"irr_{SUFFIX}",
         directory=FBTP_BASE_PATH / "irr",
     ),
+
     # Mid prices
-    "fut_mid_price": BaseFeature(
-        base_id="fut_mid_price",
-        filename=f"fut_mid_price_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "mid-price",
-    ),
-    "ctd_mid_price": BaseFeature(
-        base_id="ctd_mid_price",
-        filename=f"ctd_mid_price_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "mid-price",
-    ),
+    **{
+        f"{asset}_mid_price": BaseFeature(
+            base_id=f"{asset}_mid_price",
+            filename=f"{asset}_mid_price_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "mid-price",
+        )
+        for asset in ("fut", "ctd")
+    },
+
     # Micro prices
-    "fut_micro_price": BaseFeature(
-        base_id="fut_micro_price",
-        filename=f"fut_micro_price_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "micro-price",
-    ),
-    "ctd_micro_price": BaseFeature(
-        base_id="ctd_micro_price",
-        filename=f"ctd_micro_price_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "micro-price",
-    ),
+    **{
+        f"{asset}_micro_price": BaseFeature(
+            base_id=f"{asset}_micro_price",
+            filename=f"{asset}_micro_price_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "micro-price",
+        )
+        for asset in ("fut", "ctd")
+    },
+
     # Spreads
-    "fut_spread": BaseFeature(
-        base_id="fut_spread",
-        filename=f"fut_spread_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "spread",
-    ),
-    "ctd_spread": BaseFeature(
-        base_id="ctd_spread",
-        filename=f"ctd_spread_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "spread",
-    ),
+    **{
+        f"{asset}_spread": BaseFeature(
+            base_id=f"{asset}_spread",
+            filename=f"{asset}_spread_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "spread",
+        )
+        for asset in ("fut", "ctd")
+    },
+
     # Order Book Imbalance
-    "fut_obi_lvl_1": BaseFeature(
-        base_id="fut_obi_lvl_1",
-        filename=f"fut_obi_lvl_1_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    "ctd_obi_lvl_1": BaseFeature(
-        base_id="ctd_obi_lvl_1",
-        filename=f"ctd_obi_lvl_1_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    "fut_obi_lvl_2": BaseFeature(
-        base_id="fut_obi_lvl_2",
-        filename=f"fut_obi_lvl_2_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    "ctd_obi_lvl_2": BaseFeature(
-        base_id="ctd_obi_lvl_2",
-        filename=f"ctd_obi_lvl_2_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    "fut_obi_lvl_3": BaseFeature(
-        base_id="fut_obi_lvl_3",
-        filename=f"fut_obi_lvl_3_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    "ctd_obi_lvl_3": BaseFeature(
-        base_id="ctd_obi_lvl_3",
-        filename=f"ctd_obi_lvl_3_scaled_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "obi",
-    ),
-    # Bid Order Flow
-    "fut_bof_lvl_1": BaseFeature(
-        base_id="fut_bof_lvl_1",
-        filename=f"fut_bof_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_bof_lvl_1": BaseFeature(
-        base_id="ctd_bof_lvl_1",
-        filename=f"ctd_bof_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_bof_lvl_2": BaseFeature(
-        base_id="fut_bof_lvl_2",
-        filename=f"fut_bof_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_bof_lvl_2": BaseFeature(
-        base_id="ctd_bof_lvl_2",
-        filename=f"ctd_bof_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_bof_lvl_3": BaseFeature(
-        base_id="fut_bof_lvl_3",
-        filename=f"fut_bof_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_bof_lvl_3": BaseFeature(
-        base_id="ctd_bof_lvl_3",
-        filename=f"ctd_bof_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    # Ask Order Flow
-    "fut_aof_lvl_1": BaseFeature(
-        base_id="fut_aof_lvl_1",
-        filename=f"fut_aof_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_aof_lvl_1": BaseFeature(
-        base_id="ctd_aof_lvl_1",
-        filename=f"ctd_aof_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_aof_lvl_2": BaseFeature(
-        base_id="fut_aof_lvl_2",
-        filename=f"fut_aof_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_aof_lvl_2": BaseFeature(
-        base_id="ctd_aof_lvl_2",
-        filename=f"ctd_aof_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_aof_lvl_3": BaseFeature(
-        base_id="fut_aof_lvl_3",
-        filename=f"fut_aof_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_aof_lvl_3": BaseFeature(
-        base_id="ctd_aof_lvl_3",
-        filename=f"ctd_aof_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
+    **{
+        f"{asset}_obi_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_obi_lvl_{level}",
+            filename=f"{asset}_obi_lvl_{level}_scaled_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "obi",
+        )
+        for asset in ("fut", "ctd")
+        for level in range(1, 4)
+    },
+
+    # Bid/Ask Order Flow
+    **{
+        f"{asset}_{side}of_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_{side}of_lvl_{level}",
+            filename=f"{asset}_{side}of_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "ofi",
+        )
+        for asset in ("fut", "ctd")
+        for side in ("b", "a")
+        for level in range(1, 4)
+    },
+
     # Order Flow Imbalance
-    "fut_ofi_lvl_1": BaseFeature(
-        base_id="fut_ofi_lvl_1",
-        filename=f"fut_ofi_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_ofi_lvl_1": BaseFeature(
-        base_id="ctd_ofi_lvl_1",
-        filename=f"ctd_ofi_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_ofi_lvl_2": BaseFeature(
-        base_id="fut_ofi_lvl_2",
-        filename=f"fut_ofi_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_ofi_lvl_2": BaseFeature(
-        base_id="ctd_ofi_lvl_2",
-        filename=f"ctd_ofi_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "fut_ofi_lvl_3": BaseFeature(
-        base_id="fut_ofi_lvl_3",
-        filename=f"fut_ofi_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
-    "ctd_ofi_lvl_3": BaseFeature(
-        base_id="ctd_ofi_lvl_3",
-        filename=f"ctd_ofi_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "ofi",
-    ),
+    **{
+        f"{asset}_ofi_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_ofi_lvl_{level}",
+            filename=f"{asset}_ofi_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "ofi",
+        )
+        for asset in ("fut", "ctd")
+        for level in range(1, 4)
+    },
+
     # Slope v1
-    "fut_ask_slope_v1_lvl_1": BaseFeature(
-        base_id="fut_ask_slope_v1_lvl_1",
-        filename=f"fut_ask_slope_v1_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v1_lvl_1": BaseFeature(
-        base_id="ctd_ask_slope_v1_lvl_1",
-        filename=f"ctd_ask_slope_v1_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v1_lvl_1": BaseFeature(
-        base_id="fut_bid_slope_v1_lvl_1",
-        filename=f"fut_bid_slope_v1_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v1_lvl_1": BaseFeature(
-        base_id="ctd_bid_slope_v1_lvl_1",
-        filename=f"ctd_bid_slope_v1_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_ask_slope_v1_lvl_2": BaseFeature(
-        base_id="fut_ask_slope_v1_lvl_2",
-        filename=f"fut_ask_slope_v1_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v1_lvl_2": BaseFeature(
-        base_id="ctd_ask_slope_v1_lvl_2",
-        filename=f"ctd_ask_slope_v1_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v1_lvl_2": BaseFeature(
-        base_id="fut_bid_slope_v1_lvl_2",
-        filename=f"fut_bid_slope_v1_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v1_lvl_2": BaseFeature(
-        base_id="ctd_bid_slope_v1_lvl_2",
-        filename=f"ctd_bid_slope_v1_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_ask_slope_v1_lvl_3": BaseFeature(
-        base_id="fut_ask_slope_v1_lvl_3",
-        filename=f"fut_ask_slope_v1_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v1_lvl_3": BaseFeature(
-        base_id="ctd_ask_slope_v1_lvl_3",
-        filename=f"ctd_ask_slope_v1_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v1_lvl_3": BaseFeature(
-        base_id="fut_bid_slope_v1_lvl_3",
-        filename=f"fut_bid_slope_v1_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v1_lvl_3": BaseFeature(
-        base_id="ctd_bid_slope_v1_lvl_3",
-        filename=f"ctd_bid_slope_v1_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
+    **{
+        f"{asset}_{side}_slope_v1_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_{side}_slope_v1_lvl_{level}",
+            filename=f"{asset}_{side}_slope_v1_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "slope",
+        )
+        for asset in ("fut", "ctd")
+        for side in ("ask", "bid")
+        for level in range(1, 4)
+    },
+
     # Slope v2
-    "fut_ask_slope_v2_lvl_1": BaseFeature(
-        base_id="fut_ask_slope_v2_lvl_1",
-        filename=f"fut_ask_slope_v2_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v2_lvl_1": BaseFeature(
-        base_id="ctd_ask_slope_v2_lvl_1",
-        filename=f"ctd_ask_slope_v2_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v2_lvl_1": BaseFeature(
-        base_id="fut_bid_slope_v2_lvl_1",
-        filename=f"fut_bid_slope_v2_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v2_lvl_1": BaseFeature(
-        base_id="ctd_bid_slope_v2_lvl_1",
-        filename=f"ctd_bid_slope_v2_lvl_1_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_ask_slope_v2_lvl_2": BaseFeature(
-        base_id="fut_ask_slope_v2_lvl_2",
-        filename=f"fut_ask_slope_v2_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v2_lvl_2": BaseFeature(
-        base_id="ctd_ask_slope_v2_lvl_2",
-        filename=f"ctd_ask_slope_v2_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v2_lvl_2": BaseFeature(
-        base_id="fut_bid_slope_v2_lvl_2",
-        filename=f"fut_bid_slope_v2_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v2_lvl_2": BaseFeature(
-        base_id="ctd_bid_slope_v2_lvl_2",
-        filename=f"ctd_bid_slope_v2_lvl_2_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_ask_slope_v2_lvl_3": BaseFeature(
-        base_id="fut_ask_slope_v2_lvl_3",
-        filename=f"fut_ask_slope_v2_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_ask_slope_v2_lvl_3": BaseFeature(
-        base_id="ctd_ask_slope_v2_lvl_3",
-        filename=f"ctd_ask_slope_v2_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "fut_bid_slope_v2_lvl_3": BaseFeature(
-        base_id="fut_bid_slope_v2_lvl_3",
-        filename=f"fut_bid_slope_v2_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
-    "ctd_bid_slope_v2_lvl_3": BaseFeature(
-        base_id="ctd_bid_slope_v2_lvl_3",
-        filename=f"ctd_bid_slope_v2_lvl_3_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "slope",
-    ),
+    **{
+        f"{asset}_{side}_slope_v2_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_{side}_slope_v2_lvl_{level}",
+            filename=f"{asset}_{side}_slope_v2_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "slope",
+        )
+        for asset in ("fut", "ctd")
+        for side in ("ask", "bid")
+        for level in range(1, 4)
+    },
+
+    # Price levels
+    **{
+        f"{asset}_{side}_price_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_{side}_price_lvl_{level}",
+            filename=f"{asset}_{side}_price_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "price",
+        )
+        for asset in ("fut", "ctd")
+        for side in ("bid", "ask")
+        for level in range(1, 11)
+    },
+
+    # Size levels
+    **{
+        f"{asset}_{side}_size_lvl_{level}": BaseFeature(
+            base_id=f"{asset}_{side}_size_lvl_{level}",
+            filename=f"{asset}_{side}_size_lvl_{level}_{SUFFIX}",
+            directory=FBTP_BASE_PATH / "size",
+        )
+        for asset in ("fut", "ctd")
+        for side in ("bid", "ask")
+        for level in range(1, 11)
+    },
 }
+# fmt: on
