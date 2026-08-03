@@ -101,18 +101,15 @@ class AnalysisConfig:
     # Calendar features
     calendar_features: List[str] = field(
         default_factory=lambda: [
-            # "year",
-            "month",
-            # "week_of_year",
-            # "day_of_year",
-            "day_of_month",
-            "day_of_week",
-            "hour_of_day",
-            "minute_of_day",
-            "minute_of_hour",
-            "second_of_day",
-            "second_of_hour",
-            "second_of_minute",
+            # "month",
+            # "day_of_month",
+            # "day_of_week",
+            # "hour_of_day",
+            # "minute_of_day",
+            # "minute_of_hour",
+            # "second_of_day",
+            # "second_of_hour",
+            # "second_of_minute",
         ]
     )
 
