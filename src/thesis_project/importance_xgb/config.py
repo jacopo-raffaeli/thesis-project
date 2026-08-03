@@ -218,38 +218,45 @@ def create_config(**overrides) -> AnalysisConfig:
 
 
 def get_xgb_fixed_params(config_obj: AnalysisConfig):
-    params = {}
+    common = {
+        "tree_method": "hist",
+        "verbosity": 0,
+        "n_jobs": config_obj.n_jobs_xgb,
+        "subsample": 0.7,
+        "colsample_bytree": 0.7,
+    }
 
-    if config_obj.analysis == "importance":
-        params = {
+    if config_obj.analysis == "importance_cls":
+        return {
+            **common,
             "objective": "multi:softprob",
-            "num_class": config_obj.n_quantile,
             "eval_metric": "mlogloss",
-            "tree_method": "hist",
-            "verbosity": 0,
-            "n_jobs": config_obj.n_jobs_xgb,
-            "subsample": 0.7,
-            "colsample_bytree": 0.7,
+            "num_class": config_obj.n_quantile,
         }
-    elif config_obj.analysis == "selection":
-        params = {
+
+    elif config_obj.analysis == "importance_reg":
+        return {
+            **common,
             "objective": "reg:squarederror",
             "eval_metric": "rmse",
-            "verbosity": 0,
-            "n_jobs": config_obj.n_jobs_xgb,
-            "n_estimators": 3000,
-            "early_stopping_rounds": 100,
-            "learning_rate": 1e-2,
-            "max_depth": 9,
-            "min_child_weight": 10,
-            "lambda": 1e-3,
-            "alpha": 1e-3,
-            "gamma": 1e-3,
-            "subsample": 0.7,
-            "colsample_bytree": 0.7,
         }
 
-    return params
+    elif config_obj.analysis == "selection":
+        return {
+            **common,
+            "objective": "reg:squarederror",
+            "eval_metric": "rmse",
+            "n_estimators": 3000,
+            "early_stopping_rounds": 50,
+            "learning_rate": 1e-2,
+            "max_depth": 11,
+            "min_child_weight": 25,
+            "lambda": 10,
+            "alpha": 1e-3,
+            "gamma": 1e-3,
+        }
+
+    raise ValueError(f"Unknown analysis '{config_obj.analysis}'")
 
 
 def validate_config(config_obj: AnalysisConfig):
