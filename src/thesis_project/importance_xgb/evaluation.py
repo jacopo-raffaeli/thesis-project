@@ -215,6 +215,108 @@ def importance_xgb_mean_ranking(importance_xgb_dict, n_features, metric):
     plt.show()
 
 
+def selection_xgb_mean_ranking(selection_dict, n_features, metric):
+    dfs = []
+
+    for seed, df in selection_dict.items():
+        tmp = df[["selected_feature", "iteration", metric]].copy()
+        tmp["seed"] = seed
+        dfs.append(tmp)
+
+    all_selection = pd.concat(dfs, ignore_index=True)
+
+    summary = (
+        all_selection.groupby("selected_feature")
+        .agg(
+            mean=(metric, "mean"),
+            std=(metric, "std"),
+            mean_it=("iteration", "mean"),
+        )
+        .fillna(0)
+        .sort_values("mean", ascending=False)
+        .head(n_features)
+        .reset_index()
+    )
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    ax.barh(
+        summary["selected_feature"],
+        summary["mean"],
+        xerr=summary["std"],
+        capsize=3,
+    )
+
+    ax.invert_yaxis()
+
+    ax.set_xlabel(f"Mean {metric.title()}")
+    ax.set_ylabel("Feature")
+    ax.set_title(f"Top {n_features} Features by Mean Gain")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_xlim(left=0)
+
+    fig.tight_layout()
+    plt.show()
+
+
+def selection_xgb_metrics(selection_hist_dict, metric):
+    train_rmse_list = []
+    val_rmse_list = []
+    min_len_train = np.inf
+    min_len_val = np.inf
+
+    for seed, selection_hist in selection_hist_dict.items():
+        train_rmse_list.append(selection_hist[f"train_{metric}"])
+        val_rmse_list.append(selection_hist[f"val_{metric}"])
+        min_len_train = min(min_len_train, len(selection_hist[f"train_{metric}"]))
+        min_len_val = min(min_len_val, len(selection_hist[f"val_{metric}"]))
+
+    for i, _ in enumerate(train_rmse_list):
+        train_rmse_list[i] = train_rmse_list[i][:min_len_train]
+
+    for i, _ in enumerate(val_rmse_list):
+        val_rmse_list[i] = val_rmse_list[i][:min_len_val]
+
+    train_rmse_mean = np.mean(train_rmse_list, axis=0)
+    train_rmse_std = np.std(train_rmse_list, axis=0)
+    val_rmse_mean = np.mean(val_rmse_list, axis=0)
+    val_rmse_std = np.std(val_rmse_list, axis=0)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    iterations = np.arange(min_len_train)
+    ax.plot(iterations, train_rmse_mean, label=f"train {metric.upper()}")
+    ax.fill_between(
+        iterations,
+        train_rmse_mean - train_rmse_std,
+        train_rmse_mean + train_rmse_std,
+        alpha=0.4,
+    )
+
+    iterations = np.arange(min_len_val)
+    ax.plot(iterations, val_rmse_mean, label=f"validation {metric.upper()}")
+    ax.fill_between(
+        iterations,
+        val_rmse_mean - 2 * val_rmse_std,
+        val_rmse_mean + 2 * val_rmse_std,
+        alpha=0.4,
+    )
+
+    ax.set_xlabel("Iteration number")
+
+    ax.set_ylabel(f"{metric.upper()}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    ax.set_title(f"Iterative feature selection mean {metric.upper()}", size=12)
+
+    fig.tight_layout()
+    plt.show()
+
+
 def feature_rankings(importance_xgb_dict, metric, show_rank=False):
     rankings = {}
 
