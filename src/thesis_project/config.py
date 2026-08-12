@@ -1,32 +1,108 @@
 import re
+from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 
+# ==============================================================================
 # DIRECTORIES
+# ==============================================================================
 
 # Project root directory
 ROOT = Path(__file__).resolve().parents[2]
 
 # Data directories
 DATA_DIR = ROOT / "data"
-RAW_DIR = DATA_DIR / "raw"
-INT_DIR = DATA_DIR / "interim"
-PRO_DIR = DATA_DIR / "processed"
+DATA_RAW_DIR = DATA_DIR / "raw"
+DATA_INT_DIR = DATA_DIR / "interim"
+DATA_PRO_DIR = DATA_DIR / "processed"
 
 # Results directories
 RES_DIR = ROOT / "results"
-FIG_DIR = RES_DIR / "figures"
-TAB_DIR = RES_DIR / "tables"
+RES_FIG_DIR = RES_DIR / "figures"
+RES_TAB_DIR = RES_DIR / "tables"
+RES_EXP_DIR = RES_DIR / "experiments"
 
 # Sources directories
 SRC_DIR = ROOT / "src"
 SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 
-# Plot settings directories
-PLT_DIR = SRC_THESIS_DIR / "plotting"
-MPL_CONFIG = PLT_DIR / "config.mplstyle"
+
+# ==============================================================================
+# MARKET CONFIG
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class ExchangeConfig:
+    name: str
+    opening_time: time
+    closing_time: time
+    timezone: str
+
+
+MTS = ExchangeConfig(
+    name="mts", opening_time=time(8, 0, 0), closing_time=time(17, 30, 0), timezone="Europe/Berlin"
+)
+
+EUREX = ExchangeConfig(
+    name="eurex", opening_time=time(8, 0, 0), closing_time=time(19, 0, 0), timezone="Europe/Berlin"
+)
+
+EXCHANGES = {exchange.name: exchange for exchange in [MTS, EUREX]}
+
+
+# ==============================================================================
+# ASSET CONFIG
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class AssetConfig:
+    symbol: str
+    asset_type: Literal["bond", "future"]
+    role: Literal["ctd", "fut"]
+    min_face_value: int
+    tick_size: float
+    market: ExchangeConfig
+    description: str
+
+
+BTP = AssetConfig(
+    symbol="btp",
+    asset_type="bond",
+    role="ctd",
+    min_face_value=2_000_000,
+    tick_size=0.01,
+    market=MTS,
+    description="Buoni del Tesoro Pluriennali",
+)
+
+FBTP = AssetConfig(
+    symbol="fbtp",
+    asset_type="future",
+    role="fut",
+    min_face_value=100_000,
+    tick_size=0.01,
+    market=EUREX,
+    description="Long-Term Euro-BTP Futures",
+)
+
+FBTS = AssetConfig(
+    symbol="fbts",
+    asset_type="future",
+    role="fut",
+    min_face_value=100_000,
+    tick_size=0.01,
+    market=EUREX,
+    description="Short-Term Euro-BTP Futures",
+)
+
+ASSETS = {asset.symbol: asset for asset in [BTP, FBTP, FBTS]}
+
+# ==============================================================================
 
 # TIME SETTINGS
 
@@ -81,7 +157,7 @@ CTD_TICK_SIZE_EURO = 0.01
 # DATES TO EXCLUDE
 
 fbts_fut_meta_df = pd.read_csv(
-    RAW_DIR / "fbtp" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
+    DATA_RAW_DIR / "fbtp" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
 )
 # fbts_fut_meta_df = pd.read_csv(
 #     RAW_DIR / "fbts" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
