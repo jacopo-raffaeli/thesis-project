@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import time
 from pathlib import Path
 from typing import Literal
@@ -25,7 +25,7 @@ RES_FIG_DIR = RES_DIR / "figures"
 RES_TAB_DIR = RES_DIR / "tables"
 RES_EXP_DIR = RES_DIR / "experiments"
 
-# Sources directories
+# Source directories
 SRC_DIR = ROOT / "src"
 SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 
@@ -36,22 +36,22 @@ SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 
 
 @dataclass(frozen=True)
-class ExchangeConfig:
+class MarketConfig:
     name: str
     opening_time: time
     closing_time: time
     timezone: str
 
 
-MTS = ExchangeConfig(
+MTS = MarketConfig(
     name="mts", opening_time=time(8, 0, 0), closing_time=time(17, 30, 0), timezone="Europe/Berlin"
 )
 
-EUREX = ExchangeConfig(
+EUREX = MarketConfig(
     name="eurex", opening_time=time(8, 0, 0), closing_time=time(19, 0, 0), timezone="Europe/Berlin"
 )
 
-EXCHANGES = {exchange.name: exchange for exchange in [MTS, EUREX]}
+MARKETS = {market.name: market for market in [MTS, EUREX]}
 
 
 # ==============================================================================
@@ -61,12 +61,25 @@ EXCHANGES = {exchange.name: exchange for exchange in [MTS, EUREX]}
 
 @dataclass(frozen=True)
 class AssetConfig:
+    """
+    Dataclass for asset settings
+
+    ## Args:
+    * symbol: asset symbol
+    * asset_type: asset family
+    * role: useful to distinguish the kind of asset in the code
+    * par_value: The reference value quoted prices refers to in euros
+    * min_trade_face_vale: minimum tradable size in euros
+    * tick_size_perc: tick size expressed as a percent of the par value
+    """
+
     symbol: str
     asset_type: Literal["bond", "future"]
     role: Literal["ctd", "fut"]
-    min_face_value: int
-    tick_size: float
-    market: ExchangeConfig
+    par_value: float
+    min_trade_face_value: float
+    tick_size_perc: float
+    market: MarketConfig
     description: str
 
 
@@ -74,8 +87,9 @@ BTP = AssetConfig(
     symbol="btp",
     asset_type="bond",
     role="ctd",
-    min_face_value=2_000_000,
-    tick_size=0.01,
+    par_value=100,
+    min_trade_face_value=2_000_000,
+    tick_size_perc=0.01,
     market=MTS,
     description="Buoni del Tesoro Pluriennali",
 )
@@ -84,8 +98,9 @@ FBTP = AssetConfig(
     symbol="fbtp",
     asset_type="future",
     role="fut",
-    min_face_value=100_000,
-    tick_size=0.01,
+    par_value=100,
+    min_trade_face_value=100_000,
+    tick_size_perc=0.01,
     market=EUREX,
     description="Long-Term Euro-BTP Futures",
 )
@@ -94,13 +109,51 @@ FBTS = AssetConfig(
     symbol="fbts",
     asset_type="future",
     role="fut",
-    min_face_value=100_000,
-    tick_size=0.01,
+    par_value=100,
+    min_trade_face_value=100_000,
+    tick_size_perc=0.01,
     market=EUREX,
     description="Short-Term Euro-BTP Futures",
 )
 
 ASSETS = {asset.symbol: asset for asset in [BTP, FBTP, FBTS]}
+
+
+# ==============================================================================
+# LOB METADATA
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class LobMetadata:
+    n_levels: int
+    freq: str
+    index_name: str
+    sides: tuple[str, str] = field(default_factory=tuple[str, str])
+    column_types: tuple[str, ...] = field(default_factory=tuple[str, ...])
+
+    @property
+    def levels(self) -> list[int]:
+        return list(range(1, self.n_levels + 1))
+
+    @property
+    def columns(self) -> list[str]:
+        return [
+            f"{side}_{column_type}_level_{level}"
+            for side in self.sides
+            for column_type in self.column_types
+            for level in self.levels
+        ]
+
+
+LOB_METADATA = LobMetadata(
+    n_levels=10,
+    freq="1s",
+    index_name="timestamp",
+    sides=("bid", "ask"),
+    column_types=("price", "size"),
+)
+
 
 # ==============================================================================
 
