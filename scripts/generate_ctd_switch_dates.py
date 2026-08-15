@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     TICKER = "fbtp"
     ctd_df = pd.read_csv(
-        global_config.RAW_DIR / TICKER / "daily_cf.csv", parse_dates=["Date"], index_col="Date"
+        global_config.DATA_RAW_DIR / TICKER / "daily_cf.csv", parse_dates=["Date"], index_col="Date"
     )
     switch_dates_df = swtich_dates(ctd_df)
-    switch_dates_df.to_csv(global_config.RAW_DIR / TICKER / "ctd_switch.csv", index=False)
+    switch_dates_df.to_csv(global_config.DATA_RAW_DIR / TICKER / "ctd_switch.csv", index=False)
