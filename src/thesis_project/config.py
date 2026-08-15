@@ -74,7 +74,7 @@ MARKETS = {market.name: market for market in [MTS, EUREX]}
 @dataclass(frozen=True)
 class AssetConfig:
     """
-    Dataclass for asset settings
+    Dataclass for asset configuration
 
     ## Args:
     * symbol: asset symbol
@@ -152,9 +152,9 @@ class LobMetadata:
     def columns(self) -> list[str]:
         return [
             f"{side}_{column_type}_level_{level}"
+            for level in self.levels
             for side in self.sides
             for column_type in self.column_types
-            for level in self.levels
         ]
 
 
