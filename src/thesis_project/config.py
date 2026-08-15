@@ -147,7 +147,7 @@ class LobMetadata:
     @property
     def columns(self) -> list[str]:
         return [
-            f"{side}_{column_type}_level_{level}"
+            f"L{level}-{side.capitalize()}{column_type.capitalize()}"
             for level in self.levels
             for side in self.sides
             for column_type in self.column_types
