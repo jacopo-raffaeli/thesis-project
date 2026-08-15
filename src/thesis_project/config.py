@@ -1,4 +1,6 @@
+import datetime
 import re
+import zoneinfo
 from dataclasses import dataclass, field
 from datetime import time
 from pathlib import Path
@@ -38,17 +40,27 @@ SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 @dataclass(frozen=True)
 class MarketConfig:
     name: str
-    opening_time: time
-    closing_time: time
-    timezone: str
+    opening_time: datetime.time
+    closing_time: datetime.time
+    tz_str: str
+
+    @property
+    def tz_zi(self) -> zoneinfo.ZoneInfo:
+        return zoneinfo.ZoneInfo(self.tz_str)
 
 
 MTS = MarketConfig(
-    name="mts", opening_time=time(8, 0, 0), closing_time=time(17, 30, 0), timezone="Europe/Berlin"
+    name="mts",
+    opening_time=datetime.time(8, 0, 0),
+    closing_time=datetime.time(17, 30, 0),
+    tz_str="Europe/Berlin",
 )
 
 EUREX = MarketConfig(
-    name="eurex", opening_time=time(8, 0, 0), closing_time=time(19, 0, 0), timezone="Europe/Berlin"
+    name="eurex",
+    opening_time=datetime.time(8, 0, 0),
+    closing_time=datetime.time(19, 0, 0),
+    tz_str="Europe/Berlin",
 )
 
 MARKETS = {market.name: market for market in [MTS, EUREX]}
