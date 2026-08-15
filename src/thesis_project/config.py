@@ -42,25 +42,21 @@ class MarketConfig:
     name: str
     opening_time: datetime.time
     closing_time: datetime.time
-    tz_str: str
-
-    @property
-    def tz_zi(self) -> zoneinfo.ZoneInfo:
-        return zoneinfo.ZoneInfo(self.tz_str)
+    tz: zoneinfo.ZoneInfo
 
 
 MTS = MarketConfig(
     name="mts",
     opening_time=datetime.time(8, 0, 0),
     closing_time=datetime.time(17, 30, 0),
-    tz_str="Europe/Berlin",
+    tz=zoneinfo.ZoneInfo("Europe/Berlin"),
 )
 
 EUREX = MarketConfig(
     name="eurex",
     opening_time=datetime.time(8, 0, 0),
     closing_time=datetime.time(19, 0, 0),
-    tz_str="Europe/Berlin",
+    tz=zoneinfo.ZoneInfo("Europe/Berlin"),
 )
 
 MARKETS = {market.name: market for market in [MTS, EUREX]}
