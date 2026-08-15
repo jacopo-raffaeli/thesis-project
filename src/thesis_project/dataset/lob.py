@@ -1,17 +1,16 @@
 import datetime
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
 
-from thesis_project.config import AssetConfig, LobMetadata
+from thesis_project import config, utils
 
 
 @dataclass
 class LobReport:
     date: datetime.date
-    asset: AssetConfig
+    asset: config.AssetConfig
     modified: list[str] = field(default_factory=list[str])
     critical: list[str] = field(default_factory=list[str])
 
@@ -31,25 +30,7 @@ class LobReport:
         self.print_critical()
 
 
-def filename_to_date(filename: str) -> datetime.date:
-    """
-    Extract the date from a LOB parquet filename.
-
-    ## Args:
-    * filename: expected format {ctd/fut}_lob_freq_1s_yyyy_mm_dd.parquet
-
-    ## Return
-    * datetime.date object
-    """
-    match = re.search(r"(\d{4})_(\d{2})_(\d{2})\.parquet$", filename)
-    if not match:
-        raise ValueError(f"Unexpected filename format: {filename}")
-
-    year, month, day = map(int, match.groups())
-    return datetime.date(year, month, day)
-
-
-def load_lob(path: Path) -> pd.DataFrame:
+def load(path: Path) -> pd.DataFrame:
     """
     Load a LOB parquet file and perform preliminary checks
 
@@ -75,7 +56,20 @@ def load_lob(path: Path) -> pd.DataFrame:
     return lob
 
 
-def normalize_lob(lob: pd.DataFrame, report: LobReport, metadata: LobMetadata, asset: AssetConfig):
+def normalize(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+):
+    # Set the expected timezone
+    assert isinstance(lob.index, pd.DatetimeIndex)
+
+    if lob.index.tz is None:
+        lob.index = lob.index.tz_localize(asset.market.tz)
+        report.modified.append(f"LOB index: localized  timezone to {asset.market.tz.key}")
+
+    elif str(lob.index.tz) != asset.market.tz.key:
+        lob.index = lob.index.tz_convert(asset.market.tz)
+        report.modified.append(f"LOB index: converted timezone to {asset.market.tz.key}")
+
     # Sort index
     if not lob.index.is_monotonic_increasing:
         lob = lob.sort_index()
@@ -103,17 +97,6 @@ def normalize_lob(lob: pd.DataFrame, report: LobReport, metadata: LobMetadata, a
         lob = lob[~mask]
         report.modified.append(f"LOB index: removed {mask.sum()} NaNs")
 
-    # Set the expected timezone
-    assert isinstance(lob.index, pd.DatetimeIndex)
-
-    if lob.index.tz is None:
-        lob.index = lob.index.tz_localize(asset.market.tz)
-        report.modified.append(f"LOB index: localized  timezone to {asset.market.tz.key}")
-
-    elif str(lob.index.tz) != asset.market.tz.key:
-        lob.index = lob.index.tz_convert(asset.market.tz)
-        report.modified.append(f"LOB index: converted timezone to {asset.market.tz.key}")
-
     # Set the expected time index
     start = datetime.datetime.combine(
         report.date,
@@ -138,7 +121,7 @@ def normalize_lob(lob: pd.DataFrame, report: LobReport, metadata: LobMetadata, a
         report.modified.append("LOB index: adjusted to the expected time index ")
 
     # Rename the LOB index
-    lob.rename(index={lob.index.name: metadata.index_name})
+    lob = lob.rename_axis(metadata.index_name)
 
     # TODO: Check that all the relevant columns are present
     # TODO: Keep only the relevant columns
@@ -146,7 +129,7 @@ def normalize_lob(lob: pd.DataFrame, report: LobReport, metadata: LobMetadata, a
     return lob, report
 
 
-def preprocess_lob(path: Path, asset: AssetConfig, metadata: LobMetadata):
+def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
     """
     LOB preprocessing pipeline:
     * Load the parquet file to a DataFrame
@@ -161,10 +144,10 @@ def preprocess_lob(path: Path, asset: AssetConfig, metadata: LobMetadata):
     ## Return:
     * ...
     """
-    date = filename_to_date(path.name)
+    date = utils.io.filename_to_date(path.name)
     report = LobReport(date, asset)
 
-    lob = load_lob(path)
-    lob, report = normalize_lob(lob, report, metadata, asset)
+    lob = load(path)
+    lob, report = normalize(lob, report, metadata, asset)
 
     return lob, report

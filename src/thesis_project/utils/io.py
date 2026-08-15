@@ -1,3 +1,6 @@
+import datetime
+import re
+
 import dataframe_image as dfi
 import pandas as pd
 
@@ -16,3 +19,21 @@ def load_cf(ticker: str, filename: str = "daily_cf.csv") -> pd.DataFrame:
         cf = cf.sort_index()
 
     return cf
+
+
+def filename_to_date(filename: str) -> datetime.date:
+    """
+    Extract the date from a LOB parquet filename.
+
+    ## Args:
+    * filename: expected format {ctd/fut}_lob_freq_1s_yyyy_mm_dd.parquet
+
+    ## Return
+    * datetime.date object
+    """
+    match = re.search(r"(\d{4})_(\d{2})_(\d{2})\.parquet$", filename)
+    if not match:
+        raise ValueError(f"Unexpected filename format: {filename}")
+
+    year, month, day = map(int, match.groups())
+    return datetime.date(year, month, day)
