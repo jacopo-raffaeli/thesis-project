@@ -463,7 +463,7 @@ def preprocess_temporal_features(
         temporal_features_df[f"{name}_cos"] = cos
 
     # Event based features
-    base_path = global_config.RAW_DIR / config_obj.ticker
+    base_path = global_config.DATA_RAW_DIR / config_obj.ticker
     for name, metadata in config_obj.event_based_features.items():
         path = base_path / metadata["file"]
         column = metadata["column"]

@@ -39,7 +39,7 @@ def get_logger() -> logging.Logger:
 
 
 def generate_output_path(config_obj: config.AnalysisConfig) -> Path:
-    output_path = global_config.INT_DIR / config_obj.ticker / config_obj.base_dir / "runs"
+    output_path = global_config.DATA_INT_DIR / config_obj.ticker / config_obj.base_dir / "runs"
     output_path.mkdir(parents=True, exist_ok=True)
 
     return output_path

@@ -21,7 +21,7 @@ def get_data_paths(ticker: str) -> DataPathsConfig:
     if ticker not in ["fbtp", "fbts"]:
         raise ValueError(f"Invalid ticker: {ticker}. Must be 'fbtp' or 'fbts'")
 
-    ms_path = global_config.INT_DIR / ticker / "data-microstructure"
+    ms_path = global_config.DATA_INT_DIR / ticker / "data-microstructure"
 
     # Target data paths
     targets = {

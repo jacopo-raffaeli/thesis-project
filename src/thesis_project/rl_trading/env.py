@@ -169,7 +169,7 @@ class BasisTradingEnv(gym.Env):
 
         info = {}
         if self._is_last_mrkt_t:
-            info["closing"] = self._liquidation()
+            info["liquidation"] = self._liquidation()
 
         observation = self._get_observation()
         info.update(self._get_info())
@@ -192,7 +192,7 @@ class BasisTradingEnv(gym.Env):
         return observation
 
     def _get_regular_observation(self) -> np.ndarray:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         features = self.ep_dataset.features.iloc[self.t].to_numpy(dtype=self.config.obs_dtype)
         position = self._encoded_position
         observation = np.concatenate([features, position]).astype(
@@ -233,14 +233,14 @@ class BasisTradingEnv(gym.Env):
 
     # Rewards
     def _compute_gross_reward(self, t: int, next_t: int, position: int) -> float:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         basis = self.ep_dataset.basis
         delta = basis.iloc[next_t] - basis.iloc[t]
 
         return position * delta
 
     def _compute_cost(self, t: int, position: int, allocation: int) -> float:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         ctd_spread = self.ep_dataset.ctd_spread
         fut_spread = self.ep_dataset.fut_spread
         assert isinstance(ctd_spread, pd.Series)
@@ -386,17 +386,17 @@ class BasisTradingEnv(gym.Env):
 
     @property
     def mrkt_close_t(self) -> int:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return self.episode_length - 1
 
     @property
     def last_mrkt_t(self) -> int:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return self.mrkt_close_t - self.offset_to_close_sec
 
     @property
     def last_agent_t(self) -> int:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return self.last_mrkt_t - self.config.persistence_sec
 
     @property
@@ -405,17 +405,17 @@ class BasisTradingEnv(gym.Env):
 
     @property
     def timestamp(self):
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return self.ep_dataset.features.index[self.t]
 
     @property
     def next_timestamp(self):
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return self.ep_dataset.features.index[self.next_t]
 
     @property
     def episode_length(self) -> int:
-        assert isinstance(self.ep_dataset, RLDataset)
+        assert isinstance(self.ep_dataset, EpDataset)
         return len(self.ep_dataset.features)
 
     @property
@@ -424,20 +424,9 @@ class BasisTradingEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    import warnings
-
     from gymnasium.utils.env_checker import check_env
 
     from thesis_project.rl_trading.dataset import build_rl_dataset
-
-    warnings.filterwarnings(
-        "ignore",
-        message=r".*Box observation space minimum value is -infinity.*",
-    )
-    warnings.filterwarnings(
-        "ignore",
-        message=r".*Box observation space maximum value is infinity.*",
-    )
 
     dataset_config = DatasetConfig(
         ticker="fbtp",
@@ -448,10 +437,5 @@ if __name__ == "__main__":
     rl_dataset = build_rl_dataset(dataset_config, env_config, FEATURES)
 
     env = BasisTradingEnv(rl_dataset, env_config)
-
-    try:
-        check_env(env, skip_render_check=True, skip_close_check=True)
-        print("Environment check passed")
-
-    except Exception as e:
-        print(f"Environment check failed: {e}")
+    check_env(env, skip_render_check=True, skip_close_check=True)
+    print("Env checked!")

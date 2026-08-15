@@ -148,7 +148,7 @@ def create_config(**overrides) -> AnalysisConfig:
             setattr(config, key, val)
 
     # Set output_path based on ticker
-    config.output_path = global_config.INT_DIR / ticker / "importance-mi" / "runs"
+    config.output_path = global_config.DATA_INT_DIR / ticker / "importance-mi" / "runs"
     assert config.output_path is not None
     if not config.output_path.exists():
         config.output_path.mkdir(parents=True, exist_ok=True)

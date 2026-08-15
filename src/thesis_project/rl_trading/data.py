@@ -3,8 +3,8 @@ from pathlib import Path
 
 from thesis_project import config as global_config
 
-FBTP_BASE_PATH = global_config.INT_DIR / "fbtp" / "data-microstructure"
-FBTS_BASE_PATH = global_config.INT_DIR / "fbts" / "data-microstructure"
+FBTP_BASE_PATH = global_config.DATA_INT_DIR / "fbtp" / "data-microstructure"
+FBTS_BASE_PATH = global_config.DATA_INT_DIR / "fbts" / "data-microstructure"
 SUFFIX = "freq_1s_from_2022_08_01_to_2024_12_30.parquet"
 
 
