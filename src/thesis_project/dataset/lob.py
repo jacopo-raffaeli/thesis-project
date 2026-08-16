@@ -12,11 +12,17 @@ class LobReport:
     date: datetime.date
     asset: config.AssetConfig
     modified: list[str] = field(default_factory=list[str])
+    warning: list[str] = field(default_factory=list[str])
     critical: list[str] = field(default_factory=list[str])
 
     def print_modified(self):
         print("List of solved issues:")
         for v in self.modified:
+            print(f"- {v}")
+
+    def print_warning(self):
+        print("List of warning issues:")
+        for v in self.critical:
             print(f"- {v}")
 
     def print_critical(self):
@@ -27,6 +33,7 @@ class LobReport:
     def print_report(self):
         print(f"{self.date}: LOB {self.asset.symbol}")
         self.print_modified()
+        self.print_warning()
         self.print_critical()
 
 
@@ -56,9 +63,9 @@ def load(path: Path) -> pd.DataFrame:
     return lob
 
 
-def normalize(
+def _normalize_timezone(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
-):
+) -> tuple[pd.DataFrame, LobReport]:
     # Set the expected timezone
     assert isinstance(lob.index, pd.DatetimeIndex)
 
@@ -70,6 +77,12 @@ def normalize(
         lob.index = lob.index.tz_convert(asset.market.tz)
         report.modified.append(f"LOB index: converted timezone to {asset.market.tz.key}")
 
+    return lob, report
+
+
+def _normalize_index(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
     # Sort index
     if not lob.index.is_monotonic_increasing:
         lob = lob.sort_index()
@@ -123,10 +136,50 @@ def normalize(
     # Rename the LOB index
     lob = lob.rename_axis(metadata.index_name)
 
-    # TODO: Check that all the relevant columns are present
-    # TODO: Keep only the relevant columns
+    return lob, report
+
+
+def _normalize_columns(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
+    # Check that all the relevant columns are present
+    expected = set(metadata.columns)
+    present = set(lob.columns)
+
+    missing = expected.difference(present)
+    if missing:
+        report.modified.append(
+            f"LOB columns: {len(missing)} missing columns attached ({','.join(sorted(missing))})"
+        )
+
+    extra = present.difference(expected)
+    if extra:
+        report.modified.append(
+            f"LOB columns: {len(extra)} extra columns dropped ({','.join(sorted(extra))})"
+        )
+
+    if missing or extra:
+        lob = lob.reindex(columns=metadata.columns)
 
     return lob, report
+
+
+def normalize(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
+    """"""
+    lob, report = _normalize_timezone(lob, report, metadata, asset)
+    lob, report = _normalize_index(lob, report, metadata, asset)
+    lob, report = _normalize_columns(lob, report, metadata, asset)
+
+    return lob, report
+
+
+def consistency(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
+    """"""
+    ...
 
 
 def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
@@ -149,5 +202,6 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
 
     lob = load(path)
     lob, report = normalize(lob, report, metadata, asset)
+    ...
 
     return lob, report
