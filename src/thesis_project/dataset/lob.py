@@ -2,6 +2,7 @@ import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
@@ -71,11 +72,9 @@ def _normalize_timezone(
 
     if lob.index.tz is None:
         lob.index = lob.index.tz_localize(asset.market.tz)
-        report.modified.append(f"LOB index: localized  timezone to {asset.market.tz.key}")
 
     elif str(lob.index.tz) != asset.market.tz.key:
         lob.index = lob.index.tz_convert(asset.market.tz)
-        report.modified.append(f"LOB index: converted timezone to {asset.market.tz.key}")
 
     return lob, report
 
@@ -86,7 +85,6 @@ def _normalize_index(
     # Sort index
     if not lob.index.is_monotonic_increasing:
         lob = lob.sort_index()
-        report.modified.append("LOB index: sorted ascending")
 
     # Remove samples outside the market time
     assert isinstance(lob.index, pd.DatetimeIndex)
@@ -94,21 +92,16 @@ def _normalize_index(
     n_outside = len(lob) - len(mask)
     if n_outside > 0:
         lob = lob.iloc[mask]
-        report.modified.append(
-            f"LOB: removed {n_outside} samples outside {asset.market.opening_time} - {asset.market.closing_time}"
-        )
 
     # Remove index duplicates
     if lob.index.has_duplicates:
         mask = lob.index.duplicated()
         lob = lob[~mask]
-        report.modified.append(f"LOB index: removed {mask.sum()} duplicates")
 
     # Remove index NaNs
     if lob.index.hasnans:
         mask = lob.index.isna().to_numpy()
         lob = lob[~mask]
-        report.modified.append(f"LOB index: removed {mask.sum()} NaNs")
 
     # Set the expected time index
     start = datetime.datetime.combine(
@@ -131,7 +124,6 @@ def _normalize_index(
 
     if not lob.index.equals(index):
         lob = lob.reindex(index)
-        report.modified.append("LOB index: adjusted to the expected time index ")
 
     # Rename the LOB index
     lob = lob.rename_axis(metadata.index_name)
@@ -145,18 +137,8 @@ def _normalize_columns(
     # Check that all the relevant columns are present
     expected = set(metadata.columns)
     present = set(lob.columns)
-
     missing = expected.difference(present)
-    if missing:
-        report.modified.append(
-            f"LOB columns: {len(missing)} missing columns attached ({','.join(sorted(missing))})"
-        )
-
     extra = present.difference(expected)
-    if extra:
-        report.modified.append(
-            f"LOB columns: {len(extra)} extra columns dropped ({','.join(sorted(extra))})"
-        )
 
     if missing or extra:
         lob = lob.reindex(columns=metadata.columns)
@@ -175,11 +157,70 @@ def normalize(
     return lob, report
 
 
+def _consistency_price(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
+    # Check that prices are all positive
+    columns = [c for c in lob.columns if "Price" in c]
+    for k, s in lob[columns].items():
+        s = s.dropna()
+        mask = s <= 0
+        if mask.any():
+            ...
+            # TODO: column k has mask.sum() non-positive prices
+
+    # Check that prices are all multiples of 1 tick
+    columns = [c for c in lob.columns if "Price" in c]
+    for k, s in lob[columns].items():
+        s = s.dropna()
+        quotients = s / asset.tick_size_perc
+        mask = ~np.isclose(quotients, np.round(quotients))
+        if mask.any():
+            ...
+            # TODO: column k has mask.sum() non-multiple prices
+
+    # TODO: Check that bid prices are ordered
+    # TODO: Check that ask prices are ordered
+    # TODO: Check that best bid < best ask
+    ...
+
+    return lob, report
+
+
+def _consistency_size(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+) -> tuple[pd.DataFrame, LobReport]:
+    # Check that sizes are all positive
+    columns = [c for c in lob.columns if "Size" in c]
+    for k, s in lob[columns].items():
+        s = s.dropna()
+        mask = s <= 0
+        if mask.any():
+            ...
+            # TODO: column k has mask.sum() non-positive sizes
+
+    # Check that sizes are all multiples of 1
+    columns = [c for c in lob.columns if "Size" in c]
+    for k, s in lob[columns].items():
+        s = s.dropna()
+        mask = ~np.isclose(s, np.round(s))
+        if mask.any():
+            ...
+            # TODO: column k has mask.sum() non-multiple sizes
+    ...
+
+    return lob, report
+
+
 def consistency(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ) -> tuple[pd.DataFrame, LobReport]:
     """"""
+    _consistency_price(lob, report, metadata, asset)
+    _consistency_size(lob, report, metadata, asset)
     ...
+
+    return lob, report
 
 
 def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
@@ -187,7 +228,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     LOB preprocessing pipeline:
     * Load the parquet file to a DataFrame
     * Normalize to the expected LOB structure
-    * ...
+    * Consistency check on the values
 
     ## Args:
     * path: path like "/data/raw/ticker/asset/yyyy/mm/asset_lob_freq_1s_yyyy_mm_dd.parquet"
@@ -202,6 +243,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
 
     lob = load(path)
     lob, report = normalize(lob, report, metadata, asset)
+    lob, report = consistency(lob, report, metadata, asset)
     ...
 
     return lob, report
