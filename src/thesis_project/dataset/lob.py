@@ -1,4 +1,5 @@
 import datetime
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -6,6 +7,12 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
+
+# TODO: Implement in LobMetadata regex/formattable for the columns
+# TODO: Implement a more useful LobReport daataclass
+# TODO: Add reporting where needed
+# TODO: Write missing function description
+# TODO: Split in unit functions the checks
 
 
 @dataclass
@@ -166,8 +173,8 @@ def _consistency_price(
         s = s.dropna()
         mask = s <= 0
         if mask.any():
-            ...
             # TODO: column k has mask.sum() non-positive prices
+            ...
 
     # Check that prices are all multiples of 1 tick
     columns = [c for c in lob.columns if "Price" in c]
@@ -176,13 +183,65 @@ def _consistency_price(
         quotients = s / asset.tick_size_perc
         mask = ~np.isclose(quotients, np.round(quotients))
         if mask.any():
-            ...
             # TODO: column k has mask.sum() non-multiple prices
+            ...
 
-    # TODO: Check that bid prices are ordered
-    # TODO: Check that ask prices are ordered
-    # TODO: Check that best bid < best ask
-    ...
+    # Check that bid prices are ordered
+    pattern = re.compile(r"^L(\d+)-BidPrice$")
+    columns = [(int(m.group(1)), c) for c in lob.columns if (m := pattern.match(c))]
+    columns.sort()
+
+    levels = [level for level, _ in columns]
+    columns = [column for _, column in columns]
+
+    if not levels == metadata.levels:
+        raise ValueError(
+            f"Unexpected LOB bid prices level list: {','.join([str(level) for level in levels])}"
+        )
+
+    df = lob[columns].dropna()
+    for c1, c2 in zip(columns[:-1], columns[1:]):
+        s1 = df[c1]
+        s2 = df[c2]
+        mask = s1 <= s2
+        if mask.any():
+            # TODO: levels x,y has mask.sum() unordered prices
+            ...
+
+    # Check that ask prices are ordered
+    pattern = re.compile(r"^L(\d+)-AskPrice$")
+    columns = [(int(m.group(1)), c) for c in lob.columns if (m := pattern.match(c))]
+    columns.sort()
+
+    levels = [level for level, _ in columns]
+    columns = [column for _, column in columns]
+
+    if not levels == metadata.levels:
+        raise ValueError(
+            f"Unexpected LOB ask prices level list: {','.join([str(level) for level in levels])}"
+        )
+
+    df = lob[columns].dropna()
+    for c1, c2 in zip(columns[:-1], columns[1:]):
+        s1 = df[c1]
+        s2 = df[c2]
+        mask = s1 >= s2
+        if mask.any():
+            # TODO: levels x,y has mask.sum() unordered prices
+            ...
+
+    # Check that best bid < best ask
+    s_bid = lob["L1-BidPrice"]
+    s_ask = lob["L1-AskPrice"]
+
+    mask = s_bid.isna() or s_ask.isna()
+    s_bid = s_bid[mask]
+    s_ask = s_ask[mask]
+
+    mask = s_bid >= s_ask
+    if mask.any():
+        # TODO: Best bid and ask unordred for amsk.sum() seconds
+        ...
 
     return lob, report
 
@@ -221,6 +280,11 @@ def consistency(
     ...
 
     return lob, report
+
+
+def integrity():
+    """"""
+    ...
 
 
 def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
