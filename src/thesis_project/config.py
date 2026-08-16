@@ -1,7 +1,7 @@
 import datetime
 import re
 import zoneinfo
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
 from typing import Literal
@@ -119,7 +119,7 @@ FBTS = AssetConfig(
     role="fut",
     par_value=100,
     min_trade_face_value=100_000,
-    tick_size_perc=0.01,
+    tick_size_perc=0.005,
     market=EUREX,
     description="Short-Term Euro-BTP Futures",
 )
@@ -137,8 +137,8 @@ class LobMetadata:
     n_levels: int
     freq: str
     index_name: str
-    sides: tuple[str, str] = field(default_factory=tuple[str, str])
-    column_types: tuple[str, ...] = field(default_factory=tuple[str, ...])
+    sides: tuple[str, ...] = ("bid", "ask")
+    column_types: tuple[str, ...] = ("price", "size")
 
     @property
     def levels(self) -> list[int]:
