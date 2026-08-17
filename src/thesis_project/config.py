@@ -152,6 +152,16 @@ class LobMetadata:
     column_types: tuple[LobColumn, ...] = ("price", "size")
     column_format: str = "L{level}-{side}{column_type}"
 
+    def __post_init__(self):
+        if self.n_levels <= 0:
+            raise ValueError("LOB levels must be a positive integer")
+
+        if not self.sides:
+            raise ValueError("At least one LOB side is required")
+
+        if not self.column_types:
+            raise ValueError("At least one column type is required")
+
     @property
     def levels(self) -> list[int]:
         return list(range(1, self.n_levels + 1))
