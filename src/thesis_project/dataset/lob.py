@@ -288,12 +288,147 @@ def _consistency_size(
     ...
 
 
+def _consistency_price_size(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+):
+    for level in metadata.levels:
+        for side in metadata.sides:
+            columns = metadata.columns(levels=level, sides=side)
+            mask = lob[columns].isna().sum(axis=1).between(1, len(columns) - 1)
+            if mask.any():
+                # TODO: Report level-side, timestamps of the partially missing price-size pair
+                ...
+
+
 def consistency(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     """"""
     _consistency_price(lob, report, metadata, asset)
     _consistency_size(lob, report, metadata, asset)
+    _consistency_price_size(lob, report, metadata, asset)
+
+
+def _integrity_nans(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+):
+    info = {}
+    n_elem = lob.size
+    n_rows, n_cols = lob.shape
+    na = lob.isna()
+
+    # Shape
+    info.update(
+        {
+            "n_rows": n_rows,
+            "n_cols": n_cols,
+            "n_elem": n_elem,
+        }
+    )
+
+    # LOB integrity
+    info.update(
+        {
+            "lob_n_nan": na.sum().sum(),
+            "lob_n_nan_perc": na.mean().mean() * 100,
+        }
+    )
+
+    # Level integrity
+    for level in metadata.levels:
+        columns = metadata.columns(levels=level)
+        info.update(
+            {
+                f"level_{level}_n_nan": na[columns].sum().sum(),
+                f"level_{level}_n_nan_perc": na[columns].mean().mean() * 100,
+            }
+        )
+
+    # Side integrity
+    for level in metadata.levels:
+        for side in metadata.sides:
+            columns = metadata.columns(levels=level, sides=side)
+            info.update(
+                {
+                    f"level_{level}_side_{side}_n_nan": na[columns].sum().sum(),
+                    f"level_{level}_side_{side}_n_nan_perc": na[columns].mean().mean() * 100,
+                }
+            )
+
+    # TODO: Decide whether to keep or not the info below
+    # Column integrity
+    for column in metadata.columns():
+        info.update(
+            {
+                f"{column.lower().replace('-', '_')}_n_nan": na[column].sum(),
+                f"{column.lower().replace('-', '_')}_n_nan_perc": na[column].mean() * 100,
+            }
+        )
+
+    # TODO: Decide whether to keep or not the info below
+    # Rows integrity
+    info.update(
+        {
+            "n_rows_all_nan": na.all(axis=1).sum(),
+            "n_rows_all_nan_perc": na.all(axis=1).mean() * 100,
+            "n_rows_any_nan": na.any(axis=1).sum(),
+            "n_rows_any_nan_perc": na.any(axis=1).mean() * 100,
+        }
+    )
+
+    # TODO: Decide whether to keep or not the info below
+    # Cols integrity
+    info.update(
+        {
+            "n_cols_all_nan": na.all(axis=0).sum(),
+            "n_cols_all_nan_perc": na.all(axis=0).mean() * 100,
+            "n_cols_any_nan": na.any(axis=0).sum(),
+            "n_cols_any_nan_perc": na.any(axis=0).mean() * 100,
+        }
+    )
+
+    # TODO: Integrate info to report
+    ...
+
+
+def _integrity_valid_ts(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+):
+    info = {}
+    filtered = lob.dropna()
+
+    # LOB-wise valid index
+    info.update(
+        {
+            "lob_min_valid_idx": filtered.index[0],
+            "lob_max_valid_idx": filtered.index[-1],
+        }
+    )
+
+    # Level-wise valid index
+    for level in metadata.levels:
+        columns = metadata.columns(levels=level)
+        filtered = lob[columns].dropna()
+        info.update(
+            {
+                f"level_{level}_min_valid_idx": filtered.index[0],
+                f"level_{level}_max_valid_idx": filtered.index[-1],
+            }
+        )
+
+    # Side-wise valid index
+    for level in metadata.levels:
+        for side in metadata.sides:
+            columns = metadata.columns(levels=level, sides=side)
+            filtered = lob[columns].dropna()
+            info.update(
+                {
+                    f"level_{level}_side_{side}_min_valid_idx": filtered.index[0],
+                    f"level_{level}_side_{side}_max_valid_idx": filtered.index[-1],
+                }
+            )
+
+    # TODO: Integrate info to report
     ...
 
 
@@ -301,6 +436,8 @@ def integrity(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     """"""
+    _integrity_nans(lob, report, metadata, asset)
+    _integrity_valid_ts(lob, report, metadata, asset)
     ...
 
 
@@ -311,6 +448,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     * Normalize to the expected LOB structure
     * Consistency check on the prices
     * Consistency check on the sizes
+    * ...
 
     ## Args:
     * path: path like "/data/raw/ticker/asset/yyyy/mm/asset_lob_freq_1s_yyyy_mm_dd.parquet"
@@ -326,6 +464,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     lob = load(path)
     lob = normalize(lob, report, metadata, asset)
     consistency(lob, report, metadata, asset)
+    integrity(lob, report, metadata, asset)
     ...
 
     return lob, report
