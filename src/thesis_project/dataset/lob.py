@@ -133,7 +133,7 @@ def _normalize_index(
 
     if not lob.index.equals(index):
         lob = lob.reindex(index)
-        # Report LOB index adjustment
+        # TODO: Report LOB index adjustment
 
     # Rename the LOB index
     lob = lob.rename_axis(metadata.index_name)
