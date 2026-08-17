@@ -27,7 +27,7 @@ class LobReport:
 
     def print_warning(self):
         print("List of warning issues:")
-        for v in self.critical:
+        for v in self.warning:
             print(f"- {v}")
 
     def print_critical(self):
@@ -108,7 +108,7 @@ def _normalize_index(
 
     # Remove index duplicates
     if lob.index.has_duplicates:
-        mask = lob.index.duplicated()
+        mask = lob.index.duplicated(keep="first")
         lob = lob[~mask]
         # TODO: Report LOB index remove dups
 
@@ -225,9 +225,9 @@ def _consistency_price_bid_order(
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
-        filter = s1.notna() & s2.notna()
-        s1 = s1[filter]
-        s2 = s2[filter]
+        valid = s1.notna() & s2.notna()
+        s1 = s1[valid]
+        s2 = s2[valid]
         mask = s1 <= s2
         if mask.any():
             # TODO: Report columns, timestamps of non-ordered bid prices
@@ -241,9 +241,9 @@ def _consistency_price_ask_order(
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
-        filter = s1.notna() & s2.notna()
-        s1 = s1[filter]
-        s2 = s2[filter]
+        valid = s1.notna() & s2.notna()
+        s1 = s1[valid]
+        s2 = s2[valid]
         mask = s1 >= s2
         if mask.any():
             # TODO: Report columns, timestamps of non-ordered ask prices
@@ -258,9 +258,9 @@ def _consistency_price_bid_ask_order(
     s_bid = lob[col_bid]
     s_ask = lob[col_ask]
 
-    filter = s_bid.notna() & s_ask.notna()
-    s_bid = s_bid[filter]
-    s_ask = s_ask[filter]
+    valid = s_bid.notna() & s_ask.notna()
+    s_bid = s_bid[valid]
+    s_ask = s_ask[valid]
 
     mask = s_bid >= s_ask
     if mask.any():
@@ -294,7 +294,7 @@ def _consistency_size_sign(
 def _consistency_size_unit(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    columns = [c for c in lob.columns if "Size" in c]
+    columns = metadata.columns(column_types="size")
     for _, s in lob[columns].items():
         s = s.dropna()
         mask = ~np.isclose(s, np.round(s))
@@ -316,8 +316,11 @@ def _consistency_price_size(
 ):
     for level in metadata.levels:
         for side in metadata.sides:
-            columns = metadata.columns(levels=level, sides=side)
-            mask = lob[columns].isna().sum(axis=1).between(1, len(columns) - 1)
+            price_column = metadata.columns(levels=level, sides=side, column_types="price")
+            size_column = metadata.columns(levels=level, sides=side, column_types="size")
+            mask = lob[price_column].isna() ^ lob[size_column].isna()
+            mask = mask.squeeze("columns")
+            assert isinstance(mask, pd.Series)
             if mask.any():
                 # TODO: Report level-side, timestamps of the partially missing price-size pair
                 ...
@@ -442,8 +445,8 @@ def _integrity_valid_ts(
     # LOB-wise valid index
     info.update(
         {
-            "lob_min_valid_idx": filtered.index[0],
-            "lob_max_valid_idx": filtered.index[-1],
+            "lob_min_valid_idx": filtered.index[0] if not filtered.empty else None,
+            "lob_max_valid_idx": filtered.index[-1] if not filtered.empty else None,
         }
     )
 
@@ -453,8 +456,8 @@ def _integrity_valid_ts(
         filtered = lob[columns].dropna()
         info.update(
             {
-                f"level_{level}_min_valid_idx": filtered.index[0],
-                f"level_{level}_max_valid_idx": filtered.index[-1],
+                f"level_{level}_min_valid_idx": filtered.index[0] if not filtered.empty else None,
+                f"level_{level}_max_valid_idx": filtered.index[-1] if not filtered.empty else None,
             }
         )
 
@@ -465,8 +468,12 @@ def _integrity_valid_ts(
             filtered = lob[columns].dropna()
             info.update(
                 {
-                    f"level_{level}_side_{side}_min_valid_idx": filtered.index[0],
-                    f"level_{level}_side_{side}_max_valid_idx": filtered.index[-1],
+                    f"level_{level}_side_{side}_min_valid_idx": filtered.index[0]
+                    if not filtered.empty
+                    else None,
+                    f"level_{level}_side_{side}_max_valid_idx": filtered.index[-1]
+                    if not filtered.empty
+                    else None,
                 }
             )
 
