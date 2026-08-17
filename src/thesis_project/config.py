@@ -183,6 +183,7 @@ class LobMetadata:
 
     def columns(
         self,
+        *,
         levels: list[int] | int | None = None,
         sides: tuple[str, ...] | str | None = None,
         column_types: tuple[str, ...] | str | None = None,
