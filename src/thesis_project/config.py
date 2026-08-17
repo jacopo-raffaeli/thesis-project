@@ -143,15 +143,42 @@ class LobMetadata:
     index_name: str
     sides: tuple[str, ...] = ("bid", "ask")
     column_types: tuple[str, ...] = ("price", "size")
+    column_format: str = "L{level}_{side}{column_type}"
 
     @property
     def levels(self) -> list[int]:
         return list(range(1, self.n_levels + 1))
 
     @property
+    def bid_column(self) -> str:
+        return self.column_format.format(side="Bid")
+
+    @property
+    def ask_column(self) -> str:
+        return self.column_format.format(side="Ask")
+
+    @property
+    def bid_price_column(self) -> str:
+        return self.bid_column.format(column_type="Price")
+
+    @property
+    def bid_size_column(self) -> str:
+        return self.bid_column.format(column_type="Size")
+
+    @property
+    def ask_price_column(self) -> str:
+        return self.ask_column.format(column_type="Price")
+
+    @property
+    def ask_size_column(self) -> str:
+        return self.ask_column.format(column_type="Size")
+
+    @property
     def columns(self) -> list[str]:
         return [
-            f"L{level}-{side.capitalize()}{column_type.capitalize()}"
+            self.column_format.format(
+                level=level, side=side.capitalize(), column_type=column_type.capitalize()
+            )
             for level in self.levels
             for side in self.sides
             for column_type in self.column_types
