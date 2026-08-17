@@ -9,7 +9,6 @@ from thesis_project import config, utils
 
 # TODO: Implement a more useful LobReport daataclass
 # TODO: Add reporting where needed
-# TODO: Write missing function description
 # TODO: Split in unit functions the checks
 
 
@@ -162,7 +161,31 @@ def _normalize_columns(
 def normalize(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ) -> pd.DataFrame:
-    """"""
+    """
+    LOB normalization pipeline:
+    * Normalize LOB index timezone:
+        * Set LOB index timezone if None
+        * Convert LOB index timezone if not default
+    * Normalize the LOB index :
+        * Sort index
+        * Remove garbage outside the time window
+        * Remove duplicates in the index
+        * Remove NaNs in the index
+        * Adjust to the expected time index grid (fill with NaNs)
+        * Rename time index
+    * Normalize the LOB columns names:
+        * Drop extra columns
+        * Add missing columns (fill with NaNs)
+
+    ## Args:
+    * lob: DataFrame containing the LOB
+    * report: object of the class LobReport
+    * metadata: object of the class LobMetadata
+    * asset: object of the class AssetConfig
+
+    ## Return:
+    * lob: normalized LOB DataFrame
+    """
     lob = _normalize_timezone(lob, report, metadata, asset)
     lob = _normalize_index(lob, report, metadata, asset)
     lob = _normalize_columns(lob, report, metadata, asset)
@@ -303,7 +326,26 @@ def _consistency_price_size(
 def consistency(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    """"""
+    """
+    LOB consistency pipeline:
+    * Price consistency checks:
+        * Check for non-positive prices
+        * Check for non multiple of 1 tick prices
+        * Check for unordered bid prices
+        * Check for unordered ask prices
+        * Check for unordered best bid-ask prices
+    * Volume consistency checks:
+        * Check for non-positive volumes
+        * Check for non multiple of 1 lot prices
+    * Price-Volume consistency checks:
+        * Check for partial price-size pairs
+
+    ## Args:
+    * lob: DataFrame containing the LOB
+    * report: object of the class LobReport
+    * metadata: object of the class LobMetadata
+    * asset: object of the class AssetConfig
+    """
     _consistency_price(lob, report, metadata, asset)
     _consistency_size(lob, report, metadata, asset)
     _consistency_price_size(lob, report, metadata, asset)
@@ -435,7 +477,26 @@ def _integrity_valid_ts(
 def integrity(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    """"""
+    """
+    LOB integrity pipeline:
+    * NaNs checks:
+        * LOB-wise NaNs
+        * Level-wise NaNs
+        * Side-wise NaNs
+        * Column-wise NaNs
+        * Rows-wise NaNs
+        * Columns-wise NaNs
+    * Valid timestamps checks:
+        * LOB-wise min/max valid timestamps
+        * Level-wise min/max valid timestamps
+        * Side-wise min/max valid timestamps
+
+    ## Args:
+    * lob: DataFrame containing the LOB
+    * report: object of the class LobReport
+    * metadata: object of the class LobMetadata
+    * asset: object of the class AssetConfig
+    """
     _integrity_nans(lob, report, metadata, asset)
     _integrity_valid_ts(lob, report, metadata, asset)
     ...
@@ -446,9 +507,8 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     LOB preprocessing pipeline:
     * Load the parquet file to a DataFrame
     * Normalize to the expected LOB structure
-    * Consistency check on the prices
-    * Consistency check on the sizes
-    * ...
+    * Consistency checks
+    * Integrity checks
 
     ## Args:
     * path: path like "/data/raw/ticker/asset/yyyy/mm/asset_lob_freq_1s_yyyy_mm_dd.parquet"
@@ -456,7 +516,8 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     * metadata: object of the class LobMetadata
 
     ## Return:
-    * ...
+    * lob: normalized LOB DataFrame
+    * report: object containing a detailed report of the preprocessing
     """
     date = utils.io.filename_to_date(path.name)
     report = LobReport(date, asset)
@@ -465,6 +526,5 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     lob = normalize(lob, report, metadata, asset)
     consistency(lob, report, metadata, asset)
     integrity(lob, report, metadata, asset)
-    ...
 
     return lob, report
