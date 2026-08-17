@@ -150,7 +150,7 @@ class LobMetadata:
     index_name: str = "timestamp"
     sides: tuple[LobSide, ...] = ("bid", "ask")
     column_types: tuple[LobColumn, ...] = ("price", "size")
-    column_format: str = "L{level}_{side}{column_type}"
+    column_format: str = "L{level}-{side}{column_type}"
 
     @property
     def levels(self) -> list[int]:
@@ -192,8 +192,8 @@ class LobMetadata:
         self,
         *,
         levels: list[int] | int | None = None,
-        sides: tuple[str, ...] | str | None = None,
-        column_types: tuple[str, ...] | str | None = None,
+        sides: tuple[LobSide, ...] | LobSide | None = None,
+        column_types: tuple[LobColumn, ...] | LobColumn | None = None,
     ) -> list[str]:
         if isinstance(levels, int):
             levels = [levels]
@@ -201,12 +201,12 @@ class LobMetadata:
             levels = self.levels
 
         if isinstance(sides, str):
-            sides = tuple(sides)
+            sides = (sides,)
         elif sides is None:
             sides = self.sides
 
         if isinstance(column_types, str):
-            column_types = tuple(column_types)
+            column_types = (column_types,)
         elif column_types is None:
             column_types = self.column_types
 
