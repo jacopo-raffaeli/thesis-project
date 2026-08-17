@@ -181,7 +181,6 @@ class LobMetadata:
     def ask_size_column(self) -> str:
         return self.ask_column.format(column_type="Size")
 
-    @property
     def columns(
         self,
         levels: list[int] | int | None = None,
@@ -207,9 +206,9 @@ class LobMetadata:
             self.column_format.format(
                 level=level, side=side.capitalize(), column_type=column_type.capitalize()
             )
-            for level in levels
-            for side in sides
-            for column_type in column_types
+            for level in sorted(levels)
+            for side in sorted(sides)
+            for column_type in sorted(column_types)
         ]
 
 
