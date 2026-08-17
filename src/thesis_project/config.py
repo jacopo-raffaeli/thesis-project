@@ -158,6 +158,14 @@ class LobMetadata:
         return self.column_format.format(side="Ask")
 
     @property
+    def price_column(self) -> str:
+        return self.column_format.format(column_type="Price")
+
+    @property
+    def size_column(self) -> str:
+        return self.column_format.format(column_type="Size")
+
+    @property
     def bid_price_column(self) -> str:
         return self.bid_column.format(column_type="Price")
 
@@ -174,14 +182,34 @@ class LobMetadata:
         return self.ask_column.format(column_type="Size")
 
     @property
-    def columns(self) -> list[str]:
+    def columns(
+        self,
+        levels: list[int] | int | None = None,
+        sides: tuple[str, ...] | str | None = None,
+        column_types: tuple[str, ...] | str | None = None,
+    ) -> list[str]:
+        if isinstance(levels, int):
+            levels = [levels]
+        elif levels is None:
+            levels = self.levels
+
+        if isinstance(sides, str):
+            sides = tuple(sides)
+        elif sides is None:
+            sides = self.sides
+
+        if isinstance(column_types, str):
+            column_types = tuple(column_types)
+        elif column_types is None:
+            column_types = self.column_types
+
         return [
             self.column_format.format(
                 level=level, side=side.capitalize(), column_type=column_type.capitalize()
             )
-            for level in self.levels
-            for side in self.sides
-            for column_type in self.column_types
+            for level in levels
+            for side in sides
+            for column_type in column_types
         ]
 
 
