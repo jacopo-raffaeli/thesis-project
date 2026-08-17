@@ -3,8 +3,8 @@ from pathlib import Path
 
 from thesis_project import config as global_config
 
-FBTP_BASE_PATH = global_config.DATA_INT_DIR / "fbtp" / "data-microstructure"
-FBTS_BASE_PATH = global_config.DATA_INT_DIR / "fbts" / "data-microstructure"
+DATA_INT_FBTP_MS_DIR = global_config.DATA_INT_DIR / "fbtp" / "data-microstructure"
+DATA_INT_FBTS_MS_DIR = global_config.DATA_INT_DIR / "fbts" / "data-microstructure"
 SUFFIX = "freq_1s_from_2022_08_01_to_2024_12_30.parquet"
 
 
@@ -41,12 +41,12 @@ BASE_FEATURES: dict[str, BaseFeature] = {
     "basis": BaseFeature(
         base_id="basis",
         filename=f"gross_basis_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "basis",
+        directory=DATA_INT_FBTP_MS_DIR / "basis",
     ),
     "irr": BaseFeature(
         base_id="irr",
         filename=f"irr_{SUFFIX}",
-        directory=FBTP_BASE_PATH / "irr",
+        directory=DATA_INT_FBTP_MS_DIR / "irr",
     ),
 
     # Mid prices
@@ -54,7 +54,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_mid_price": BaseFeature(
             base_id=f"{asset}_mid_price",
             filename=f"{asset}_mid_price_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "mid-price",
+            directory=DATA_INT_FBTP_MS_DIR / "mid-price",
         )
         for asset in ("fut", "ctd")
     },
@@ -64,7 +64,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_micro_price": BaseFeature(
             base_id=f"{asset}_micro_price",
             filename=f"{asset}_micro_price_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "micro-price",
+            directory=DATA_INT_FBTP_MS_DIR / "micro-price",
         )
         for asset in ("fut", "ctd")
     },
@@ -74,7 +74,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_spread": BaseFeature(
             base_id=f"{asset}_spread",
             filename=f"{asset}_spread_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "spread",
+            directory=DATA_INT_FBTP_MS_DIR / "spread",
         )
         for asset in ("fut", "ctd")
     },
@@ -84,7 +84,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_obi_lvl_{level}": BaseFeature(
             base_id=f"{asset}_obi_lvl_{level}",
             filename=f"{asset}_obi_lvl_{level}_scaled_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "obi",
+            directory=DATA_INT_FBTP_MS_DIR / "obi",
         )
         for asset in ("fut", "ctd")
         for level in range(1, 4)
@@ -95,7 +95,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_{side}of_lvl_{level}": BaseFeature(
             base_id=f"{asset}_{side}of_lvl_{level}",
             filename=f"{asset}_{side}of_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "ofi",
+            directory=DATA_INT_FBTP_MS_DIR / "ofi",
         )
         for asset in ("fut", "ctd")
         for side in ("b", "a")
@@ -107,7 +107,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_ofi_lvl_{level}": BaseFeature(
             base_id=f"{asset}_ofi_lvl_{level}",
             filename=f"{asset}_ofi_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "ofi",
+            directory=DATA_INT_FBTP_MS_DIR / "ofi",
         )
         for asset in ("fut", "ctd")
         for level in range(1, 4)
@@ -118,7 +118,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_{side}_slope_v1_lvl_{level}": BaseFeature(
             base_id=f"{asset}_{side}_slope_v1_lvl_{level}",
             filename=f"{asset}_{side}_slope_v1_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "slope",
+            directory=DATA_INT_FBTP_MS_DIR / "slope",
         )
         for asset in ("fut", "ctd")
         for side in ("ask", "bid")
@@ -130,7 +130,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_{side}_slope_v2_lvl_{level}": BaseFeature(
             base_id=f"{asset}_{side}_slope_v2_lvl_{level}",
             filename=f"{asset}_{side}_slope_v2_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "slope",
+            directory=DATA_INT_FBTP_MS_DIR / "slope",
         )
         for asset in ("fut", "ctd")
         for side in ("ask", "bid")
@@ -142,7 +142,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_{side}_price_lvl_{level}": BaseFeature(
             base_id=f"{asset}_{side}_price_lvl_{level}",
             filename=f"{asset}_{side}_price_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "price",
+            directory=DATA_INT_FBTP_MS_DIR / "price",
         )
         for asset in ("fut", "ctd")
         for side in ("bid", "ask")
@@ -154,7 +154,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         f"{asset}_{side}_size_lvl_{level}": BaseFeature(
             base_id=f"{asset}_{side}_size_lvl_{level}",
             filename=f"{asset}_{side}_size_lvl_{level}_{SUFFIX}",
-            directory=FBTP_BASE_PATH / "size",
+            directory=DATA_INT_FBTP_MS_DIR / "size",
         )
         for asset in ("fut", "ctd")
         for side in ("bid", "ask")
