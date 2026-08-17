@@ -66,6 +66,10 @@ MARKETS = {market.name: market for market in [MTS, EUREX]}
 # ASSET CONFIG
 # ==============================================================================
 
+AssetSymbol = Literal["btp", "fbtp", "fbts"]
+AssetFamily = Literal["bond", "future"]
+AssetRole = Literal["ctd", "fut"]
+
 
 @dataclass(frozen=True)
 class AssetConfig:
@@ -74,16 +78,16 @@ class AssetConfig:
 
     ## Args:
     * symbol: asset symbol
-    * asset_type: asset family
-    * role: useful to distinguish the kind of asset in the code
+    * family: asset family
+    * role: useful to distinguish the role of the asset in the basis
     * par_value: The reference value quoted prices refers to in euros
     * min_trade_face_vale: minimum tradable size in euros
     * tick_size_perc: tick size expressed as a percent of the par value
     """
 
-    symbol: str
-    asset_type: Literal["bond", "future"]
-    role: Literal["ctd", "fut"]
+    symbol: AssetSymbol
+    family: AssetFamily
+    role: AssetRole
     par_value: float
     contract_size: float
     tick_size_perc: float
@@ -97,7 +101,7 @@ class AssetConfig:
 
 BTP = AssetConfig(
     symbol="btp",
-    asset_type="bond",
+    family="bond",
     role="ctd",
     par_value=100,
     contract_size=2_000_000,
@@ -108,7 +112,7 @@ BTP = AssetConfig(
 
 FBTP = AssetConfig(
     symbol="fbtp",
-    asset_type="future",
+    family="future",
     role="fut",
     par_value=100,
     contract_size=100_000,
@@ -119,7 +123,7 @@ FBTP = AssetConfig(
 
 FBTS = AssetConfig(
     symbol="fbts",
-    asset_type="future",
+    family="future",
     role="fut",
     par_value=100,
     contract_size=100_000,
@@ -135,14 +139,17 @@ ASSETS = {asset.symbol: asset for asset in [BTP, FBTP, FBTS]}
 # LOB METADATA
 # ==============================================================================
 
+LobSide = Literal["ask", "bid"]
+LobColumn = Literal["price", "size"]
+
 
 @dataclass(frozen=True)
 class LobMetadata:
     n_levels: int
     freq: str
-    index_name: str
-    sides: tuple[str, ...] = ("bid", "ask")
-    column_types: tuple[str, ...] = ("price", "size")
+    index_name: str = "timestamp"
+    sides: tuple[LobSide, ...] = ("bid", "ask")
+    column_types: tuple[LobColumn, ...] = ("price", "size")
     column_format: str = "L{level}_{side}{column_type}"
 
     @property
