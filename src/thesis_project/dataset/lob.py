@@ -13,33 +13,20 @@ from thesis_project import config, utils
 
 
 @dataclass
+class LobRecord:
+    id: str
+    description: str
+    timestamps: pd.DatetimeIndex | None = None
+    columns: tuple[str, ...] | None = None
+
+
+@dataclass
 class LobReport:
     date: datetime.date
     asset: config.AssetConfig
-    modified: list[str] = field(default_factory=list[str])
-    warning: list[str] = field(default_factory=list[str])
-    critical: list[str] = field(default_factory=list[str])
-
-    def print_modified(self):
-        print("List of solved issues:")
-        for v in self.modified:
-            print(f"- {v}")
-
-    def print_warning(self):
-        print("List of warning issues:")
-        for v in self.warning:
-            print(f"- {v}")
-
-    def print_critical(self):
-        print("List of critical issues:")
-        for v in self.critical:
-            print(f"- {v}")
-
-    def print_report(self):
-        print(f"{self.date}: LOB {self.asset.symbol}")
-        self.print_modified()
-        self.print_warning()
-        self.print_critical()
+    normalization: list[LobRecord] = field(default_factory=list)
+    consistency: list[LobRecord] = field(default_factory=list)
+    integrity: list[LobRecord] = field(default_factory=list)
 
 
 def load(path: Path) -> pd.DataFrame:
