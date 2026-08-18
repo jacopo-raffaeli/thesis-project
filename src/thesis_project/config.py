@@ -39,6 +39,15 @@ SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 
 @dataclass(frozen=True)
 class MarketConfig:
+    """
+    Dataclass for market configuration
+
+    * name: market name
+    * opening_time: opening trading time
+    * closing_time: closing trading time
+    * tz: market timezone
+    """
+
     name: str
     opening_time: datetime.time
     closing_time: datetime.time
@@ -145,7 +154,18 @@ LobColumn = Literal["price", "size"]
 
 
 @dataclass(frozen=True)
-class LobMetadata:
+class LobConfig:
+    """
+    Dataclass for LOB metadata
+
+    ## Args:
+    * n_levels: LOB levels
+    * index_name: name of the index column
+    * sides: ids of the sides of a LOB level
+    * column_types: ids of the column_types of a LOB level
+    * column_format: formattable string for the canonical column name
+    """
+
     n_levels: int
     freq: str
     index_name: str = "timestamp"
@@ -236,7 +256,7 @@ class LobMetadata:
         ]
 
 
-LOB_METADATA = LobMetadata(
+LOB_METADATA = LobConfig(
     n_levels=10,
     freq="1s",
     index_name="timestamp",
