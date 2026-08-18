@@ -230,8 +230,8 @@ class LobMetadata:
         return [
             self.column(level=level, side=side, column_type=column_type)
             for level in sorted(levels)
-            for side in sorted(sides)
-            for column_type in sorted(column_types)
+            for side in sides
+            for column_type in column_types
         ]
 
 
