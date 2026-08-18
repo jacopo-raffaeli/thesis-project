@@ -8,9 +8,9 @@ import pandas as pd
 
 from thesis_project import config, utils
 
-# TODO: Implement a more useful LobReport daataclass
 # TODO: Add reporting where needed
-# TODO: Split in unit functions the checks
+# TODO: Split in unit functions the
+# TODO: Add some integrity check about NaN gaps in the lob
 
 
 LobRecordType = Literal[
@@ -26,10 +26,21 @@ LobRecordType = Literal[
     # LOB columns
     "COLUMNS_EXTRA_DROP",
     "COLUMNS_MISSING_ADD",
+    # Price consistency
+    "PRICE_NON_POSITIVE",
+    "PRICE_NON_MULTIPLE",
+    "PRICE_BID_NON_ORDERED",
+    "PRICE_ASK_NON_ORDERED",
+    "PRICE_BID_ASK_NON_ORDERED",
+    # Size consistency
+    "SIZE_NON_POSITIVE",
+    "SIZE_NON_MULTIPLE",
+    # Price-Size consistency
+    "PRICE_SIZE_PARTIAL",
 ]
 
 
-@dataclass
+@dataclass(frozen=True)
 class LobRecord:
     id: LobRecordType
     description: str
@@ -118,8 +129,6 @@ def _normalize_index(
             LobRecord(
                 id="INDEX_WINDOW_CUT",
                 description=f"Lob index: dropped {n_outside} timestamps outisde {asset.market.opening_time} - {asset.market.closing_time} window",
-                # timestamps=
-                # TODO: Is it worth to keep removed timestamps?
             )
         )
 
@@ -244,25 +253,39 @@ def _consistency_price_sign(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="price")
-    for _, s in lob[columns].items():
+    for column, s in lob[columns].items():
         s = s.dropna()
         mask = s <= 0
-        if mask.any():
-            # TODO: Report column, timestamps of the non-positive prices
-            ...
+        ts = s.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="PRICE_NON_POSITIVE",
+                    description=f"LOB {str(column)}: found {len(ts)} non-positive prices",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(str(column),),
+                )
+            )
 
 
 def _consistency_price_unit(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="price")
-    for _, s in lob[columns].items():
+    for column, s in lob[columns].items():
         s = s.dropna()
         quotients = s / asset.tick_size_perc
         mask = ~np.isclose(quotients, np.round(quotients))
-        if mask.any():
-            # TODO: Report column, timestamps of the non-multiple prices
-            ...
+        ts = s.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="PRICE_NON_MULTIPLE",
+                    description=f"LOB {str(column)}: found {len(ts)} non-multiple of {asset.tick_size_perc} prices",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(str(column),),
+                )
+            )
 
 
 def _consistency_price_bid_order(
@@ -276,9 +299,16 @@ def _consistency_price_bid_order(
         s1 = s1[valid]
         s2 = s2[valid]
         mask = s1 <= s2
-        if mask.any():
-            # TODO: Report columns, timestamps of non-ordered bid prices
-            ...
+        ts = s1.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="PRICE_BID_NON_ORDERED",
+                    description=f"LOB {c1} - {c2}: found {len(ts)} non-ordered bid prices",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(c1, c2),
+                )
+            )
 
 
 def _consistency_price_ask_order(
@@ -292,9 +322,16 @@ def _consistency_price_ask_order(
         s1 = s1[valid]
         s2 = s2[valid]
         mask = s1 >= s2
-        if mask.any():
-            # TODO: Report columns, timestamps of non-ordered ask prices
-            ...
+        ts = s1.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="PRICE_ASK_NON_ORDERED",
+                    description=f"LOB {c1} - {c2}: found {len(ts)} non-ordered ask prices",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(c1, c2),
+                )
+            )
 
 
 def _consistency_price_bid_ask_order(
@@ -310,9 +347,16 @@ def _consistency_price_bid_ask_order(
     s_ask = s_ask[valid]
 
     mask = s_bid >= s_ask
-    if mask.any():
-        # TODO: Best bid and ask unordred for amsk.sum() seconds
-        ...
+    ts = s_bid.index[mask]
+    if len(ts):
+        report.consistency.append(
+            LobRecord(
+                id="PRICE_BID_ASK_NON_ORDERED",
+                description=f"LOB {col_bid} - {col_ask}: found {len(ts)} non-ordered best bid-ask prices",
+                timestamps=pd.DatetimeIndex(ts),
+                columns=(col_bid, col_ask),
+            )
+        )
 
 
 def _consistency_price(
@@ -323,31 +367,44 @@ def _consistency_price(
     _consistency_price_bid_order(lob, report, metadata, asset)
     _consistency_price_ask_order(lob, report, metadata, asset)
     _consistency_price_bid_ask_order(lob, report, metadata, asset)
-    ...
 
 
 def _consistency_size_sign(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="size")
-    for _, s in lob[columns].items():
+    for column, s in lob[columns].items():
         s = s.dropna()
         mask = s <= 0
-        if mask.any():
-            # TODO: Report column, timestamps of the non-positive sizes
-            ...
+        ts = s.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="SIZE_NON_POSITIVE",
+                    description=f"LOB {str(column)}: found {len(ts)} non-positive sizes",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(str(column),),
+                )
+            )
 
 
 def _consistency_size_unit(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="size")
-    for _, s in lob[columns].items():
+    for column, s in lob[columns].items():
         s = s.dropna()
         mask = ~np.isclose(s, np.round(s))
-        if mask.any():
-            # TODO: Report column, timestamps of the non-multiple prices
-            ...
+        ts = s.index[mask]
+        if len(ts):
+            report.consistency.append(
+                LobRecord(
+                    id="SIZE_NON_MULTIPLE",
+                    description=f"LOB {str(column)}: found {len(ts)} non-multiple of {1} lot sizes",
+                    timestamps=pd.DatetimeIndex(ts),
+                    columns=(str(column),),
+                )
+            )
 
 
 def _consistency_size(
@@ -355,7 +412,6 @@ def _consistency_size(
 ):
     _consistency_size_sign(lob, report, metadata, asset)
     _consistency_size_unit(lob, report, metadata, asset)
-    ...
 
 
 def _consistency_price_size(
@@ -363,14 +419,19 @@ def _consistency_price_size(
 ):
     for level in metadata.levels:
         for side in metadata.sides:
-            price_column = metadata.columns(levels=level, sides=side, column_types="price")
-            size_column = metadata.columns(levels=level, sides=side, column_types="size")
+            price_column = metadata.columns(levels=level, sides=side, column_types="price")[0]
+            size_column = metadata.columns(levels=level, sides=side, column_types="size")[0]
             mask = lob[price_column].isna() ^ lob[size_column].isna()
-            mask = mask.squeeze("columns")
-            assert isinstance(mask, pd.Series)
-            if mask.any():
-                # TODO: Report level-side, timestamps of the partially missing price-size pair
-                ...
+            ts = lob.index[mask]
+            if len(ts):
+                report.consistency.append(
+                    LobRecord(
+                        id="PRICE_SIZE_PARTIAL",
+                        description=f"LOB {price_column} - {size_column}: found {len(ts)} partial price-size pairs",
+                        timestamps=pd.DatetimeIndex(ts),
+                        columns=(price_column, size_column),
+                    )
+                )
 
 
 def consistency(
