@@ -8,7 +8,6 @@ import pandas as pd
 
 from thesis_project import config, utils
 
-# TODO: Add reporting where needed
 # TODO: Split in unit functions the
 # TODO: Add some integrity check about NaN gaps in the lob
 
@@ -137,7 +136,7 @@ def _normalize_index(
         mask = lob.index.isna().to_numpy()
         lob = lob[~mask]
         report.normalization.append(
-            LobRecord(id="INDEX_DROP_NANS", description=f"Lob index: dropped {len(mask)} NaNs")
+            LobRecord(id="INDEX_DROP_NANS", description=f"Lob index: dropped {mask.sum()} NaNs")
         )
 
     # Remove index duplicates
@@ -146,7 +145,7 @@ def _normalize_index(
         lob = lob[~mask]
         report.normalization.append(
             LobRecord(
-                id="INDEX_DROP_DUPS", description=f"Lob index: dropped {len(mask)} duplicates"
+                id="INDEX_DROP_DUPS", description=f"Lob index: dropped {mask.sum()} duplicates"
             )
         )
 
@@ -469,11 +468,9 @@ def _integrity_shape(
 
     # Shape
     info = {
-        "shape": {
-            "rows": n_rows,
-            "columns": n_cols,
-            "size": lob.size,
-        }
+        "rows": n_rows,
+        "columns": n_cols,
+        "size": lob.size,
     }
     report.integrity["shape"] = info
 
@@ -547,7 +544,7 @@ def _integrity_nans(
 def _integrity_valid_ts(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    valid = lob.dropna()
+    valid = lob.notna()
     info = {
         "lob": {},
         "levels": {},
@@ -558,32 +555,29 @@ def _integrity_valid_ts(
     }
 
     # LOB-wise valid index
+    mask = valid.all(axis=1)
     info["lob"] = {
-        "min_valid_idx": valid.index[0] if not valid.empty else None,
-        "max_valid_idx": valid.index[-1] if not valid.empty else None,
+        "min_valid_idx": lob.index[mask][0] if mask.any() else None,
+        "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
     }
 
     # Level-wise valid index
     for level in metadata.levels:
         columns = metadata.columns(levels=level)
-        valid = lob[columns].dropna()
+        mask = valid[columns].all(axis=1)
         info["levels"][level] = {
-            "min_valid_idx": valid.index[0] if not valid.empty else None,
-            "max_valid_idx": valid.index[-1] if not valid.empty else None,
+            "min_valid_idx": lob.index[mask][0] if mask.any() else None,
+            "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
         }
 
     # Side-wise valid index
     for level in metadata.levels:
         for side in metadata.sides:
             columns = metadata.columns(levels=level, sides=side)
-            valid = lob[columns].dropna()
+            mask = valid[columns].all(axis=1)
             info["sides"][level, side] = {
-                f"level_{level}_side_{side}_min_valid_idx": valid.index[0]
-                if not valid.empty
-                else None,
-                f"level_{level}_side_{side}_max_valid_idx": valid.index[-1]
-                if not valid.empty
-                else None,
+                "min_valid_idx": lob.index[mask][0] if not mask.empty else None,
+                "max_valid_idx": lob.index[mask][-1] if not mask.empty else None,
             }
 
     report.integrity["timestamps"] = info
