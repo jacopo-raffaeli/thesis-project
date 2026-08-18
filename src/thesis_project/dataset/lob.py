@@ -465,15 +465,14 @@ def consistency(
 def _integrity_shape(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    n_elem = lob.size
     n_rows, n_cols = lob.shape
 
     # Shape
     info = {
         "shape": {
-            "n_rows": n_rows,
-            "n_cols": n_cols,
-            "n_elem": n_elem,
+            "rows": n_rows,
+            "columns": n_cols,
+            "size": lob.size,
         }
     }
     report.integrity["shape"] = info
@@ -595,7 +594,10 @@ def integrity(
 ):
     """
     LOB integrity pipeline:
-    * ...
+    * Shape:
+        * Rows
+        * Columns
+        * Size
     * NaNs checks:
         * LOB-wise NaNs
         * Level-wise NaNs
