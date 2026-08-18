@@ -198,6 +198,13 @@ class LobMetadata:
     def ask_size_column(self) -> str:
         return self.ask_column.format(column_type="Size")
 
+    def column(self, *, level: int, side: LobSide, column_type: LobColumn) -> str:
+        return self.column_format.format(
+            level=level,
+            side=side.capitalize(),
+            column_type=column_type.capitalize(),
+        )
+
     def columns(
         self,
         *,
@@ -221,9 +228,7 @@ class LobMetadata:
             column_types = self.column_types
 
         return [
-            self.column_format.format(
-                level=level, side=side.capitalize(), column_type=column_type.capitalize()
-            )
+            self.column(level=level, side=side, column_type=column_type)
             for level in sorted(levels)
             for side in sorted(sides)
             for column_type in sorted(column_types)
