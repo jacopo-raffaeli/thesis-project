@@ -88,6 +88,10 @@ class LobReport:
         return bool(self.consistency)
 
     @property
+    def has_records(self) -> bool:
+        return self.has_normalization_records or self.has_consistency_records
+
+    @property
     def records(self) -> list[LobRecord]:
         return self.normalization + self.consistency
 
@@ -100,7 +104,7 @@ def load(path: Path) -> pd.DataFrame:
     Load a LOB parquet file and perform preliminary checks
 
     ## Args:
-    * path: path like "/data/raw/ticker/asset/yyyy/mm/asset_lob_freq_1s_yyyy_mm_dd.parquet"
+    * path: "/data/raw/{ticker}/{asset}/yyyy/mm/{asset}_lob_freq_1s_yyyy_mm_dd.parquet"
 
     ## Return:
     * lob: DataFrame containing the LOB data
@@ -329,7 +333,7 @@ def _consistency_price_unit(
 def _consistency_price_bid_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    columns = [metadata.bid_price_column.format(level=level) for level in metadata.levels]
+    columns = metadata.columns(sides="bid", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
@@ -352,7 +356,7 @@ def _consistency_price_bid_order(
 def _consistency_price_ask_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    columns = [metadata.ask_price_column.format(level=level) for level in metadata.levels]
+    columns = metadata.columns(sides="ask", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
@@ -375,8 +379,8 @@ def _consistency_price_ask_order(
 def _consistency_price_bid_ask_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
-    col_bid = metadata.bid_price_column.format(level=1)
-    col_ask = metadata.ask_price_column.format(level=1)
+    col_bid = metadata.column(level=1, side="bid", column_type="price")
+    col_ask = metadata.column(level=1, side="ask", column_type="price")
     s_bid = lob[col_bid]
     s_ask = lob[col_ask]
 
