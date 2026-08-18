@@ -66,7 +66,8 @@ MARKETS = {market.name: market for market in [MTS, EUREX]}
 # ASSET CONFIG
 # ==============================================================================
 
-AssetSymbol = Literal["btp", "fbtp", "fbts"]
+FutTicker = Literal["fbtp", "fbts"]
+AssetSymbol = Literal[FutTicker, "btp"]
 AssetFamily = Literal["bond", "future"]
 AssetRole = Literal["ctd", "fut"]
 
