@@ -45,6 +45,9 @@ class LobRecord:
     timestamps: pd.DatetimeIndex | None = None
     columns: tuple[str, ...] | None = None
 
+    def __str__(self) -> str:
+        return self.description
+
     @property
     def has_timestamps(self) -> bool:
         return self.timestamps is not None and len(self.timestamps) > 0
@@ -52,6 +55,20 @@ class LobRecord:
     @property
     def n_timestamps(self) -> int:
         return 0 if self.timestamps is None else len(self.timestamps)
+
+    @property
+    def first_timestamp(self) -> pd.Timestamp | None:
+        if not self.has_timestamps:
+            return None
+        assert isinstance(self.timestamps, pd.DatetimeIndex)
+        return self.timestamps[0]
+
+    @property
+    def last_timestamp(self) -> pd.Timestamp | None:
+        if not self.has_timestamps:
+            return None
+        assert isinstance(self.timestamps, pd.DatetimeIndex)
+        return self.timestamps[-1]
 
 
 @dataclass
@@ -69,10 +86,6 @@ class LobReport:
     @property
     def has_consistency_records(self) -> bool:
         return bool(self.consistency)
-
-    @property
-    def has_records(self) -> bool:
-        return bool(self.normalization or self.consistency)
 
     @property
     def records(self) -> list[LobRecord]:
@@ -676,16 +689,22 @@ def integrity(
         * Columns
         * Size
     * NaNs checks:
-        * LOB-wise NaNs
-        * Level-wise NaNs
-        * Side-wise NaNs
-        * Column-wise NaNs
+        * LOB NaNs
+        * Per level NaNs
+        * Per side-wise NaNs
+        * Per column-wise NaNs
         * Rows-wise NaNs
         * Columns-wise NaNs
     * Valid timestamps checks:
-        * LOB-wise min/max valid timestamps
-        * Level-wise min/max valid timestamps
-        * Side-wise min/max valid timestamps
+        * LOB min/max valid timestamps
+        * Per level min/max valid timestamps
+        * Per side min/max valid timestamps
+        * Per column min/max valid timestamps
+    * NaNs groups checks:
+        * LOB NaNs groups
+        * Per level NaNs groups
+        * Per side NaNs groups
+        * Per column NaNs groups
 
     ## Args:
     * lob: DataFrame containing the LOB
