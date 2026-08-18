@@ -1,6 +1,7 @@
 import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -12,9 +13,25 @@ from thesis_project import config, utils
 # TODO: Split in unit functions the checks
 
 
+LobRecordType = Literal[
+    # LOB index timezone
+    "TIMEZONE_LOCALIZED",
+    "TIMEZONE_CONVERTED",
+    # LOB index
+    "INDEX_SORTED",
+    "INDEX_WINDOW_CUT",
+    "INDEX_DROP_NANS",
+    "INDEX_DROP_DUPS",
+    "INDEX_GRID_ADJUSTED",
+    # LOB columns
+    "COLUMNS_EXTRA_DROP",
+    "COLUMNS_MISSING_ADD",
+]
+
+
 @dataclass
 class LobRecord:
-    id: str
+    id: LobRecordType
     description: str
     timestamps: pd.DatetimeIndex | None = None
     columns: tuple[str, ...] | None = None
@@ -61,12 +78,22 @@ def _normalize_timezone(
     assert isinstance(lob.index, pd.DatetimeIndex)
 
     if lob.index.tz is None:
+        report.normalization.append(
+            LobRecord(
+                id="TIMEZONE_LOCALIZED",
+                description=f"LOB index timezone: localized from None to {asset.market.tz.key}",
+            )
+        )
         lob.index = lob.index.tz_localize(asset.market.tz)
-        # TODO: Report tz localization
 
     elif str(lob.index.tz) != asset.market.tz.key:
+        report.normalization.append(
+            LobRecord(
+                id="TIMEZONE_CONVERTED",
+                description=f"LOB index timezone: converted from {str(lob.index.tz)} to {asset.market.tz.key}",
+            )
+        )
         lob.index = lob.index.tz_convert(asset.market.tz)
-        # TODO: Report tz conversion
 
     return lob
 
@@ -76,8 +103,10 @@ def _normalize_index(
 ) -> pd.DataFrame:
     # Sort index
     if not lob.index.is_monotonic_increasing:
-        lob = lob.sort_index()
-        # TODO: Report LOB index ordering
+        lob = lob.sort_index(ascending=True)
+        report.normalization.append(
+            LobRecord(id="INDEX_SORTED", description="LOB index: sorted in ascending order")
+        )
 
     # Remove samples outside the market time
     assert isinstance(lob.index, pd.DatetimeIndex)
@@ -85,19 +114,32 @@ def _normalize_index(
     n_outside = len(lob) - len(mask)
     if n_outside > 0:
         lob = lob.iloc[mask]
-        # TODO: Report LOB time window adjustment
+        report.normalization.append(
+            LobRecord(
+                id="INDEX_WINDOW_CUT",
+                description=f"Lob index: dropped {n_outside} timestamps outisde {asset.market.opening_time} - {asset.market.closing_time} window",
+                # timestamps=
+                # TODO: Is it worth to keep removed timestamps?
+            )
+        )
 
     # Remove index NaNs
     if lob.index.hasnans:
         mask = lob.index.isna().to_numpy()
         lob = lob[~mask]
-        # TODO: Report LOB index remove nans
+        report.normalization.append(
+            LobRecord(id="INDEX_DROP_NANS", description=f"Lob index: dropped {len(mask)} NaNs")
+        )
 
     # Remove index duplicates
     if lob.index.has_duplicates:
         mask = lob.index.duplicated(keep="first")
         lob = lob[~mask]
-        # TODO: Report LOB index remove dups
+        report.normalization.append(
+            LobRecord(
+                id="INDEX_DROP_DUPS", description=f"Lob index: dropped {len(mask)} duplicates"
+            )
+        )
 
     # Set the expected time index
     start = datetime.datetime.combine(
@@ -120,7 +162,12 @@ def _normalize_index(
 
     if not lob.index.equals(index):
         lob = lob.reindex(index)
-        # TODO: Report LOB index adjustment
+        report.normalization.append(
+            LobRecord(
+                id="INDEX_GRID_ADJUSTED",
+                description=f"Lob index: reindexed to {metadata.freq} grid in {asset.market.opening_time} - {asset.market.closing_time} window",
+            )
+        )
 
     # Rename the LOB index
     lob = lob.rename_axis(metadata.index_name)
@@ -136,8 +183,21 @@ def _normalize_columns(
     missing = expected.difference(present)
     extra = present.difference(expected)
 
-    # TODO: Report missing columns
-    # TODO: Report extra columns
+    if missing:
+        report.normalization.append(
+            LobRecord(
+                id="COLUMNS_MISSING_ADD",
+                description=f"LOB columns: add missing columns ({','.join(sorted(missing))})",
+            )
+        )
+
+    if extra:
+        report.normalization.append(
+            LobRecord(
+                id="COLUMNS_EXTRA_DROP",
+                description=f"LOB columns: dropped extra columns ({','.join(sorted(extra))})",
+            )
+        )
 
     if missing or extra:
         lob = lob.reindex(columns=metadata.columns())
