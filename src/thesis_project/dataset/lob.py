@@ -8,7 +8,6 @@ import pandas as pd
 
 from thesis_project import config, utils
 
-# TODO: Split in unit functions the
 # TODO: Add some integrity check about NaN gaps in the lob
 
 
@@ -46,6 +45,14 @@ class LobRecord:
     timestamps: pd.DatetimeIndex | None = None
     columns: tuple[str, ...] | None = None
 
+    @property
+    def has_timestamps(self) -> bool:
+        return self.timestamps is not None and len(self.timestamps) > 0
+
+    @property
+    def n_timestamps(self) -> int:
+        return 0 if self.timestamps is None else len(self.timestamps)
+
 
 @dataclass
 class LobReport:
@@ -54,6 +61,25 @@ class LobReport:
     normalization: list[LobRecord] = field(default_factory=list)
     consistency: list[LobRecord] = field(default_factory=list)
     integrity: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def has_normalization_records(self) -> bool:
+        return bool(self.normalization)
+
+    @property
+    def has_consistency_records(self) -> bool:
+        return bool(self.consistency)
+
+    @property
+    def has_records(self) -> bool:
+        return bool(self.normalization or self.consistency)
+
+    @property
+    def records(self) -> list[LobRecord]:
+        return self.normalization + self.consistency
+
+    def records_by_id(self, id: LobRecordType) -> list[LobRecord]:
+        return [record for record in self.records if record.id == id]
 
 
 def load(path: Path) -> pd.DataFrame:
@@ -418,8 +444,8 @@ def _consistency_price_size(
 ):
     for level in metadata.levels:
         for side in metadata.sides:
-            price_column = metadata.columns(levels=level, sides=side, column_types="price")[0]
-            size_column = metadata.columns(levels=level, sides=side, column_types="size")[0]
+            price_column = metadata.column(level=level, side=side, column_type="price")
+            size_column = metadata.column(level=level, side=side, column_type="size")
             mask = lob[price_column].isna() ^ lob[size_column].isna()
             ts = lob.index[mask]
             if len(ts):
@@ -494,7 +520,7 @@ def _integrity_nans(
         "n_nan_perc": na.mean().mean() * 100,
     }
 
-    # Level integrity
+    # Per level integrity
     for level in metadata.levels:
         columns = metadata.columns(levels=level)
         info["levels"][level] = {
@@ -502,7 +528,7 @@ def _integrity_nans(
             "n_nan_perc": na[columns].mean().mean() * 100,
         }
 
-    # Side integrity
+    # Per side integrity
     for level in metadata.levels:
         for side in metadata.sides:
             columns = metadata.columns(levels=level, sides=side)
@@ -511,16 +537,12 @@ def _integrity_nans(
                 "n_nan_perc": na[columns].mean().mean() * 100,
             }
 
-    # Column integrity
-    for level in metadata.levels:
-        for side in metadata.sides:
-            for column_type in metadata.column_types:
-                # NOTE: Is it better to use the column name as a whole as a key?
-                column = metadata.columns(levels=level, sides=side, column_types=column_type)
-                info["columns"][level, side, column_type] = {
-                    "n_nan": na[column].sum(),
-                    "n_nan_perc": na[column].mean() * 100,
-                }
+    # Per column integrity
+    for column in metadata.columns():
+        info["columns"][column] = {
+            "n_nan": na[column].sum(),
+            "n_nan_perc": na[column].mean() * 100,
+        }
 
     # Rows-wide integrity
     info["rows_wide"] = {
@@ -530,7 +552,7 @@ def _integrity_nans(
         "n_rows_any_nan_perc": na.any(axis=1).mean() * 100,
     }
 
-    # Cols-wide integrity
+    # Columns-wide integrity
     info["cols_wide"] = {
         "n_cols_all_nan": na.all(axis=0).sum(),
         "n_cols_all_nan_perc": na.all(axis=0).mean() * 100,
@@ -541,7 +563,7 @@ def _integrity_nans(
     report.integrity["nans"] = info
 
 
-def _integrity_valid_ts(
+def _integrity_timestamps(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
 ):
     valid = lob.notna()
@@ -550,18 +572,16 @@ def _integrity_valid_ts(
         "levels": {},
         "sides": {},
         "columns": {},
-        "rows_wide": {},
-        "cols_wide": {},
     }
 
-    # LOB-wise valid index
+    # LOB valid index
     mask = valid.all(axis=1)
     info["lob"] = {
         "min_valid_idx": lob.index[mask][0] if mask.any() else None,
         "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
     }
 
-    # Level-wise valid index
+    # Per level valid index
     for level in metadata.levels:
         columns = metadata.columns(levels=level)
         mask = valid[columns].all(axis=1)
@@ -570,17 +590,80 @@ def _integrity_valid_ts(
             "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
         }
 
-    # Side-wise valid index
+    # Per side valid index
     for level in metadata.levels:
         for side in metadata.sides:
             columns = metadata.columns(levels=level, sides=side)
             mask = valid[columns].all(axis=1)
             info["sides"][level, side] = {
-                "min_valid_idx": lob.index[mask][0] if not mask.empty else None,
-                "max_valid_idx": lob.index[mask][-1] if not mask.empty else None,
+                "min_valid_idx": lob.index[mask][0] if mask.any() else None,
+                "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
             }
 
+    # Per column valid index
+    for column in metadata.columns():
+        mask = valid[column]
+        info["columns"][column] = {
+            "min_valid_index": lob.index[mask][0] if mask.any() else None,
+            "max_valid_index": lob.index[mask][-1] if mask.any() else None,
+        }
+
     report.integrity["timestamps"] = info
+
+
+def _find_true_groups(s: pd.Series) -> list[tuple[pd.Timestamp, pd.Timestamp]] | None:
+    """
+    Find groups of consecutive True boolean in a series
+
+    ## Args:
+    * s: A Series of bool indexed by a DatetimeIndex
+
+    ## Returns:
+    * ts: A list of tuple each containing opening and closing timestamps of a group
+    """
+
+    if not isinstance(s.index, pd.DatetimeIndex):
+        raise ValueError("The series index must be a DatetimeIndex")
+
+    if not s.any():
+        return []
+
+    groups = s.ne(s.shift()).cumsum()
+    ts = s[s].groupby(groups[s]).apply(lambda ts: (ts.index[0], ts.index[-1]))
+
+    return ts.tolist()
+
+
+def _integrity_gaps(
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+):
+    na = lob.isna()
+    info = {
+        "lob": ...,
+        "levels": {},
+        "sides": {},
+        "columns": {},
+    }
+
+    # LOB gaps
+    info["lob"] = _find_true_groups(na.all(axis=1))
+
+    # Per level gaps
+    for level in metadata.levels:
+        columns = metadata.columns(levels=level)
+        info["levels"][level] = _find_true_groups(na[columns].all(axis=1))
+
+    # Per side gaps
+    for level in metadata.levels:
+        for side in metadata.sides:
+            columns = metadata.columns(levels=level, sides=side)
+            info["sides"][level, side] = _find_true_groups(na[columns].all(axis=1))
+
+    # Per column gaps
+    for column in metadata.columns():
+        info["columns"][column] = _find_true_groups(na[[column]].all(axis=1))
+
+    report.integrity["gaps"] = info
 
 
 def integrity(
@@ -612,7 +695,8 @@ def integrity(
     """
     _integrity_shape(lob, report, metadata, asset)
     _integrity_nans(lob, report, metadata, asset)
-    _integrity_valid_ts(lob, report, metadata, asset)
+    _integrity_timestamps(lob, report, metadata, asset)
+    _integrity_gaps(lob, report, metadata, asset)
 
 
 def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
