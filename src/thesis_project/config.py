@@ -178,7 +178,7 @@ class LobConfig:
 
     n_levels: int
     freq: str
-    column_format: str
+    column_format: str = "L{level}-{side}{column_type}"
     column_types: tuple[LobColumn, ...] = ("price", "size")
     index_name: str = "timestamp"
     sides: tuple[LobSide, ...] = ("bid", "ask")
@@ -195,7 +195,7 @@ class LobConfig:
 
     def filename(self, *, role: AssetRole, date: datetime.date) -> str:
         if role not in self.ROLES:
-            raise ValueError(f"Invalid LOB role: {role!r}")
+            raise ValueError(f"Invalid LOB {role=!r}")
 
         return self.FILENAME.format(
             role=role,
@@ -263,7 +263,6 @@ LOB = LobConfig(
     index_name="timestamp",
     sides=("bid", "ask"),
     column_types=("price", "size"),
-    column_format="L{level}-{side}{column_type}",
 )
 
 
