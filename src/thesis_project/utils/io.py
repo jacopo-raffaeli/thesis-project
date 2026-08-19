@@ -132,7 +132,7 @@ def lob_paths_role(
     *, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker, role: config.AssetRole
 ) -> list[Path]:
     """
-    Iterate data/raw/ticker/role and collect all the lobs path
+    Iterate data/raw/ticker/role and collect all the lob paths
 
     ## Args:
     * root: Data root folder
@@ -163,13 +163,23 @@ def lob_paths_role(
                 if not path.is_file():
                     continue
 
-                if config.LOB_METADATA.filename_re.fullmatch(path.name):
+                if config.LOB.filename_re.fullmatch(path.name):
                     paths.append(path)
 
     return paths
 
 
 def lob_paths_ticker(*, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker) -> list[Path]:
+    """
+    Iterate data/raw/ticker/ and collect all the lob paths for all the roles
+
+    ## Args:
+    * root: Data root folder
+    * ticker: FutTicker literal
+
+    ## Return:
+    * paths: List of lob paths
+    """
     paths = []
     for role in get_args(config.AssetRole):
         paths.extend(lob_paths_role(root=root, ticker=ticker, role=role))
@@ -183,6 +193,17 @@ def lob_paths(
     ticker: config.FutTicker,
     role: config.AssetRole | None = None,
 ) -> list[Path]:
+    """
+    Iterate data/raw/ticker/Optional[role] and collect all the lob paths
+
+    ## Args:
+    * root: Data root folder
+    * ticker: FutTicker literal
+    * role: AssetRole literal
+
+    ## Return:
+    * paths: List of lob paths
+    """
     if role is None:
         return lob_paths_ticker(root=root, ticker=ticker)
 
