@@ -9,12 +9,15 @@ import pandas as pd
 from thesis_project import config, utils
 from thesis_project.utils.io import lob_paths
 
-# TODO
+# TODO: test LobReportCollector
+# TODO: Add utilities to LobReportCollector
+# TODO: Add utilities to save/load the reports
 # TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
 # TODO: Write a plots/lob.py function for visualizing lob and lob reports
 
 
 LobRecordType = Literal[
+    # NORMALIZATION
     # LOB index timezone
     "TIMEZONE_LOCALIZED",
     "TIMEZONE_CONVERTED",
@@ -27,6 +30,7 @@ LobRecordType = Literal[
     # LOB columns
     "COLUMNS_EXTRA_DROP",
     "COLUMNS_MISSING_ADD",
+    # CONSISTENCY
     # Price consistency
     "PRICE_NON_POSITIVE",
     "PRICE_NON_MULTIPLE",
@@ -258,7 +262,7 @@ def _normalize_index(
 def _normalize_columns(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ) -> pd.DataFrame:
-    expected = set(metadata.columns())
+    expected = set(metadata.get_columns())
     present = set(lob.columns)
     missing = expected.difference(present)
     extra = present.difference(expected)
@@ -280,7 +284,7 @@ def _normalize_columns(
         )
 
     if missing or extra:
-        lob = lob.reindex(columns=metadata.columns())
+        lob = lob.reindex(columns=metadata.get_columns())
 
     return lob
 
@@ -323,7 +327,7 @@ def normalize(
 def _consistency_price_sign(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(column_types="price")
+    columns = metadata.get_columns(column_types="price")
     for column, s in lob[columns].items():
         s = s.dropna()
         mask = s <= 0
@@ -342,7 +346,7 @@ def _consistency_price_sign(
 def _consistency_price_unit(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(column_types="price")
+    columns = metadata.get_columns(column_types="price")
     for column, s in lob[columns].items():
         s = s.dropna()
         quotients = s / asset.tick_size_perc
@@ -362,7 +366,7 @@ def _consistency_price_unit(
 def _consistency_price_bid_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(sides="bid", column_types="price")
+    columns = metadata.get_columns(sides="bid", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
@@ -385,7 +389,7 @@ def _consistency_price_bid_order(
 def _consistency_price_ask_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(sides="ask", column_types="price")
+    columns = metadata.get_columns(sides="ask", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
         s1 = lob[c1]
         s2 = lob[c2]
@@ -408,8 +412,8 @@ def _consistency_price_ask_order(
 def _consistency_price_bid_ask_order(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    col_bid = metadata.column(level=1, side="bid", column_type="price")
-    col_ask = metadata.column(level=1, side="ask", column_type="price")
+    col_bid = metadata.get_column(level=1, side="bid", column_type="price")
+    col_ask = metadata.get_column(level=1, side="ask", column_type="price")
     s_bid = lob[col_bid]
     s_ask = lob[col_ask]
 
@@ -443,7 +447,7 @@ def _consistency_price(
 def _consistency_size_sign(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(column_types="size")
+    columns = metadata.get_columns(column_types="size")
     for column, s in lob[columns].items():
         s = s.dropna()
         mask = s <= 0
@@ -462,7 +466,7 @@ def _consistency_size_sign(
 def _consistency_size_unit(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
-    columns = metadata.columns(column_types="size")
+    columns = metadata.get_columns(column_types="size")
     for column, s in lob[columns].items():
         s = s.dropna()
         mask = ~np.isclose(s, np.round(s))
@@ -490,8 +494,8 @@ def _consistency_price_size(
 ):
     for level in metadata.levels:
         for side in metadata.sides:
-            price_column = metadata.column(level=level, side=side, column_type="price")
-            size_column = metadata.column(level=level, side=side, column_type="size")
+            price_column = metadata.get_column(level=level, side=side, column_type="price")
+            size_column = metadata.get_column(level=level, side=side, column_type="size")
             mask = lob[price_column].isna() ^ lob[size_column].isna()
             ts = lob.index[mask]
             if len(ts):
@@ -568,7 +572,7 @@ def _integrity_nans(
 
     # Per level integrity
     for level in metadata.levels:
-        columns = metadata.columns(levels=level)
+        columns = metadata.get_columns(levels=level)
         info["levels"][level] = {
             "n_nan": na[columns].sum().sum(),
             "n_nan_perc": na[columns].mean().mean() * 100,
@@ -577,14 +581,14 @@ def _integrity_nans(
     # Per side integrity
     for level in metadata.levels:
         for side in metadata.sides:
-            columns = metadata.columns(levels=level, sides=side)
+            columns = metadata.get_columns(levels=level, sides=side)
             info["sides"][level, side] = {
                 "n_nan": na[columns].sum().sum(),
                 "n_nan_perc": na[columns].mean().mean() * 100,
             }
 
     # Per column integrity
-    for column in metadata.columns():
+    for column in metadata.get_columns():
         info["columns"][column] = {
             "n_nan": na[column].sum(),
             "n_nan_perc": na[column].mean() * 100,
@@ -629,7 +633,7 @@ def _integrity_timestamps(
 
     # Per level valid index
     for level in metadata.levels:
-        columns = metadata.columns(levels=level)
+        columns = metadata.get_columns(levels=level)
         mask = valid[columns].all(axis=1)
         info["levels"][level] = {
             "min_valid_idx": lob.index[mask][0] if mask.any() else None,
@@ -639,7 +643,7 @@ def _integrity_timestamps(
     # Per side valid index
     for level in metadata.levels:
         for side in metadata.sides:
-            columns = metadata.columns(levels=level, sides=side)
+            columns = metadata.get_columns(levels=level, sides=side)
             mask = valid[columns].all(axis=1)
             info["sides"][level, side] = {
                 "min_valid_idx": lob.index[mask][0] if mask.any() else None,
@@ -647,7 +651,7 @@ def _integrity_timestamps(
             }
 
     # Per column valid index
-    for column in metadata.columns():
+    for column in metadata.get_columns():
         mask = valid[column]
         info["columns"][column] = {
             "min_valid_index": lob.index[mask][0] if mask.any() else None,
@@ -696,17 +700,17 @@ def _integrity_gaps(
 
     # Per level gaps
     for level in metadata.levels:
-        columns = metadata.columns(levels=level)
+        columns = metadata.get_columns(levels=level)
         info["levels"][level] = _find_true_groups(na[columns].all(axis=1))
 
     # Per side gaps
     for level in metadata.levels:
         for side in metadata.sides:
-            columns = metadata.columns(levels=level, sides=side)
+            columns = metadata.get_columns(levels=level, sides=side)
             info["sides"][level, side] = _find_true_groups(na[columns].all(axis=1))
 
     # Per column gaps
-    for column in metadata.columns():
+    for column in metadata.get_columns():
         info["columns"][column] = _find_true_groups(na[[column]].all(axis=1))
 
     report.integrity["gaps"] = info
