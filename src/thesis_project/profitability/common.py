@@ -209,6 +209,14 @@ def execution_mask(
             raise ValueError(f"Unknown {liquidity=}")
 
 
+# TODO: Move to utils
+def shift_forward(series: pd.Series, horizon: int) -> pd.Series:
+    target_index = series.index + pd.to_timedelta(horizon, unit="s")
+    shifted = series.reindex(target_index)
+    shifted.index = series.index
+    return shifted
+
+
 def has_event_between(
     entry_dates: pd.DatetimeIndex,
     exit_dates: pd.DatetimeIndex,
