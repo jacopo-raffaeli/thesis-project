@@ -179,8 +179,8 @@ class LobConfig:
     n_levels: int
     freq: str
     column_format: str = "L{level}-{side}{column_type}"
-    column_types: tuple[LobColumn, ...] = ("price", "size")
     index_name: str = "timestamp"
+    columns: tuple[LobColumn, ...] = ("price", "size")
     sides: tuple[LobSide, ...] = ("bid", "ask")
 
     def __post_init__(self):
@@ -190,7 +190,7 @@ class LobConfig:
         if not self.sides:
             raise ValueError("At least one LOB side is required")
 
-        if not self.column_types:
+        if not self.columns:
             raise ValueError("At least one column type is required")
 
     def filename(self, *, role: AssetRole, date: datetime.date) -> str:
@@ -220,14 +220,14 @@ class LobConfig:
     def levels(self) -> list[int]:
         return list(range(1, self.n_levels + 1))
 
-    def column(self, *, level: int, side: LobSide, column_type: LobColumn) -> str:
+    def get_column(self, *, level: int, side: LobSide, column_type: LobColumn) -> str:
         return self.column_format.format(
             level=level,
             side=side.capitalize(),
             column_type=column_type.capitalize(),
         )
 
-    def columns(
+    def get_columns(
         self,
         *,
         levels: list[int] | int | None = None,
@@ -247,10 +247,10 @@ class LobConfig:
         if isinstance(column_types, str):
             column_types = (column_types,)
         elif column_types is None:
-            column_types = self.column_types
+            column_types = self.columns
 
         return [
-            self.column(level=level, side=side, column_type=column_type)
+            self.get_column(level=level, side=side, column_type=column_type)
             for level in sorted(levels)
             for side in sides
             for column_type in column_types
@@ -262,7 +262,7 @@ LOB = LobConfig(
     freq="1s",
     index_name="timestamp",
     sides=("bid", "ask"),
-    column_types=("price", "size"),
+    columns=("price", "size"),
 )
 
 
