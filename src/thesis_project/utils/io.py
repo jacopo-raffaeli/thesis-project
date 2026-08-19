@@ -1,11 +1,12 @@
 import datetime
 import re
 from pathlib import Path
+from typing import get_args
 
 import dataframe_image as dfi
 import pandas as pd
 
-from thesis_project import config as global_config
+from thesis_project import config
 
 
 def df_to_png(df: pd.DataFrame, path: Path, filename: str):
@@ -18,7 +19,9 @@ def df_to_png(df: pd.DataFrame, path: Path, filename: str):
     * path: file output path
     * filenmae: file output name
     """
-    dfi.export(df, path / f"{filename}.png", table_conversion="chrome")
+    path = path / filename
+    path = path.with_suffix(".png")
+    dfi.export(df, path, table_conversion="chrome")
 
 
 def filename_to_date(filename: str) -> datetime.date:
@@ -39,7 +42,7 @@ def filename_to_date(filename: str) -> datetime.date:
     return datetime.date(year, month, day)
 
 
-def load_cf(ticker: global_config.FutTicker, filename: str = "daily_cf.csv") -> pd.DataFrame:
+def load_cf(ticker: config.FutTicker, filename: str = "daily_cf.csv") -> pd.DataFrame:
     """
     Load daily conversion factor series \n
     The csv also contains the day index, the ISIN id and CUSIP id
@@ -55,7 +58,7 @@ def load_cf(ticker: global_config.FutTicker, filename: str = "daily_cf.csv") -> 
         * ISIN: The respective ISIN ids
         * CUSIP: The respective CUSIP ids
     """
-    path = global_config.DATA_RAW_DIR / ticker / filename
+    path = config.DATA_RAW_DIR / ticker / filename
     cf = pd.read_csv(path, parse_dates=["Date"]).set_index("Date")
 
     assert isinstance(cf.index, pd.DatetimeIndex)
@@ -68,7 +71,7 @@ def load_cf(ticker: global_config.FutTicker, filename: str = "daily_cf.csv") -> 
 
 
 def load_ctd_switch_dates(
-    ticker: global_config.FutTicker, filename: str = "ctd_switch.csv"
+    ticker: config.FutTicker, filename: str = "ctd_switch.csv"
 ) -> pd.DatetimeIndex:
     """
     Load ctd bond switch dates \n
@@ -81,13 +84,13 @@ def load_ctd_switch_dates(
     ## Returns:
     * dates: DatetimeIndex
     """
-    path = global_config.DATA_RAW_DIR / ticker / filename
+    path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["CTD Switch Date"])["CTD Switch Date"]
     return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
 
 
 def load_fut_rollover_dates(
-    ticker: global_config.FutTicker, filename: str = "fut_metadata.csv"
+    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
 ) -> pd.DatetimeIndex:
     """
     Load future rollover dates \n
@@ -100,13 +103,13 @@ def load_fut_rollover_dates(
     ## Returns:
     * dates: DatetimeIndex
     """
-    path = global_config.DATA_RAW_DIR / ticker / filename
+    path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Last Trading Date"])["Last Trading Date"]
     return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
 
 
 def load_fut_delivery_dates(
-    ticker: global_config.FutTicker, filename: str = "fut_metadata.csv"
+    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
 ) -> pd.DatetimeIndex:
     """
     Load future delivery dates \n
@@ -120,6 +123,67 @@ def load_fut_delivery_dates(
     ## Returns:
     * dates: DatetimeIndex
     """
-    path = global_config.DATA_RAW_DIR / ticker / filename
+    path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Delivery Date"])["Delivery Date"]
     return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
+
+
+def lob_paths_role(
+    *, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker, role: config.AssetRole
+) -> list[Path]:
+    """
+    Iterate data/raw/ticker/role and collect all the lobs path
+
+    ## Args:
+    * root: Data root folder
+    * ticker: FutTicker literal
+    * role: AssetRole literal
+
+    ## Return:
+    * paths: List of lob paths
+    """
+    paths = []
+    root = root / ticker / role
+
+    if not root.exists():
+        raise ValueError(f"This path does not exists: {root}")
+
+    if not root.is_dir():
+        raise ValueError(f"This path is not a directory: {root}")
+
+    for ydir in sorted(root.iterdir()):
+        if not ydir.is_dir():
+            continue
+
+        for mdir in sorted(ydir.iterdir()):
+            if not mdir.is_dir():
+                continue
+
+            for path in sorted(mdir.iterdir()):
+                if not path.is_file():
+                    continue
+
+                if config.LOB_METADATA.filename_re.fullmatch(path.name):
+                    paths.append(path)
+
+    return paths
+
+
+def lob_paths_ticker(*, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker) -> list[Path]:
+    paths = []
+    for role in get_args(config.AssetRole):
+        paths.extend(lob_paths_role(root=root, ticker=ticker, role=role))
+
+    return paths
+
+
+def lob_paths(
+    *,
+    root: Path = config.DATA_RAW_DIR,
+    ticker: config.FutTicker,
+    role: config.AssetRole | None = None,
+) -> list[Path]:
+    if role is None:
+        return lob_paths_ticker(root=root, ticker=ticker)
+
+    return lob_paths_role(root=root, ticker=ticker, role=role)
