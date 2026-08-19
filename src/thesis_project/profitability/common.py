@@ -1,11 +1,13 @@
 import datetime
 from typing import get_args
 
+import numpy as np
 import pandas as pd
 import polars as pl
 
 from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
+from thesis_project.profitability import settings
 from thesis_project.profitability.settings import CTD_FACE_VALUE, FUT_FACE_VALUE
 from thesis_project.rl_trading.dataset_config import DatasetConfig, get_dates_to_exclude
 
@@ -141,3 +143,140 @@ def compute_eff_cf(
     return (fut_contracts * fut_face_value / (ctd_contracts * ctd_face_value)).rename(
         "effective_cf"
     )
+
+
+def execution_prices(
+    data: pd.DataFrame,
+    price: settings.PriceMode,
+) -> dict[str, pd.Series]:
+    match price:
+        case "mid":
+            return {
+                "ctd_bid_price": (data["ctd_bid_price"] + data["ctd_ask_price"]) / 2,
+                "ctd_ask_price": (data["ctd_bid_price"] + data["ctd_ask_price"]) / 2,
+                "fut_bid_price": (data["fut_bid_price"] + data["fut_ask_price"]) / 2,
+                "fut_ask_price": (data["fut_bid_price"] + data["fut_ask_price"]) / 2,
+            }
+
+        case "spread_enabled":
+            return {
+                "ctd_bid_price": data["ctd_bid_price"],
+                "ctd_ask_price": data["ctd_ask_price"],
+                "fut_bid_price": data["fut_bid_price"],
+                "fut_ask_price": data["fut_ask_price"],
+            }
+
+        case _:
+            raise ValueError(f"Unknown {price=}")
+
+
+def execution_mask(
+    data: pd.DataFrame,
+    fut_contracts: pd.Series,
+    ctd_contracts: int,
+    *,
+    liquidity: settings.LiquidityMode,
+) -> pd.DataFrame:
+    match liquidity:
+        case "ignore":
+            return pd.DataFrame(
+                {
+                    "long": True,
+                    "short": True,
+                },
+                index=data.index,
+            )
+
+        case "level":
+            return pd.DataFrame(
+                {
+                    "long": (
+                        (data["ctd_ask_size"] >= ctd_contracts)
+                        & (data["fut_bid_size"] >= fut_contracts)
+                    ),
+                    "short": (
+                        (data["ctd_bid_size"] >= ctd_contracts)
+                        & (data["fut_ask_size"] >= fut_contracts)
+                    ),
+                },
+                index=data.index,
+            )
+
+        case "lob":
+            raise NotImplementedError
+
+        case _:
+            raise ValueError(f"Unknown {liquidity=}")
+
+
+def has_event_between(
+    entry_dates: pd.DatetimeIndex,
+    exit_dates: pd.DatetimeIndex,
+    event_dates: pd.DatetimeIndex,
+    index: pd.DatetimeIndex,
+    *,
+    entry_inclusive: bool,
+    exit_inclusive: bool,
+) -> pd.Series:
+    events = event_dates.sort_values().unique()
+
+    if len(events) == 0:
+        return pd.Series(False, index=index)
+
+    left = np.searchsorted(
+        events,
+        entry_dates,
+        side="left" if entry_inclusive else "right",
+    )
+    right = np.searchsorted(
+        events,
+        exit_dates,
+        side="right" if exit_inclusive else "left",
+    )
+
+    return pd.Series(right > left, index=index)
+
+
+def valid_trade_window(
+    index: pd.DatetimeIndex,
+    horizon: int,
+    fut_last_trading_dates: pd.DatetimeIndex,
+    ctd_switch_dates: pd.DatetimeIndex,
+) -> pd.Series:
+    entry_dates = naive_dates(index)
+    exit_dates = naive_dates(index + pd.to_timedelta(horizon, unit="s"))
+
+    invalid_fut = has_event_between(
+        entry_dates,
+        exit_dates,
+        fut_last_trading_dates,
+        index,
+        entry_inclusive=True,
+        exit_inclusive=False,
+    )
+    invalid_ctd = has_event_between(
+        entry_dates,
+        exit_dates,
+        ctd_switch_dates,
+        index,
+        entry_inclusive=False,
+        exit_inclusive=True,
+    )
+
+    return ~(invalid_fut | invalid_ctd)
+
+
+def invalidate_overnight_trades(
+    pnl: pd.DataFrame,
+    horizon: int,
+    fut_last_trading_dates: pd.DatetimeIndex,
+    ctd_switch_dates: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    assert isinstance(pnl.index, pd.DatetimeIndex)
+    valid = valid_trade_window(
+        pnl.index,
+        horizon,
+        fut_last_trading_dates,
+        ctd_switch_dates,
+    )
+    return pnl.mask(~valid)
