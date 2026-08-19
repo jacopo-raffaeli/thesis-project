@@ -16,7 +16,10 @@ LiquidityMode = Literal["ignore", "level", "lob"]
 
 @dataclass(frozen=True)
 class AnalysisConfig:
-    name: str
     price_mode: PriceMode
     fut_contract_mode: FutContractMode
     liquidity_mode: LiquidityMode
+
+    @property
+    def name(self) -> str:
+        return f"{self.price_mode}_price_{self.fut_contract_mode}_contract_{self.liquidity_mode}_liquidity"
