@@ -128,7 +128,7 @@ def load_fut_delivery_dates(
     return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
 
 
-def lob_paths_role(
+def list_lob_paths_role(
     *, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker, role: config.AssetRole
 ) -> list[Path]:
     """
@@ -169,7 +169,9 @@ def lob_paths_role(
     return paths
 
 
-def lob_paths_ticker(*, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker) -> list[Path]:
+def list_lob_paths_ticker(
+    *, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker
+) -> list[Path]:
     """
     Iterate data/raw/ticker/ and collect all the lob paths for all the roles
 
@@ -182,12 +184,12 @@ def lob_paths_ticker(*, root: Path = config.DATA_RAW_DIR, ticker: config.FutTick
     """
     paths = []
     for role in get_args(config.AssetRole):
-        paths.extend(lob_paths_role(root=root, ticker=ticker, role=role))
+        paths.extend(list_lob_paths_role(root=root, ticker=ticker, role=role))
 
     return paths
 
 
-def lob_paths(
+def list_lob_paths(
     *,
     root: Path = config.DATA_RAW_DIR,
     ticker: config.FutTicker,
@@ -205,6 +207,6 @@ def lob_paths(
     * paths: List of lob paths
     """
     if role is None:
-        return lob_paths_ticker(root=root, ticker=ticker)
+        return list_lob_paths_ticker(root=root, ticker=ticker)
 
-    return lob_paths_role(root=root, ticker=ticker, role=role)
+    return list_lob_paths_role(root=root, ticker=ticker, role=role)
