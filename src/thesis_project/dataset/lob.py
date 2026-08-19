@@ -1,7 +1,7 @@
 import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import numpy as np
 import pandas as pd
@@ -105,9 +105,18 @@ class LobReport:
 @dataclass
 class LobReportCollector:
     ticker: config.FutTicker
-    reports: dict[config.AssetRole, dict[datetime.date, LobReport]] = field(default_factory=dict)
+    reports: dict[config.AssetRole, dict[datetime.date, LobReport]] = field(
+        default_factory=lambda: {
+            "ctd": {},
+            "fut": {},
+        }
+    )
 
     def add(self, report: LobReport):
+        asset = config.ASSET_BY_TICKER_ROLE[(self.ticker, report.asset.role)]
+        if report.asset is not asset:
+            raise ValueError(f"Expected {asset=}, instead recieved {report.asset=}")
+
         if report.asset.role not in self.reports:
             self.reports[report.asset.role] = {}
 
@@ -298,7 +307,7 @@ def normalize(
     ## Args:
     * lob: DataFrame containing the LOB
     * report: object of the class LobReport
-    * metadata: object of the class LobMetadata
+    * metadata: object of the class LobConfig
     * asset: object of the class AssetConfig
 
     ## Return:
@@ -516,7 +525,7 @@ def consistency(
     ## Args:
     * lob: DataFrame containing the LOB
     * report: object of the class LobReport
-    * metadata: object of the class LobMetadata
+    * metadata: object of the class LobConfig
     * asset: object of the class AssetConfig
     """
     _consistency_price(lob, report, metadata, asset)
@@ -733,7 +742,7 @@ def integrity(
     ## Args:
     * lob: DataFrame containing the LOB
     * report: object of the class LobReport
-    * metadata: object of the class LobMetadata
+    * metadata: object of the class LobConfig
     * asset: object of the class AssetConfig
     """
     _integrity_shape(lob, report, metadata, asset)
@@ -752,8 +761,8 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
 
     ## Args:
     * path: path like "/data/raw/ticker/asset/yyyy/mm/asset_lob_freq_1s_yyyy_mm_dd.parquet"
-    * asset: object of the class AssetConfig
-    * metadata: object of the class LobMetadata
+    * asset: AssetConfig object
+    * metadata: LobConfig object
 
     ## Return:
     * lob: normalized LOB DataFrame
@@ -770,10 +779,25 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     return lob, report
 
 
-def foo(ticker: config.FutTicker, role: config.AssetRole, metadata: config.LobConfig):
-    """"""
-    asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
-    paths = lob_paths(ticker=ticker, role=role)
+def preprocess_all_lobs(ticker: config.FutTicker, metadata: config.LobConfig) -> LobReportCollector:
+    """
+    Preprocess and save back all lobs inside data/raw/ticker
 
-    for path in paths:
-        lob, report = preprocess(path, asset, metadata)
+    ## Args:
+    * ticker: FutTicker literal
+    * metadata: LobConfig object
+
+    ## Return:
+    * reports: LobReportCollector object
+    """
+    reports = LobReportCollector(ticker=ticker)
+    for role in get_args(config.FutTicker):
+        asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
+        paths = lob_paths(ticker=ticker, role=role)
+
+        for path in paths:
+            lob, report = preprocess(path, asset, metadata)
+            reports.add(report)
+            lob.to_parquet(path)
+
+    return reports
