@@ -4,7 +4,7 @@ import zoneinfo
 from dataclasses import dataclass
 from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal, get_args
 
 import pandas as pd
 
@@ -166,12 +166,15 @@ class LobConfig:
     * column_format: formattable string for the canonical column name
     """
 
+    ROLES: ClassVar[tuple[AssetRole, ...]] = get_args(AssetRole)
+    FILENAME: ClassVar[str] = "{role}_lob_freq_{freq}_{yyyy}_{mm}_{dd}.parquet"
+
     n_levels: int
     freq: str
+    column_format: str
+    column_types: tuple[LobColumn, ...] = ("price", "size")
     index_name: str = "timestamp"
     sides: tuple[LobSide, ...] = ("bid", "ask")
-    column_types: tuple[LobColumn, ...] = ("price", "size")
-    column_format: str = "L{level}-{side}{column_type}"
 
     def __post_init__(self):
         if self.n_levels <= 0:
@@ -183,41 +186,32 @@ class LobConfig:
         if not self.column_types:
             raise ValueError("At least one column type is required")
 
+    def filename(self, *, role: AssetRole, date: datetime.date) -> str:
+        if role not in self.ROLES:
+            raise ValueError(f"Invalid LOB role: {role!r}")
+
+        return self.FILENAME.format(
+            role=role,
+            freq=self.freq,
+            yyyy=f"{date.year:04d}",
+            mm=f"{date.month:02d}",
+            dd=f"{date.day:02d}",
+        )
+
+    @property
+    def filename_re(self) -> re.Pattern[str]:
+        return re.compile(
+            rf"(?P<role>{'|'.join(map(re.escape, self.ROLES))})"
+            rf"_lob_freq_{re.escape(self.freq)}"
+            rf"_(?P<year>\d{{4}})"
+            rf"_(?P<month>\d{{2}})"
+            rf"_(?P<day>\d{{2}})"
+            rf"\.parquet"
+        )
+
     @property
     def levels(self) -> list[int]:
         return list(range(1, self.n_levels + 1))
-
-    @property
-    def bid_column(self) -> str:
-        return self.column_format.format(side="Bid")
-
-    @property
-    def ask_column(self) -> str:
-        return self.column_format.format(side="Ask")
-
-    @property
-    def price_column(self) -> str:
-        return self.column_format.format(column_type="Price")
-
-    @property
-    def size_column(self) -> str:
-        return self.column_format.format(column_type="Size")
-
-    @property
-    def bid_price_column(self) -> str:
-        return self.bid_column.format(column_type="Price")
-
-    @property
-    def bid_size_column(self) -> str:
-        return self.bid_column.format(column_type="Size")
-
-    @property
-    def ask_price_column(self) -> str:
-        return self.ask_column.format(column_type="Price")
-
-    @property
-    def ask_size_column(self) -> str:
-        return self.ask_column.format(column_type="Size")
 
     def column(self, *, level: int, side: LobSide, column_type: LobColumn) -> str:
         return self.column_format.format(
@@ -262,6 +256,7 @@ LOB_METADATA = LobConfig(
     index_name="timestamp",
     sides=("bid", "ask"),
     column_types=("price", "size"),
+    column_format="L{level}-{side}{column_type}",
 )
 
 
