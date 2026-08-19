@@ -9,7 +9,7 @@ import pandas as pd
 from thesis_project import config, utils
 from thesis_project.utils.io import lob_paths
 
-# TODO: Add a LobReportCollection + test
+# TODO
 # TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
 # TODO: Write a plots/lob.py function for visualizing lob and lob reports
 
