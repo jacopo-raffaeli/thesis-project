@@ -144,6 +144,13 @@ FBTS = AssetConfig(
 
 ASSETS = {asset.symbol: asset for asset in [BTP, FBTP, FBTS]}
 
+ASSET_BY_TICKER_ROLE: dict[tuple[FutTicker, AssetRole], AssetSymbol] = {
+    ("fbtp", "ctd"): "btp",
+    ("fbtp", "fut"): "fbtp",
+    ("fbts", "ctd"): "btp",
+    ("fbts", "fut"): "fbts",
+}
+
 
 # ==============================================================================
 # LOB METADATA
