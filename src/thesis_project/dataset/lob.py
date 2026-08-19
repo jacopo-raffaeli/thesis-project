@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
+from thesis_project.utils.io import lob_paths
 
-# TODO: Add some integrity check about NaN gaps in the lob
+# TODO: Add a LobReportCollection + test
+# TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
+# TODO: Write a plots/lob.py function for visualizing lob and lob reports
 
 
 LobRecordType = Literal[
@@ -99,6 +102,23 @@ class LobReport:
         return [record for record in self.records if record.id == id]
 
 
+@dataclass
+class LobReportCollector:
+    ticker: config.FutTicker
+    reports: dict[config.AssetRole, dict[datetime.date, LobReport]] = field(default_factory=dict)
+
+    def add(self, report: LobReport):
+        if report.asset.role not in self.reports:
+            self.reports[report.asset.role] = {}
+
+        if report.date in self.reports[report.asset.role]:
+            raise ValueError(
+                f"Duplicate report for {self.ticker=} {report.asset.role=} {report.date=}"
+            )
+
+        self.reports[report.asset.role][report.date] = report
+
+
 def load(path: Path) -> pd.DataFrame:
     """
     Load a LOB parquet file and perform preliminary checks
@@ -126,7 +146,7 @@ def load(path: Path) -> pd.DataFrame:
 
 
 def _normalize_timezone(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ) -> pd.DataFrame:
     assert isinstance(lob.index, pd.DatetimeIndex)
 
@@ -152,7 +172,7 @@ def _normalize_timezone(
 
 
 def _normalize_index(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ) -> pd.DataFrame:
     # Sort index
     if not lob.index.is_monotonic_increasing:
@@ -227,7 +247,7 @@ def _normalize_index(
 
 
 def _normalize_columns(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ) -> pd.DataFrame:
     expected = set(metadata.columns())
     present = set(lob.columns)
@@ -257,7 +277,7 @@ def _normalize_columns(
 
 
 def normalize(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ) -> pd.DataFrame:
     """
     LOB normalization pipeline:
@@ -292,7 +312,7 @@ def normalize(
 
 
 def _consistency_price_sign(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="price")
     for column, s in lob[columns].items():
@@ -311,7 +331,7 @@ def _consistency_price_sign(
 
 
 def _consistency_price_unit(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="price")
     for column, s in lob[columns].items():
@@ -331,7 +351,7 @@ def _consistency_price_unit(
 
 
 def _consistency_price_bid_order(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(sides="bid", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
@@ -354,7 +374,7 @@ def _consistency_price_bid_order(
 
 
 def _consistency_price_ask_order(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(sides="ask", column_types="price")
     for c1, c2 in zip(columns[:-1], columns[1:]):
@@ -377,7 +397,7 @@ def _consistency_price_ask_order(
 
 
 def _consistency_price_bid_ask_order(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     col_bid = metadata.column(level=1, side="bid", column_type="price")
     col_ask = metadata.column(level=1, side="ask", column_type="price")
@@ -402,7 +422,7 @@ def _consistency_price_bid_ask_order(
 
 
 def _consistency_price(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     _consistency_price_sign(lob, report, metadata, asset)
     _consistency_price_unit(lob, report, metadata, asset)
@@ -412,7 +432,7 @@ def _consistency_price(
 
 
 def _consistency_size_sign(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="size")
     for column, s in lob[columns].items():
@@ -431,7 +451,7 @@ def _consistency_size_sign(
 
 
 def _consistency_size_unit(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     columns = metadata.columns(column_types="size")
     for column, s in lob[columns].items():
@@ -450,14 +470,14 @@ def _consistency_size_unit(
 
 
 def _consistency_size(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     _consistency_size_sign(lob, report, metadata, asset)
     _consistency_size_unit(lob, report, metadata, asset)
 
 
 def _consistency_price_size(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     for level in metadata.levels:
         for side in metadata.sides:
@@ -477,7 +497,7 @@ def _consistency_price_size(
 
 
 def consistency(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     """
     LOB consistency pipeline:
@@ -505,7 +525,7 @@ def consistency(
 
 
 def _integrity_shape(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     n_rows, n_cols = lob.shape
 
@@ -519,7 +539,7 @@ def _integrity_shape(
 
 
 def _integrity_nans(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     na = lob.isna()
     info = {
@@ -581,7 +601,7 @@ def _integrity_nans(
 
 
 def _integrity_timestamps(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     valid = lob.notna()
     info = {
@@ -652,7 +672,7 @@ def _find_true_groups(s: pd.Series) -> list[tuple[pd.Timestamp, pd.Timestamp]] |
 
 
 def _integrity_gaps(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     na = lob.isna()
     info = {
@@ -684,7 +704,7 @@ def _integrity_gaps(
 
 
 def integrity(
-    lob: pd.DataFrame, report: LobReport, metadata: config.LobMetadata, asset: config.AssetConfig
+    lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     """
     LOB integrity pipeline:
@@ -722,7 +742,7 @@ def integrity(
     _integrity_gaps(lob, report, metadata, asset)
 
 
-def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetadata):
+def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig):
     """
     LOB preprocessing pipeline:
     * Load the parquet file to a DataFrame
@@ -748,3 +768,12 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobMetada
     integrity(lob, report, metadata, asset)
 
     return lob, report
+
+
+def foo(ticker: config.FutTicker, role: config.AssetRole, metadata: config.LobConfig):
+    """"""
+    asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
+    paths = lob_paths(ticker=ticker, role=role)
+
+    for path in paths:
+        lob, report = preprocess(path, asset, metadata)
