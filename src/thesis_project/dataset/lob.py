@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.utils.io import lob_paths
+from thesis_project.utils.io import list_lob_paths
 
 # TODO: test LobReportCollector
 # TODO: Add utilities to LobReportCollector
@@ -797,7 +797,7 @@ def preprocess_all_lobs(ticker: config.FutTicker, metadata: config.LobConfig) ->
     reports = LobReportCollector(ticker=ticker)
     for role in get_args(config.FutTicker):
         asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
-        paths = lob_paths(ticker=ticker, role=role)
+        paths = list_lob_paths(ticker=ticker, role=role)
 
         for path in paths:
             lob, report = preprocess(path, asset, metadata)
