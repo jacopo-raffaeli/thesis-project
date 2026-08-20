@@ -21,5 +21,9 @@ class AnalysisConfig:
     volume_mode: VolumeMode
 
     @property
+    def key(self) -> tuple[PriceMode, FutContractMode, VolumeMode]:
+        return (self.price_mode, self.fut_contract_mode, self.volume_mode)
+
+    @property
     def name(self) -> str:
         return f"{self.price_mode}_price_{self.fut_contract_mode}_contract_{self.volume_mode}_liquidity"
