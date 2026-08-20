@@ -34,6 +34,25 @@ SRC_THESIS_DIR = SRC_DIR / "thesis_project"
 
 
 # ==============================================================================
+# GENERAL
+# ==============================================================================
+
+# Standard financial naming conventions
+FutTicker = Literal["fbtp", "fbts"]
+AssetSymbol = Literal[FutTicker, "btp"]
+AssetFamily = Literal["bond", "future"]
+AssetRole = Literal["ctd", "fut"]
+
+# Standard LOB naming conventions
+LobSide = Literal["ask", "bid"]
+LobColumn = Literal["price", "size"]
+
+# Standard timeS for fut-ctd joint analysis
+STD_OPENING_TIME = time(9, 0)
+STD_CLOSING_TIME = time(17, 0)
+
+
+# ==============================================================================
 # MARKET CONFIG
 # ==============================================================================
 
@@ -75,11 +94,6 @@ MARKETS = {market.name: market for market in [MTS, EUREX]}
 # ==============================================================================
 # ASSET CONFIG
 # ==============================================================================
-
-FutTicker = Literal["fbtp", "fbts"]
-AssetSymbol = Literal[FutTicker, "btp"]
-AssetFamily = Literal["bond", "future"]
-AssetRole = Literal["ctd", "fut"]
 
 
 @dataclass(frozen=True)
@@ -156,9 +170,6 @@ ASSET_BY_TICKER_ROLE: dict[tuple[FutTicker, AssetRole], AssetConfig] = {
 # ==============================================================================
 # LOB METADATA
 # ==============================================================================
-
-LobSide = Literal["ask", "bid"]
-LobColumn = Literal["price", "size"]
 
 
 @dataclass(frozen=True)
@@ -287,10 +298,6 @@ FUT_MRKT_OPEN = time(8, 0)
 FUT_MRKT_CLOSE = time(19, 0)
 CTD_MRKT_OPEN = time(8, 0)
 CTD_MRKT_CLOSE = time(17, 30)
-
-# Common time settings for joint analysis
-START_TIME = time(9, 0)
-END_TIME = time(17, 0)
 
 # Year range
 FBTP_START_YEAR = 2022
