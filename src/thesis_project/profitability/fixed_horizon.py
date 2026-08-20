@@ -103,7 +103,7 @@ def run_fixed_horizon(analysis_config: FixedHorizonConfig) -> dict:
     analyses = {}
     summaries = {}
 
-    for analysis in tqdm(analysis_config.analyses):
+    for analysis in tqdm(analysis_config.analyses, desc="Analyses"):
         match analysis.fut_contract_mode:
             case "frac":
                 fut_contracts = fractional_fut_contracts
@@ -116,7 +116,7 @@ def run_fixed_horizon(analysis_config: FixedHorizonConfig) -> dict:
 
         horizon_analysis = {}
         key = analysis.key
-        for horizon in analysis_config.horizons:
+        for horizon in tqdm(analysis_config.horizons, desc="Horizons", leave=False):
             pnl = run_fixed_horizon_single(
                 horizon=horizon,
                 data=data,
