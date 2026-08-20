@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from thesis_project import config, utils
 from thesis_project.profitability import common, settings
@@ -10,13 +11,13 @@ from thesis_project.profitability import common, settings
 
 @dataclass(frozen=True)
 class FixedHorizonConfig:
-    min_time: datetime.time
-    max_time: datetime.time
     ticker: config.FutTicker
     ctd_contracts: int
     horizons: list[int]
     tolerance: int
     analyses: list[settings.AnalysisConfig]
+    min_time: datetime.time = config.STD_OPENING_TIME
+    max_time: datetime.time = config.STD_CLOSING_TIME
 
 
 def episode_pnl(
@@ -102,13 +103,16 @@ def run_fixed_horizon(analysis_config: FixedHorizonConfig) -> dict:
     analyses = {}
     summaries = {}
 
-    for analysis in analysis_config.analyses:
+    for analysis in tqdm(analysis_config.analyses):
         match analysis.fut_contract_mode:
             case "frac":
                 fut_contracts = fractional_fut_contracts
 
             case "round":
                 fut_contracts = rounded_fut_contracts
+
+            case _:
+                raise ValueError(f"Unkown {analysis.fut_contract_mode=}")
 
         horizon_analysis = {}
         key = analysis.key
@@ -137,8 +141,8 @@ def run_fixed_horizon(analysis_config: FixedHorizonConfig) -> dict:
     return {
         "fractional_fut_contracts": fractional_fut_contracts,
         "rounded_fut_contracts": rounded_fut_contracts,
-        "fractional_cf": cf,
-        "rounded_cf": common.compute_eff_cf(
+        "original_cf": cf,
+        "effective_cf": common.compute_eff_cf(
             analysis_config.ctd_contracts,
             rounded_fut_contracts,
         ),
