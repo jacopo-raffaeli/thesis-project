@@ -17,13 +17,9 @@ VolumeMode = Literal["ignore", "level", "lob"]
 @dataclass(frozen=True)
 class AnalysisConfig:
     price_mode: PriceMode
-    volume_mode: VolumeMode
+    volume_modes: tuple[VolumeMode, ...]
     fut_contract_mode: FutContractMode
 
     @property
-    def key(self) -> tuple[PriceMode, FutContractMode, VolumeMode]:
-        return (self.price_mode, self.fut_contract_mode, self.volume_mode)
-
-    @property
-    def name(self) -> str:
-        return f"{self.price_mode}_price_{self.fut_contract_mode}_contract_{self.volume_mode}_liquidity"
+    def key(self) -> tuple[PriceMode, FutContractMode]:
+        return (self.price_mode, self.fut_contract_mode)
