@@ -70,10 +70,12 @@ def load_volumes(
 
 def load_market_data(
     ticker: config.FutTicker, min_time: datetime.time, max_time: datetime.time
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> pd.DataFrame:
     prices = load_prices(ticker, min_time, max_time)
     volumes = load_volumes(ticker, min_time, max_time)
-    return prices, volumes
+    data = prices.join(volumes)
+
+    return data
 
 
 def naive_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
@@ -147,9 +149,9 @@ def compute_eff_cf(
 
 def execution_prices(
     data: pd.DataFrame,
-    price: settings.PriceMode,
+    price_mode: settings.PriceMode,
 ) -> dict[str, pd.Series]:
-    match price:
+    match price_mode:
         case "mid":
             return {
                 "ctd_bid_price": (data["ctd_bid_price"] + data["ctd_ask_price"]) / 2,
@@ -167,7 +169,7 @@ def execution_prices(
             }
 
         case _:
-            raise ValueError(f"Unknown {price=}")
+            raise ValueError(f"Unknown {price_mode=}")
 
 
 def execution_mask(
@@ -175,9 +177,9 @@ def execution_mask(
     fut_contracts: pd.Series,
     ctd_contracts: int,
     *,
-    liquidity: settings.LiquidityMode,
+    volume_mode: settings.VolumeMode,
 ) -> pd.DataFrame:
-    match liquidity:
+    match volume_mode:
         case "ignore":
             return pd.DataFrame(
                 {
@@ -206,7 +208,7 @@ def execution_mask(
             raise NotImplementedError
 
         case _:
-            raise ValueError(f"Unknown {liquidity=}")
+            raise ValueError(f"Unknown {volume_mode=}")
 
 
 # TODO: Move to utils
