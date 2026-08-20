@@ -34,6 +34,7 @@ def load_prices(
             .collect()
             .to_pandas()
             .set_index("timestamp")
+            .sort_index()
             .squeeze("columns")
         )
 
@@ -62,6 +63,7 @@ def load_volumes(
             .collect()
             .to_pandas()
             .set_index("timestamp")
+            .sort_index()
             .squeeze("columns")
         )
 
@@ -160,7 +162,7 @@ def execution_prices(
                 "fut_ask_price": (data["fut_bid_price"] + data["fut_ask_price"]) / 2,
             }
 
-        case "spread_enabled":
+        case "quoted":
             return {
                 "ctd_bid_price": data["ctd_bid_price"],
                 "ctd_ask_price": data["ctd_ask_price"],
