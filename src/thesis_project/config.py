@@ -6,6 +6,7 @@ from datetime import time
 from pathlib import Path
 from typing import ClassVar, Literal, get_args
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 # ==============================================================================
@@ -264,6 +265,17 @@ LOB = LobConfig(
     sides=("bid", "ask"),
     columns=("price", "size"),
 )
+
+
+# ==============================================================================
+# PLOTTING
+# ==============================================================================
+
+
+# Matplotlib global settings
+def default_plt():
+    plt.rcdefaults()
+    plt.style.use("seaborn-v0_8-paper")
 
 
 # ==============================================================================
