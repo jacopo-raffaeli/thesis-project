@@ -166,7 +166,7 @@ def list_lob_paths_role(
                 if config.LOB.filename_re.fullmatch(path.name):
                     paths.append(path)
 
-    return paths
+    return sorted(paths)
 
 
 def list_lob_paths_ticker(
@@ -186,7 +186,7 @@ def list_lob_paths_ticker(
     for role in get_args(config.AssetRole):
         paths.extend(list_lob_paths_role(root=root, ticker=ticker, role=role))
 
-    return paths
+    return sorted(paths)
 
 
 def list_lob_paths(
