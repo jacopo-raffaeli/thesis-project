@@ -48,8 +48,8 @@ LobSide = Literal["ask", "bid"]
 LobColumn = Literal["price", "size"]
 
 # Standard timeS for fut-ctd joint analysis
-STD_OPENING_TIME = time(9, 0)
-STD_CLOSING_TIME = time(17, 0)
+STD_OPENING_TIME = time(9, 0, 0)
+STD_CLOSING_TIME = time(17, 0, 0)
 
 
 # ==============================================================================
