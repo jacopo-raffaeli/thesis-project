@@ -176,7 +176,6 @@ def execution_mask(
     data: pd.DataFrame,
     fut_contracts: pd.Series,
     ctd_contracts: int,
-    *,
     volume_mode: settings.VolumeMode,
 ) -> pd.DataFrame:
     match volume_mode:
