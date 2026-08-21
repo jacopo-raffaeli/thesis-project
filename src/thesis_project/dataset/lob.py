@@ -365,7 +365,7 @@ def normalize(
 
     if report.has_normalization_records:
         logger.warning(
-            "LOB normalization corrections: asset=%s, date=%s, records=%d",
+            "- LOB normalization corrections: asset=%s, date=%s, records=%d",
             asset.symbol,
             report.date,
             len(report.normalization),
@@ -588,7 +588,7 @@ def consistency(
 
     if report.has_consistency_records:
         logger.warning(
-            "LOB consistency issues: asset=%s, date=%s, records=%d",
+            "- LOB consistency issues: asset=%s, date=%s, records=%d",
             asset.symbol,
             report.date,
             len(report.consistency),
@@ -840,7 +840,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     integrity(lob, report, metadata, asset)
 
     logger.debug(
-        "LOB preprocessed: asset=%s, date=%s, rows=%d, columns=%d",
+        "- LOB preprocessed: asset=%s, date=%s, rows=%d, columns=%d",
         asset.symbol,
         report.date,
         len(lob),
