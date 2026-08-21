@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
 
 from thesis_project import config, utils
 from thesis_project.profitability import common, settings
@@ -14,8 +13,8 @@ class FixedProfitConfig:
     ticker: config.FutTicker
     ctd_contracts: int
     profits: list[float]
+    max_holding_time: int | None
     analyses: list[settings.AnalysisConfig]
-    max_holding_time: int | None = None
     min_time: datetime.time = config.STD_OPENING_TIME
     max_time: datetime.time = config.STD_CLOSING_TIME
 
@@ -133,11 +132,7 @@ def run_fixed_profit_single(
     short_time_to_profit = np.full(n, np.nan)
     short_mae = np.full(n, np.nan)
 
-    for session_start, session_end in tqdm(
-        session_bounds(index),
-        desc="Sessions",
-        leave=False,
-    ):
+    for session_start, session_end in session_bounds(index):
         session_times = index[session_start : session_end + 1]
         session_length = len(session_times)
 
@@ -256,10 +251,7 @@ def run_fixed_profit(
     analyses = {}
     summaries = {}
 
-    for analysis in tqdm(
-        analysis_config.analyses,
-        desc="Analyses",
-    ):
+    for analysis in analysis_config.analyses:
         match analysis.fut_contract_mode:
             case "frac":
                 fut_contracts = fractional_fut_contracts
@@ -278,11 +270,7 @@ def run_fixed_profit(
         for volume_mode in analysis.volume_modes:
             profit_analysis = {}
 
-            for profit in tqdm(
-                analysis_config.profits,
-                desc=f"Profits ({volume_mode})",
-                leave=False,
-            ):
+            for profit in analysis_config.profits:
                 profit_analysis[profit] = run_fixed_profit_single(
                     data=data,
                     fut_contracts=fut_contracts,
@@ -348,3 +336,32 @@ def summarize_fixed_profit(
     summary.index.names = ["profit", "direction"]
 
     return summary
+
+
+def main():
+    from thesis_project.profitability import (
+        fixed_profit,
+        settings,
+    )
+
+    ANALYSES = [
+        settings.AnalysisConfig(
+            price_mode="mid", volume_modes=("ignore", "level"), fut_contract_mode="frac"
+        ),
+    ]
+
+    CONFIG = fixed_profit.FixedProfitConfig(
+        ticker="fbtp",
+        ctd_contracts=1,
+        profits=[
+            100,
+        ],
+        max_holding_time=None,
+        analyses=ANALYSES,
+    )
+
+    fixed_profit.run_fixed_profit(CONFIG)
+
+
+if __name__ == "__main__":
+    main()
