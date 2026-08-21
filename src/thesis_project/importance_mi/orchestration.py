@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
-from tqdm_joblib import tqdm_joblib
 
 from thesis_project import config as global_config
 
@@ -370,7 +369,7 @@ def run_analysis(config: AnalysisConfig) -> pd.DataFrame:
             results.append(result)
     else:
         logger.info("Running in parallel mode (n_jobs=%s)", config.n_jobs)
-        with tqdm_joblib(
+        with tqdm(
             total=len(tasks),
             desc="Computing metrics",
             unit="tuple",
