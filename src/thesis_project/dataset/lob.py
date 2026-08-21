@@ -1,4 +1,5 @@
 import datetime
+import logging
 import pickle as pkl
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -6,8 +7,12 @@ from typing import Any, Literal, get_args
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 from thesis_project import config, utils
+
+logger = logging.getLogger(__name__)
+
 
 # TODO: Add utilities to LobReportCollector
 # TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
@@ -149,6 +154,8 @@ def load(path: Path) -> pd.DataFrame:
 
     if lob.empty:
         raise ValueError("The LOB is empty")
+
+    logger.debug("LOB loaded: name=%s, rows=%d, columns=%d", path.name, len(lob), len(lob.columns))
 
     return lob
 
@@ -356,6 +363,14 @@ def normalize(
     lob = _normalize_timezone(lob, report, metadata, asset)
     lob = _normalize_index(lob, report, metadata, asset)
     lob = _normalize_columns(lob, report, metadata, asset)
+
+    if report.has_normalization_records:
+        logger.warning(
+            "LOB normalization corrections: asset=%s, date=%s, records=%d",
+            asset.symbol,
+            report.date,
+            len(report.normalization),
+        )
 
     return lob
 
@@ -571,6 +586,14 @@ def consistency(
     _consistency_price(lob, report, metadata, asset)
     _consistency_size(lob, report, metadata, asset)
     _consistency_price_size(lob, report, metadata, asset)
+
+    if report.has_consistency_records:
+        logger.warning(
+            "LOB consistency issues: asset=%s, date=%s, records=%d",
+            asset.symbol,
+            report.date,
+            len(report.consistency),
+        )
 
 
 def _integrity_shape(
@@ -817,6 +840,14 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     consistency(lob, report, metadata, asset)
     integrity(lob, report, metadata, asset)
 
+    logger.debug(
+        "LOB preprocessed: asset=%s, date=%s, rows=%d, columns=%d",
+        asset.symbol,
+        report.date,
+        len(lob),
+        len(lob.columns),
+    )
+
     return lob, report
 
 
@@ -841,7 +872,7 @@ def preprocess_all_lobs(
         asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
         raw_paths = utils.io.list_lob_paths(root=config.DATA_RAW_DIR, ticker=ticker, role=role)
 
-        for raw_path in raw_paths:
+        for raw_path in tqdm(raw_paths, desc=f"LOBs {ticker=} {role=}"):
             # Run preprocessing
             lob, report = preprocess(raw_path, asset, metadata)
 
