@@ -1,3 +1,10 @@
+"""
+Script to download raw LOB data from DEIB server
+
+## Args:
+* path: destionation path
+"""
+
 import argparse
 import getpass
 import os
@@ -13,14 +20,15 @@ import paramiko
 
 SERVER = "131.175.120.196"
 USERNAME = "trading"
+ROOT = f"/home/{USERNAME}"
 
 # Files/folders on the remote server to copy.
 # Use Linux-style paths here, because these are paths on the SSH server.
 REMOTE_ITEMS = [
-    "/home/trading/data_jacopo/cache_FBTP.zip",
-    "/home/trading/data_jacopo/new_cache_FBTP.zip",
-    "/home/trading/data_jacopo/cache_FBTS.zip",
-    "/home/trading/data_jacopo/new_cache_FBTS.zip",
+    f"{ROOT}/data_jacopo/cache_FBTP.zip",
+    f"{ROOT}/data_jacopo/new_cache_FBTP.zip",
+    f"{ROOT}/data_jacopo/cache_FBTS.zip",
+    f"{ROOT}/data_jacopo/new_cache_FBTS.zip",
 ]
 
 
@@ -138,6 +146,10 @@ def extract_zip(zip_path, destination):
                     relative_path = normalized[len(prefix) :]
 
                     if not relative_path:
+                        continue
+
+                    # There are some garbage nested .zip to filter out
+                    if not relative_path.lower().endswith(".parquet"):
                         continue
 
                     target_path = os.path.join(destination, *relative_path.split("/"))
