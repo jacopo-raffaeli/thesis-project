@@ -1,11 +1,11 @@
 import pandas as pd
 from pandas.api.typing import SeriesGroupBy
 
-from thesis_project.rl_trading.data import BASE_FEATURES, BaseFeature
+from thesis_project.dataset.data import BASE_FEATURES, BaseFeature
+from thesis_project.dataset.features import FeatureSpec
 from thesis_project.rl_trading.dataset_config import DatasetConfig
 from thesis_project.rl_trading.env import RLDataset
 from thesis_project.rl_trading.env_config import EnvConfig
-from thesis_project.rl_trading.features import FeatureSpec
 
 
 def _validate_feature_specs(feature_specs: list[FeatureSpec]):
@@ -129,6 +129,62 @@ def build_spec(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]
     return transformed
 
 
+def build_spec_pl(config: DatasetConfig, spec: FeatureSpec) -> dict[str, pd.Series]:
+    from datetime import time
+
+    import polars as pl
+
+    excluded = [d.date() for d in config.dates_to_exclude]
+    lookback = spec.max_lag + spec.max_lookback
+    min_time, max_time = config.get_preprocessing_interval(lookback)
+    min_time = time.fromisoformat(min_time)
+    max_time = time.fromisoformat(max_time)
+    base = BASE_FEATURES[spec.base_id]
+
+    df = (
+        pl.scan_parquet(base.path)
+        .filter(~pl.col("timestamp").dt.date().is_in(excluded))
+        .filter(pl.col("timestamp").dt.time().is_between(min_time, max_time))
+        .collect()
+    )
+
+    df = df.to_pandas()
+    df = df.set_index("timestamp")
+
+    if df.empty:
+        raise ValueError(f"BaseFeature '{base.base_id}': empty DataFrame")
+
+    if df.shape[1] != 1:
+        raise ValueError(
+            f"BaseFeature '{base.base_id}': expected 1 column DataFrame, found {df.shape[1]} columns instead"
+        )
+
+    s = df.squeeze("columns")
+    assert isinstance(s, pd.Series)
+    _validate_series(s)
+
+    s = s.rename(base.base_id)
+
+    if not s.index.is_monotonic_increasing:
+        s = s.sort_index()
+
+    if s.empty:
+        raise ValueError("The Series is empty")
+
+    # Create and validate group
+    assert isinstance(s, pd.Series)
+    assert isinstance(s.index, pd.DatetimeIndex)
+    g = s.groupby(s.index.floor(freq="D"))
+    _validate_grouped(g)
+
+    # Compute transforms
+    transformed = {}
+    for transform in spec.transforms:
+        transformed.update(transform.transform(s, g, spec.base_id))
+
+    return transformed
+
+
 def build_features_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> pd.DataFrame:
     _validate_feature_specs(specs)
 
@@ -136,6 +192,23 @@ def build_features_dataset(config: DatasetConfig, specs: list[FeatureSpec]) -> p
     # TODO: Implement parallel version
     for spec in specs:
         transformed.update(build_spec(config, spec))
+
+    df = pd.DataFrame(transformed)
+    df = df.between_time(config.min_time, config.max_time)
+
+    if df.empty:
+        raise ValueError("The DataFrame is empty")
+
+    return df
+
+
+def build_features_dataset_pl(config: DatasetConfig, specs: list[FeatureSpec]) -> pd.DataFrame:
+    _validate_feature_specs(specs)
+
+    transformed = {}
+    # TODO: Implement parallel version
+    for spec in specs:
+        transformed.update(build_spec_pl(config, spec))
 
     df = pd.DataFrame(transformed)
     df = df.between_time(config.min_time, config.max_time)

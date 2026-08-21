@@ -4,18 +4,18 @@ from typing import Iterable
 
 import pandas as pd
 
-from thesis_project import config as global_config
+from thesis_project import config
 
 
 @dataclass(frozen=True)
 class DatasetConfig:
-    ticker: str
+    ticker: config.FutTicker
 
     min_time: str = "09:00:00"
     max_time: str = "17:00:00"
 
-    min_time_data: str = str(global_config.CTD_MRKT_OPEN)
-    max_time_data: str = str(global_config.CTD_MRKT_CLOSE)
+    min_time_data: str = str(config.CTD_MRKT_OPEN)
+    max_time_data: str = str(config.CTD_MRKT_CLOSE)
 
     offsets: dict[str, tuple[int, int]] = field(
         default_factory=lambda: {"fut_last_trading_days": (5, 0)}
@@ -23,7 +23,7 @@ class DatasetConfig:
     dates_to_exclude: set[pd.Timestamp] = field(init=False)
 
     def __post_init__(self):
-        if self.ticker not in global_config.VALID_TICKERS:
+        if self.ticker not in config.VALID_TICKERS:
             raise ValueError("Ticker is not valid")
 
         _validate_time(self.min_time)
@@ -33,7 +33,7 @@ class DatasetConfig:
             raise ValueError("min_time must be earlier than max_time")
 
         for key in self.offsets:
-            if key not in global_config.DATES_TO_EXCLUDE[self.ticker]:
+            if key not in config.DATES_TO_EXCLUDE[self.ticker]:
                 raise ValueError(f"Offset {key} not found")
 
         object.__setattr__(
@@ -65,7 +65,7 @@ def _validate_time(time: str) -> None:
 def load_dates_to_exclude(ticker: str) -> dict[str, set[pd.Timestamp]]:
     """ """
     out = {}
-    for key, dates in global_config.DATES_TO_EXCLUDE[ticker].items():
+    for key, dates in config.DATES_TO_EXCLUDE[ticker].items():
         out[key] = {pd.Timestamp(d).normalize() for d in dates}
 
     return out
