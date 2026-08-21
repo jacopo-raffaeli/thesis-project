@@ -191,12 +191,12 @@ def list_lob_paths_ticker(
 
 def list_lob_paths(
     *,
-    root: Path = config.DATA_RAW_DIR,
+    root: Path,
     ticker: config.FutTicker,
     role: config.AssetRole | None = None,
 ) -> list[Path]:
     """
-    Iterate data/raw/ticker/Optional[role] and collect all the lob paths
+    Iterate data/{raw|processed}/ticker/Optional[role] and collect all the lob paths
 
     ## Args:
     * root: Data root folder
