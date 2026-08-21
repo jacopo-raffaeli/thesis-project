@@ -150,6 +150,7 @@ def extract_zip(zip_path, destination):
 
                     # There are some garbage nested .zip to filter out
                     if not relative_path.lower().endswith(".parquet"):
+                        print(f"  Skipping non-parquet member: {member}")
                         continue
 
                     target_path = os.path.join(destination, *relative_path.split("/"))
