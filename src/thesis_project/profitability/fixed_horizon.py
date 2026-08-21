@@ -151,7 +151,7 @@ def run_fixed_horizon(
 
             for horizon in tqdm(
                 analysis_config.horizons,
-                desc=f"Horizons ({volume_mode})",
+                desc=f"Horizons ({volume_mode=})",
                 leave=False,
             ):
                 pnl = run_fixed_horizon_single(
