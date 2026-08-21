@@ -1,4 +1,5 @@
 import datetime
+import pickle as pkl
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, get_args
@@ -7,11 +8,8 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.utils.io import list_lob_paths
 
-# TODO: test LobReportCollector
 # TODO: Add utilities to LobReportCollector
-# TODO: Add utilities to save/load the reports
 # TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
 # TODO: Write a plots/lob.py function for visualizing lob and lob reports
 
@@ -152,10 +150,48 @@ def load(path: Path) -> pd.DataFrame:
     if lob.empty:
         raise ValueError("The LOB is empty")
 
-    if not isinstance(lob.index, pd.DatetimeIndex):
-        raise TypeError("The LOB index is not a DatetimeIndex")
-
     return lob
+
+
+def set_index(lob: pd.DataFrame, metadata: config.LobConfig) -> pd.DataFrame:
+    # Case 1:
+    # We already have a DatetimeIndex set
+    # We set the default name whichever is the actual one
+    if isinstance(lob.index, pd.DatetimeIndex):
+        lob = lob.rename_axis(metadata.index_name)
+        return lob
+
+    CANDIDATES = ("timestamp", "Date-Time")
+    present = [c for c in CANDIDATES if c in lob.columns]
+
+    if not present:
+        raise ValueError(
+            "The LOB has neither a DatetimeIndex nor a timestamp column. "
+            f"Expected one of: {', '.join(CANDIDATES)}"
+        )
+
+    if len(present) > 1:
+        raise ValueError(f"The LOB contains multiple timestamp candidates: {present}")
+
+    column = present[0]
+    try:
+        index = pd.DatetimeIndex(pd.to_datetime(lob[column]))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Could not convert LOB timestamp column {column!r} to datetime") from exc
+
+    if not isinstance(index, pd.DatetimeIndex):
+        raise TypeError(f"Timestamp column {column!r} did not produce a DatetimeIndex")
+
+    print("SET_INDEX FILE:", __file__)
+    print("COLUMN:", column)
+    print("BEFORE DROP:", lob.columns.tolist())
+
+    lob = lob.drop(columns=column)
+
+    print("AFTER DROP:", lob.columns.tolist())
+
+    lob.index = index
+    return lob.rename_axis(metadata.index_name)
 
 
 def _normalize_timezone(
@@ -776,6 +812,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     report = LobReport(date, asset)
 
     lob = load(path)
+    lob = set_index(lob, metadata)
     lob = normalize(lob, report, metadata, asset)
     consistency(lob, report, metadata, asset)
     integrity(lob, report, metadata, asset)
@@ -783,9 +820,14 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     return lob, report
 
 
-def preprocess_all_lobs(ticker: config.FutTicker, metadata: config.LobConfig) -> LobReportCollector:
+def preprocess_all_lobs(
+    *, ticker: config.FutTicker, metadata: config.LobConfig = config.LOB
+) -> LobReportCollector:
     """
-    Preprocess and save back all lobs inside data/raw/ticker
+    Preprocess all raw LOBs for a ticker and save them to processed/.
+
+    A LobReportCollector containing the reports for all processed LOBs
+    is also saved alongside the processed LOB data.
 
     ## Args:
     * ticker: FutTicker literal
@@ -795,13 +837,39 @@ def preprocess_all_lobs(ticker: config.FutTicker, metadata: config.LobConfig) ->
     * reports: LobReportCollector object
     """
     reports = LobReportCollector(ticker=ticker)
-    for role in get_args(config.FutTicker):
+    for role in get_args(config.AssetRole):
         asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
-        paths = list_lob_paths(ticker=ticker, role=role)
+        raw_paths = utils.io.list_lob_paths(root=config.DATA_RAW_DIR, ticker=ticker, role=role)
 
-        for path in paths:
-            lob, report = preprocess(path, asset, metadata)
+        for raw_path in raw_paths:
+            # Run preprocessing
+            lob, report = preprocess(raw_path, asset, metadata)
+
+            # Save lob to preprocessed/ twin path
+            pro_path = config.DATA_PRO_DIR / raw_path.relative_to(config.DATA_RAW_DIR)
+            pro_path.parent.mkdir(parents=True, exist_ok=True)
+            lob.to_parquet(pro_path)
+
+            # Add to report collection
             reports.add(report)
-            lob.to_parquet(path)
+
+    # Save report colletion
+    save_lob_reports(reports, ticker)
 
     return reports
+
+
+def save_lob_reports(reports: LobReportCollector, ticker: config.FutTicker):
+    path = config.DATA_PRO_DIR / ticker
+    path.mkdir(parents=True, exist_ok=True)
+    path = path / "lob_reports.pkl"
+
+    with path.open("wb") as f:
+        pkl.dump(reports, f)
+
+
+def load_lob_reports(ticker: config.FutTicker) -> LobReportCollector:
+    path = config.DATA_PRO_DIR / ticker / "lob_reports.pkl"
+
+    with path.open("rb") as f:
+        return pkl.load(f)
