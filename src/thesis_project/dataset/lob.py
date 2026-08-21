@@ -7,7 +7,6 @@ from typing import Any, Literal, get_args
 
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
 
 from thesis_project import config, utils
 
@@ -872,7 +871,7 @@ def preprocess_all_lobs(
         asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
         raw_paths = utils.io.list_lob_paths(root=config.DATA_RAW_DIR, ticker=ticker, role=role)
 
-        for raw_path in tqdm(raw_paths, desc=f"LOBs {ticker=} {role=}"):
+        for raw_path in raw_paths:
             # Run preprocessing
             lob, report = preprocess(raw_path, asset, metadata)
 
