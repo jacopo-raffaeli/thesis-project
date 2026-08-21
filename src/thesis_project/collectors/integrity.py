@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 
 from thesis_project import config as global_config
-from thesis_project.utils.dates import filename_to_date
+from thesis_project.utils.io import filename_to_date
 
 
 def collect_empty_lobs(
