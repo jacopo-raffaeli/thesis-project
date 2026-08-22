@@ -1,8 +1,10 @@
 import datetime
+import pickle as pkl
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 
 from thesis_project import config, utils
 from thesis_project.profitability import common, settings
@@ -14,6 +16,7 @@ class FixedProfitConfig:
     ctd_contracts: int
     profits: list[float]
     max_holding_time: int | None
+    n_jobs: int
     analyses: list[settings.AnalysisConfig]
     min_time: datetime.time = config.STD_OPENING_TIME
     max_time: datetime.time = config.STD_CLOSING_TIME
@@ -25,21 +28,18 @@ def session_bounds(
     if len(index) == 0:
         return []
 
-    bounds = []
-    start = 0
+    gaps = index[1:] - index[:-1]
+    session_starts = np.flatnonzero(gaps > settings.SAMPLING_INTERVAL) + 1
 
-    for i in range(1, len(index)):
-        if index[i] - index[i - 1] > settings.SAMPLING_INTERVAL:
-            bounds.append((start, i - 1))
-            start = i
+    starts = np.r_[0, session_starts]
+    ends = np.r_[session_starts - 1, len(index) - 1]
 
-    bounds.append((start, len(index) - 1))
-
-    return bounds
+    return list(zip(starts, ends))
 
 
 def pnl_metrics_from_path(
     path: np.ndarray,
+    exit_allowed: np.ndarray,
     profit: float,
     entry_time: pd.Timestamp,
     path_times: pd.DatetimeIndex,
@@ -49,23 +49,22 @@ def pnl_metrics_from_path(
     if not valid.any():
         return False, np.nan, np.nan
 
-    valid_path = path[valid]
-    valid_times = path_times[valid]
+    executable = valid & exit_allowed
 
-    hits = np.flatnonzero(valid_path >= profit)
+    hits = np.flatnonzero(executable & (path >= profit))
 
     if len(hits) == 0:
-        mae = max(0.0, float(-np.min(valid_path)))
+        mae = max(0.0, float(-np.min(path[valid])))
         return False, np.nan, mae
 
     hit_pos = hits[0]
 
     mae = max(
         0.0,
-        float(-np.min(valid_path[: hit_pos + 1])),
+        float(-np.min(path[valid][: hit_pos + 1])),
     )
 
-    time_to_profit = (valid_times[hit_pos] - entry_time).total_seconds()
+    time_to_profit = (path_times[hit_pos] - entry_time).total_seconds()
 
     return True, time_to_profit, mae
 
@@ -93,15 +92,25 @@ def run_fixed_profit_single(
     index = data.index
     n = len(index)
 
-    entry_mask = common.execution_mask(
+    entry_mask = common.entry_execution_mask(
         data,
         fut_contracts,
         ctd_contracts,
         volume_mode,
     )
 
-    long_allowed = entry_mask["long"].to_numpy(dtype=bool)
-    short_allowed = entry_mask["short"].to_numpy(dtype=bool)
+    exit_mask = common.exit_execution_mask(
+        data,
+        fut_contracts,
+        ctd_contracts,
+        volume_mode,
+    )
+
+    long_entry_allowed = entry_mask["long"].to_numpy(dtype=bool)
+    short_entry_allowed = entry_mask["short"].to_numpy(dtype=bool)
+
+    long_exit_allowed = exit_mask["long"].to_numpy(dtype=bool)
+    short_exit_allowed = exit_mask["short"].to_numpy(dtype=bool)
 
     ctd_bid = prices["ctd_bid_price"].to_numpy(dtype=float)
     ctd_ask = prices["ctd_ask_price"].to_numpy(dtype=float)
@@ -112,16 +121,16 @@ def run_fixed_profit_single(
     ctd_scale = ctd_contracts * settings.CTD_FACE_VALUE / 100
     fut_scale = fut_n * settings.FUT_FACE_VALUE / 100
 
-    # PnL of an open long-basis position marked at the current prices.
+    # PnL of an open long-basis position marked at the current prices
     long_mark = ctd_scale * ctd_bid - fut_scale * fut_ask
 
-    # Entry cash flow of a long-basis position.
+    # Entry cash flow of a long-basis position
     long_entry = fut_scale * fut_bid - ctd_scale * ctd_ask
 
-    # PnL of an open short-basis position marked at the current prices.
+    # PnL of an open short-basis position marked at the current prices
     short_mark = fut_scale * fut_bid - ctd_scale * ctd_ask
 
-    # Entry cash flow of a short-basis position.
+    # Entry cash flow of a short-basis position
     short_entry = ctd_scale * ctd_bid - fut_scale * fut_ask
 
     long_profit_hit = np.zeros(n, dtype=bool)
@@ -145,8 +154,11 @@ def run_fixed_profit_single(
         session_short_mark = short_mark[session_start : session_end + 1]
         session_short_entry = short_entry[session_start : session_end + 1]
 
-        session_long_allowed = long_allowed[session_start : session_end + 1]
-        session_short_allowed = short_allowed[session_start : session_end + 1]
+        session_long_entry_allowed = long_entry_allowed[session_start : session_end + 1]
+        session_short_entry_allowed = short_entry_allowed[session_start : session_end + 1]
+
+        session_long_exit_allowed = long_exit_allowed[session_start : session_end + 1]
+        session_short_exit_allowed = short_exit_allowed[session_start : session_end + 1]
 
         if max_holding_time is None:
             end_positions = np.full(
@@ -167,7 +179,7 @@ def run_fixed_profit_single(
             )
 
         for i in range(session_length - 1):
-            if not session_long_allowed[i] and not session_short_allowed[i]:
+            if not session_long_entry_allowed[i] and not session_short_entry_allowed[i]:
                 continue
 
             end = end_positions[i]
@@ -180,11 +192,14 @@ def run_fixed_profit_single(
 
             path_times = session_times[path_start:path_end]
 
-            if session_long_allowed[i]:
+            if session_long_entry_allowed[i]:
                 long_path = session_long_mark[path_start:path_end] + session_long_entry[i]
+
+                long_exit_allowed = session_long_exit_allowed[path_start:path_end]
 
                 hit, time_to_profit, mae = pnl_metrics_from_path(
                     long_path,
+                    long_exit_allowed,
                     profit,
                     session_times[i],
                     path_times,
@@ -192,16 +207,18 @@ def run_fixed_profit_single(
 
                 if hit:
                     position = session_start + i
-
                     long_profit_hit[position] = True
                     long_time_to_profit[position] = time_to_profit
                     long_mae[position] = mae
 
-            if session_short_allowed[i]:
+            if session_short_entry_allowed[i]:
                 short_path = session_short_mark[path_start:path_end] + session_short_entry[i]
+
+                short_exit_allowed = session_short_exit_allowed[path_start:path_end]
 
                 hit, time_to_profit, mae = pnl_metrics_from_path(
                     short_path,
+                    short_exit_allowed,
                     profit,
                     session_times[i],
                     path_times,
@@ -209,7 +226,6 @@ def run_fixed_profit_single(
 
                 if hit:
                     position = session_start + i
-
                     short_profit_hit[position] = True
                     short_time_to_profit[position] = time_to_profit
                     short_mae[position] = mae
@@ -227,9 +243,52 @@ def run_fixed_profit_single(
     )
 
 
+def run_analysis(
+    analysis: settings.AnalysisConfig,
+    analysis_config: FixedProfitConfig,
+    data: pd.DataFrame,
+    fractional_fut_contracts: pd.Series,
+    rounded_fut_contracts: pd.Series,
+) -> tuple[tuple[settings.PriceMode, settings.FutContractMode], dict, dict]:
+    match analysis.fut_contract_mode:
+        case "frac":
+            fut_contracts = fractional_fut_contracts
+        case "round":
+            fut_contracts = rounded_fut_contracts
+        case _:
+            raise ValueError(f"Unknown {analysis.fut_contract_mode=}")
+
+    profit_analysis_by_volume = {}
+    summaries_by_volume = {}
+
+    for volume_mode in analysis.volume_modes:
+        profit_analysis = {}
+        for profit in analysis_config.profits:
+            profit_analysis[profit] = run_fixed_profit_single(
+                data=data,
+                fut_contracts=fut_contracts,
+                profit=profit,
+                max_holding_time=analysis_config.max_holding_time,
+                ctd_contracts=analysis_config.ctd_contracts,
+                price_mode=analysis.price_mode,
+                volume_mode=volume_mode,
+            )
+
+        profit_analysis_by_volume[volume_mode] = profit_analysis
+        summaries_by_volume[volume_mode] = summarize_fixed_profit(
+            profit_analysis,
+        )
+
+    return (
+        analysis.key,
+        profit_analysis_by_volume,
+        summaries_by_volume,
+    )
+
+
 def run_fixed_profit(
     analysis_config: FixedProfitConfig,
-) -> dict:
+):
     data = common.load_market_data(
         ticker=analysis_config.ticker,
         min_time=analysis_config.min_time,
@@ -248,55 +307,31 @@ def run_fixed_profit(
         fractional_fut_contracts,
     )
 
-    analyses = {}
-    summaries = {}
+    results = Parallel(
+        n_jobs=analysis_config.n_jobs,
+        backend="loky",
+    )(
+        delayed(run_analysis)(
+            analysis, analysis_config, data, fractional_fut_contracts, rounded_fut_contracts
+        )
+        for analysis in analysis_config.analyses
+    )
 
-    for analysis in analysis_config.analyses:
-        match analysis.fut_contract_mode:
-            case "frac":
-                fut_contracts = fractional_fut_contracts
+    for key, profit_analysis, summary in results:
+        experiment = {
+            "config": analysis_config,
+            "fractional_fut_contracts": fractional_fut_contracts,
+            "rounded_fut_contracts": rounded_fut_contracts,
+            "original_cf": cf,
+            "effective_cf": common.compute_eff_cf(
+                analysis_config.ctd_contracts,
+                rounded_fut_contracts,
+            ),
+            "analyses": profit_analysis,
+            "summaries": summary,
+        }
 
-            case "round":
-                fut_contracts = rounded_fut_contracts
-
-            case _:
-                raise ValueError(f"Unknown {analysis.fut_contract_mode=}")
-
-        key = analysis.key
-
-        analyses[key] = {}
-        summaries[key] = {}
-
-        for volume_mode in analysis.volume_modes:
-            profit_analysis = {}
-
-            for profit in analysis_config.profits:
-                profit_analysis[profit] = run_fixed_profit_single(
-                    data=data,
-                    fut_contracts=fut_contracts,
-                    profit=profit,
-                    max_holding_time=analysis_config.max_holding_time,
-                    ctd_contracts=analysis_config.ctd_contracts,
-                    price_mode=analysis.price_mode,
-                    volume_mode=volume_mode,
-                )
-
-            analyses[key][volume_mode] = profit_analysis
-            summaries[key][volume_mode] = summarize_fixed_profit(
-                profit_analysis,
-            )
-
-    return {
-        "fractional_fut_contracts": fractional_fut_contracts,
-        "rounded_fut_contracts": rounded_fut_contracts,
-        "original_cf": cf,
-        "effective_cf": common.compute_eff_cf(
-            analysis_config.ctd_contracts,
-            rounded_fut_contracts,
-        ),
-        "analyses": analyses,
-        "summaries": summaries,
-    }
+        save_experiment(experiment, analysis_config.ticker, key[0], key[1])
 
 
 def summarize_fixed_profit(
@@ -338,30 +373,35 @@ def summarize_fixed_profit(
     return summary
 
 
-def main():
-    from thesis_project.profitability import (
-        fixed_profit,
-        settings,
+def save_experiment(
+    experiment,
+    ticker: config.FutTicker,
+    price: settings.PriceMode,
+    contract: settings.FutContractMode,
+):
+    path = (
+        config.RES_EXP_DIR
+        / ticker
+        / "profitability"
+        / "fixed_profit"
+        / f"{price}_price_{contract}_contract.pkl"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("wb") as f:
+        pkl.dump(experiment, f)
+
+
+def load_experiment(
+    ticker: config.FutTicker, price: settings.PriceMode, contract: settings.FutContractMode
+):
+    path = (
+        config.RES_EXP_DIR
+        / ticker
+        / "profitability"
+        / "fixed_profit"
+        / f"{price}_price_{contract}_contract.pkl"
     )
 
-    ANALYSES = [
-        settings.AnalysisConfig(
-            price_mode="mid", volume_modes=("ignore", "level"), fut_contract_mode="frac"
-        ),
-    ]
-
-    CONFIG = fixed_profit.FixedProfitConfig(
-        ticker="fbtp",
-        ctd_contracts=1,
-        profits=[
-            100,
-        ],
-        max_holding_time=None,
-        analyses=ANALYSES,
-    )
-
-    fixed_profit.run_fixed_profit(CONFIG)
-
-
-if __name__ == "__main__":
-    main()
+    with path.open("rb") as f:
+        return pkl.load(f)
