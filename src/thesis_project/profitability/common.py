@@ -174,7 +174,7 @@ def execution_prices(
             raise ValueError(f"Unknown {price_mode=}")
 
 
-def execution_mask(
+def entry_execution_mask(
     data: pd.DataFrame,
     fut_contracts: pd.Series,
     ctd_contracts: int,
@@ -212,7 +212,44 @@ def execution_mask(
             raise ValueError(f"Unknown {volume_mode=}")
 
 
-# TODO: Move to utils
+def exit_execution_mask(
+    data: pd.DataFrame,
+    fut_contracts: pd.Series,
+    ctd_contracts: int,
+    volume_mode: settings.VolumeMode,
+) -> pd.DataFrame:
+    match volume_mode:
+        case "ignore":
+            return pd.DataFrame(
+                {
+                    "long": True,
+                    "short": True,
+                },
+                index=data.index,
+            )
+
+        case "level":
+            return pd.DataFrame(
+                {
+                    "long": (
+                        (data["ctd_bid_size"] >= ctd_contracts)
+                        & (data["fut_ask_size"] >= fut_contracts)
+                    ),
+                    "short": (
+                        (data["ctd_ask_size"] >= ctd_contracts)
+                        & (data["fut_bid_size"] >= fut_contracts)
+                    ),
+                },
+                index=data.index,
+            )
+
+        case "lob":
+            raise NotImplementedError
+
+        case _:
+            raise ValueError(f"Unknown {volume_mode=}")
+
+
 def shift_forward(series: pd.Series, horizon: int) -> pd.Series:
     target_index = series.index + pd.to_timedelta(horizon, unit="s")
     shifted = series.reindex(target_index)
