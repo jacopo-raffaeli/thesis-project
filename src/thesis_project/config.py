@@ -293,6 +293,10 @@ def default_plt():
     plt.style.use("seaborn-v0_8-paper")
 
 
+def default():
+    default_plt()
+
+
 # ==============================================================================
 
 # TIME SETTINGS
