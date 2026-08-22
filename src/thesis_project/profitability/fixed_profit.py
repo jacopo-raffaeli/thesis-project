@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
+from tqdm.auto import tqdm
+from tqdm_joblib import tqdm_joblib
 
 from thesis_project import config, utils
 from thesis_project.profitability import common, settings
@@ -307,15 +309,25 @@ def run_fixed_profit(
         fractional_fut_contracts,
     )
 
-    results = Parallel(
-        n_jobs=analysis_config.n_jobs,
-        backend="loky",
-    )(
-        delayed(run_analysis)(
-            analysis, analysis_config, data, fractional_fut_contracts, rounded_fut_contracts
+    with tqdm_joblib(
+        tqdm(
+            total=len(analysis_config.analyses),
+            desc="Analyses",
         )
-        for analysis in analysis_config.analyses
-    )
+    ):
+        results = Parallel(
+            n_jobs=analysis_config.n_jobs,
+            backend="loky",
+        )(
+            delayed(run_analysis)(
+                analysis,
+                analysis_config,
+                data,
+                fractional_fut_contracts,
+                rounded_fut_contracts,
+            )
+            for analysis in analysis_config.analyses
+        )
 
     for key, profit_analysis, summary in results:  # type: ignore
         experiment = {
