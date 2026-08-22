@@ -86,7 +86,7 @@ def run_fixed_horizon_single(
         }
     )
 
-    entry_mask = common.execution_mask(
+    entry_mask = common.entry_execution_mask(
         data,
         fut_contracts,
         ctd_contracts,
