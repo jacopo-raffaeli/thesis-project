@@ -115,13 +115,14 @@ class AssetConfig:
     role: AssetRole
     par_value: float
     contract_size: float
-    tick_size_perc: float
+    price_tick_perc: float
+    size_tick: float
     market: MarketConfig
     description: str
 
     @property
-    def tick_size_euro(self) -> float:
-        return self.contract_size * (self.tick_size_perc / 100)
+    def price_tick_euro(self) -> float:
+        return self.contract_size * (self.price_tick_perc / 100)
 
 
 BTP = AssetConfig(
@@ -130,7 +131,8 @@ BTP = AssetConfig(
     role="ctd",
     par_value=100,
     contract_size=2_000_000,
-    tick_size_perc=0.01,
+    price_tick_perc=0.01,
+    size_tick=0.5,
     market=MTS,
     description="Buoni del Tesoro Pluriennali",
 )
@@ -141,7 +143,8 @@ FBTP = AssetConfig(
     role="fut",
     par_value=100,
     contract_size=100_000,
-    tick_size_perc=0.01,
+    price_tick_perc=0.01,
+    size_tick=1.0,
     market=EUREX,
     description="Long-Term Euro-BTP Futures",
 )
@@ -152,7 +155,8 @@ FBTS = AssetConfig(
     role="fut",
     par_value=100,
     contract_size=100_000,
-    tick_size_perc=0.005,
+    price_tick_perc=0.005,
+    size_tick=1.0,
     market=EUREX,
     description="Short-Term Euro-BTP Futures",
 )
