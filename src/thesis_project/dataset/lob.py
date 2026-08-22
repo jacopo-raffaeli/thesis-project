@@ -1,6 +1,7 @@
 import datetime
 import logging
 import pickle as pkl
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, get_args
@@ -107,31 +108,47 @@ class LobReport:
     def records_by_id(self, id: LobRecordType) -> list[LobRecord]:
         return [record for record in self.records if record.id == id]
 
+    def normalization_summary(self):
+        print("Normalization summary:")
+        for record in self.normalization:
+            print(f"- {record.description}")
+
+    def consistency_summary(self):
+        print("Consistency summary:")
+        for record in self.consistency:
+            print(f"- {record.description}")
+
+    def summary(self):
+        print(f"LOB {self.date} {self.asset.role} summary:")
+        print()
+        self.normalization_summary()
+        print()
+        self.consistency_summary()
+
 
 @dataclass
 class LobReportCollector:
     ticker: config.FutTicker
-    reports: dict[config.AssetRole, dict[datetime.date, LobReport]] = field(
-        default_factory=lambda: {
-            "ctd": {},
-            "fut": {},
-        }
-    )
+    role: config.AssetRole
+    reports: dict[datetime.date, LobReport] = field(default_factory=dict)
 
     def add(self, report: LobReport):
-        asset = config.ASSET_BY_TICKER_ROLE[(self.ticker, report.asset.role)]
-        if report.asset is not asset:
-            raise ValueError(f"Expected {asset=}, instead recieved {report.asset=}")
+        if report.asset.role != self.role:
+            raise ValueError(
+                f"Cannot add report for role {report.asset.role!r} " f"to {self.role!r} collector."
+            )
 
-        if report.asset.role not in self.reports:
-            self.reports[report.asset.role] = {}
-
-        if report.date in self.reports[report.asset.role]:
+        if report.date in self.reports:
             raise ValueError(
                 f"Duplicate report for {self.ticker=} {report.asset.role=} {report.date=}"
             )
 
-        self.reports[report.asset.role][report.date] = report
+        self.reports[report.date] = report
+
+    def summary(self):
+        for report in self.reports.values():
+            report.summary()
+            print()
 
 
 def load(path: Path) -> pd.DataFrame:
@@ -364,7 +381,7 @@ def normalize(
     lob = _normalize_columns(lob, report, metadata, asset)
 
     if report.has_normalization_records:
-        logger.warning(
+        logger.debug(
             "- LOB normalization corrections: asset=%s, date=%s, records=%d",
             asset.symbol,
             report.date,
@@ -399,14 +416,14 @@ def _consistency_price_unit(
     columns = metadata.get_columns(column_types="price")
     for column, s in lob[columns].items():
         s = s.dropna()
-        quotients = s / asset.tick_size_perc
+        quotients = s / asset.price_tick_perc
         mask = ~np.isclose(quotients, np.round(quotients))
         ts = s.index[mask]
         if len(ts):
             report.consistency.append(
                 LobRecord(
                     id="PRICE_NON_MULTIPLE",
-                    description=f"LOB {str(column)}: found {len(ts)} non-multiple of {asset.tick_size_perc} prices",
+                    description=f"LOB {str(column)}: found {len(ts)} prices non-multiple of {asset.price_tick_perc} price tick",
                     timestamps=pd.DatetimeIndex(ts),
                     columns=(str(column),),
                 )
@@ -519,13 +536,14 @@ def _consistency_size_unit(
     columns = metadata.get_columns(column_types="size")
     for column, s in lob[columns].items():
         s = s.dropna()
-        mask = ~np.isclose(s, np.round(s))
+        quotients = s / asset.size_tick
+        mask = ~np.isclose(quotients, np.round(quotients))
         ts = s.index[mask]
         if len(ts):
             report.consistency.append(
                 LobRecord(
                     id="SIZE_NON_MULTIPLE",
-                    description=f"LOB {str(column)}: found {len(ts)} non-multiple of {1} lot sizes",
+                    description=f"LOB {str(column)}: found {len(ts)} sizes non-multiple of {asset.size_tick} size tick",
                     timestamps=pd.DatetimeIndex(ts),
                     columns=(str(column),),
                 )
@@ -587,7 +605,7 @@ def consistency(
     _consistency_price_size(lob, report, metadata, asset)
 
     if report.has_consistency_records:
-        logger.warning(
+        logger.debug(
             "- LOB consistency issues: asset=%s, date=%s, records=%d",
             asset.symbol,
             report.date,
@@ -618,55 +636,51 @@ def _integrity_nans(
         "levels": {},
         "sides": {},
         "columns": {},
-        "rows_wide": {},
-        "cols_wide": {},
     }
 
     # LOB integrity
     info["lob"] = {
         "n_nan": na.sum().sum(),
         "n_nan_perc": na.mean().mean() * 100,
-    }
-
-    # Per level integrity
-    for level in metadata.levels:
-        columns = metadata.get_columns(levels=level)
-        info["levels"][level] = {
-            "n_nan": na[columns].sum().sum(),
-            "n_nan_perc": na[columns].mean().mean() * 100,
-        }
-
-    # Per side integrity
-    for level in metadata.levels:
-        for side in metadata.sides:
-            columns = metadata.get_columns(levels=level, sides=side)
-            info["sides"][level, side] = {
-                "n_nan": na[columns].sum().sum(),
-                "n_nan_perc": na[columns].mean().mean() * 100,
-            }
-
-    # Per column integrity
-    for column in metadata.get_columns():
-        info["columns"][column] = {
-            "n_nan": na[column].sum(),
-            "n_nan_perc": na[column].mean() * 100,
-        }
-
-    # Rows-wide integrity
-    info["rows_wide"] = {
         "n_rows_all_nan": na.all(axis=1).sum(),
         "n_rows_all_nan_perc": na.all(axis=1).mean() * 100,
         "n_rows_any_nan": na.any(axis=1).sum(),
         "n_rows_any_nan_perc": na.any(axis=1).mean() * 100,
     }
 
-    # Columns-wide integrity
-    info["cols_wide"] = {
-        "n_cols_all_nan": na.all(axis=0).sum(),
-        "n_cols_all_nan_perc": na.all(axis=0).mean() * 100,
-        "n_cols_any_nan": na.any(axis=0).sum(),
-        "n_cols_any_nan_perc": na.any(axis=0).mean() * 100,
-    }
+    levels = [1]
+
+    # Per level integrity
+    for level in levels:
+        columns = metadata.get_columns(levels=level)
+        info["levels"][level] = {
+            "n_nan": na[columns].sum().sum(),
+            "n_nan_perc": na[columns].mean().mean() * 100,
+            "n_rows_all_nan": na[columns].all(axis=1).sum(),
+            "n_rows_all_nan_perc": na[columns].all(axis=1).mean() * 100,
+            "n_rows_any_nan": na[columns].any(axis=1).sum(),
+            "n_rows_any_nan_perc": na[columns].any(axis=1).mean() * 100,
+        }
+
+    # Per side integrity
+    for level in levels:
+        for side in metadata.sides:
+            columns = metadata.get_columns(levels=level, sides=side)
+            info["sides"][level, side] = {
+                "n_nan": na[columns].sum().sum(),
+                "n_nan_perc": na[columns].mean().mean() * 100,
+                "n_rows_all_nan": na[columns].all(axis=1).sum(),
+                "n_rows_all_nan_perc": na[columns].all(axis=1).mean() * 100,
+                "n_rows_any_nan": na[columns].any(axis=1).sum(),
+                "n_rows_any_nan_perc": na[columns].any(axis=1).mean() * 100,
+            }
+
+    # Per column integrity
+    for column in metadata.get_columns(levels=levels):
+        info["columns"][column] = {
+            "n_nan": na[column].sum(),
+            "n_nan_perc": na[column].mean() * 100,
+        }
 
     report.integrity["nans"] = info
 
@@ -689,8 +703,10 @@ def _integrity_timestamps(
         "max_valid_idx": lob.index[mask][-1] if mask.any() else None,
     }
 
+    levels = [1]
+
     # Per level valid index
-    for level in metadata.levels:
+    for level in levels:
         columns = metadata.get_columns(levels=level)
         mask = valid[columns].all(axis=1)
         info["levels"][level] = {
@@ -699,7 +715,7 @@ def _integrity_timestamps(
         }
 
     # Per side valid index
-    for level in metadata.levels:
+    for level in levels:
         for side in metadata.sides:
             columns = metadata.get_columns(levels=level, sides=side)
             mask = valid[columns].all(axis=1)
@@ -709,7 +725,7 @@ def _integrity_timestamps(
             }
 
     # Per column valid index
-    for column in metadata.get_columns():
+    for column in metadata.get_columns(levels=levels):
         mask = valid[column]
         info["columns"][column] = {
             "min_valid_index": lob.index[mask][0] if mask.any() else None,
@@ -756,19 +772,21 @@ def _integrity_gaps(
     # LOB gaps
     info["lob"] = _find_true_groups(na.all(axis=1))
 
+    levels = [1]
+
     # Per level gaps
-    for level in metadata.levels:
+    for level in levels:
         columns = metadata.get_columns(levels=level)
         info["levels"][level] = _find_true_groups(na[columns].all(axis=1))
 
     # Per side gaps
-    for level in metadata.levels:
+    for level in levels:
         for side in metadata.sides:
             columns = metadata.get_columns(levels=level, sides=side)
             info["sides"][level, side] = _find_true_groups(na[columns].all(axis=1))
 
     # Per column gaps
-    for column in metadata.get_columns():
+    for column in metadata.get_columns(levels=levels):
         info["columns"][column] = _find_true_groups(na[[column]].all(axis=1))
 
     report.integrity["gaps"] = info
@@ -778,6 +796,8 @@ def integrity(
     lob: pd.DataFrame, report: LobReport, metadata: config.LobConfig, asset: config.AssetConfig
 ):
     """
+    NOTE: The analysis is actually performed only at LOB level 1 for computational reasons
+
     LOB integrity pipeline:
     * Shape:
         * Rows
@@ -788,8 +808,6 @@ def integrity(
         * Per level NaNs
         * Per side-wise NaNs
         * Per column-wise NaNs
-        * Rows-wise NaNs
-        * Columns-wise NaNs
     * Valid timestamps checks:
         * LOB min/max valid timestamps
         * Per level min/max valid timestamps
@@ -839,7 +857,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     consistency(lob, report, metadata, asset)
     integrity(lob, report, metadata, asset)
 
-    logger.debug(
+    logger.info(
         "- LOB preprocessed: asset=%s, date=%s, rows=%d, columns=%d",
         asset.symbol,
         report.date,
@@ -850,9 +868,7 @@ def preprocess(path: Path, asset: config.AssetConfig, metadata: config.LobConfig
     return lob, report
 
 
-def preprocess_all_lobs(
-    *, ticker: config.FutTicker, metadata: config.LobConfig = config.LOB
-) -> LobReportCollector:
+def preprocess_all_lobs(*, ticker: config.FutTicker, metadata: config.LobConfig = config.LOB):
     """
     Preprocess all raw LOBs for a ticker and save them to processed/.
 
@@ -862,35 +878,47 @@ def preprocess_all_lobs(
     ## Args:
     * ticker: FutTicker literal
     * metadata: LobConfig object
-
-    ## Return:
-    * reports: LobReportCollector object
     """
-    reports = LobReportCollector(ticker=ticker)
     for role in get_args(config.AssetRole):
+        # reports = LobReportCollector(ticker=ticker, role=role)
         asset = config.ASSET_BY_TICKER_ROLE[(ticker, role)]
         raw_paths = utils.io.list_lob_paths(root=config.DATA_RAW_DIR, ticker=ticker, role=role)
+
+        report_root = config.DATA_PRO_DIR / ticker / role / "reports"
+
+        if report_root.exists():
+            shutil.rmtree(report_root)
+
+        report_root.mkdir(parents=True)
 
         for raw_path in raw_paths:
             # Run preprocessing
             lob, report = preprocess(raw_path, asset, metadata)
 
-            # Save lob to preprocessed/ twin path
+            # Save lob to preprocessed/... specular path
             pro_path = config.DATA_PRO_DIR / raw_path.relative_to(config.DATA_RAW_DIR)
             pro_path.parent.mkdir(parents=True, exist_ok=True)
             lob.to_parquet(pro_path)
 
+            # Save the report immediately
+            save_lob_report(report, ticker, role)
+
             # Add to report collection
-            reports.add(report)
+            # reports.add(report)
 
-    # Save report colletion
-    save_lob_reports(reports, ticker)
+            del lob
+            del report
 
-    return reports
+        # Save report collection
+        # save_lob_reports(reports)
+        # del reports
+
+        # Group report collection
+        group_lob_reports(ticker, role)
 
 
-def save_lob_reports(reports: LobReportCollector, ticker: config.FutTicker):
-    path = config.DATA_PRO_DIR / ticker
+def save_lob_reports(reports: LobReportCollector):
+    path = config.DATA_PRO_DIR / reports.ticker / reports.role
     path.mkdir(parents=True, exist_ok=True)
     path = path / "lob_reports.pkl"
 
@@ -898,8 +926,48 @@ def save_lob_reports(reports: LobReportCollector, ticker: config.FutTicker):
         pkl.dump(reports, f)
 
 
-def load_lob_reports(ticker: config.FutTicker) -> LobReportCollector:
-    path = config.DATA_PRO_DIR / ticker / "lob_reports.pkl"
+def load_lob_reports(ticker: config.FutTicker, role: config.AssetRole) -> LobReportCollector:
+    path = config.DATA_PRO_DIR / ticker / role / "lob_reports.pkl"
 
     with path.open("rb") as f:
         return pkl.load(f)
+
+
+def save_lob_report(report: LobReport, ticker: config.FutTicker, role: config.AssetRole):
+    path = config.DATA_PRO_DIR / ticker / role / "reports"
+    path.mkdir(parents=True, exist_ok=True)
+    path = path / f"{report.date}.pkl"
+
+    with path.open("wb") as f:
+        pkl.dump(report, f)
+
+
+def load_lob_report(
+    ticker: config.FutTicker, role: config.AssetRole, date: datetime.date
+) -> LobReport:
+    path = config.DATA_PRO_DIR / ticker / role / "reports" / f"{date}.pkl"
+
+    with path.open("rb") as f:
+        return pkl.load(f)
+
+
+def group_lob_reports(ticker: config.FutTicker, role: config.AssetRole):
+    root = config.DATA_PRO_DIR / ticker / role / "reports"
+
+    if not root.exists():
+        raise FileNotFoundError(f"LOB report directory does not exist: {root}")
+
+    if not root.is_dir():
+        raise NotADirectoryError(f"LOB report path is not a directory: {root}")
+
+    reports = LobReportCollector(ticker=ticker, role=role)
+    for path in sorted(root.glob("*.pkl")):
+        with path.open("rb") as f:
+            report = pkl.load(f)
+
+        if not isinstance(report, LobReport):
+            raise TypeError(f"Expected LobReport in {path}, " f"got {type(report).__name__}")
+        reports.add(report)
+
+    save_lob_reports(reports)
+    shutil.rmtree(root)
