@@ -114,6 +114,14 @@ def run_fixed_profit_single(
     long_exit_allowed = exit_mask["long"].to_numpy(dtype=bool)
     short_exit_allowed = exit_mask["short"].to_numpy(dtype=bool)
 
+    if len(long_exit_allowed) != n or len(short_exit_allowed) != n:
+        raise RuntimeError(
+            f"Exit mask length mismatch: "
+            f"{len(long_exit_allowed)=}, "
+            f"{len(short_exit_allowed)=}, "
+            f"{n=}"
+        )
+
     ctd_bid = prices["ctd_bid_price"].to_numpy(dtype=float)
     ctd_ask = prices["ctd_ask_price"].to_numpy(dtype=float)
     fut_bid = prices["fut_bid_price"].to_numpy(dtype=float)
@@ -197,11 +205,25 @@ def run_fixed_profit_single(
             if session_long_entry_allowed[i]:
                 long_path = session_long_mark[path_start:path_end] + session_long_entry[i]
 
-                long_exit_allowed = session_long_exit_allowed[path_start:path_end]
+                long_exit_allowed_path = session_long_exit_allowed[path_start:path_end]
+
+                if len(long_path) != len(long_exit_allowed_path):
+                    raise RuntimeError(
+                        "Long path/exit mask length mismatch: "
+                        f"{len(long_path)=}, "
+                        f"{len(long_exit_allowed_path)=}, "
+                        f"{session_start=}, "
+                        f"{session_end=}, "
+                        f"{session_length=}, "
+                        f"{i=}, "
+                        f"{end=}, "
+                        f"{path_start=}, "
+                        f"{path_end=}"
+                    )
 
                 hit, time_to_profit, mae = pnl_metrics_from_path(
                     long_path,
-                    long_exit_allowed,
+                    long_exit_allowed_path,
                     profit,
                     session_times[i],
                     path_times,
@@ -216,11 +238,25 @@ def run_fixed_profit_single(
             if session_short_entry_allowed[i]:
                 short_path = session_short_mark[path_start:path_end] + session_short_entry[i]
 
-                short_exit_allowed = session_short_exit_allowed[path_start:path_end]
+                short_exit_allowed_path = session_short_exit_allowed[path_start:path_end]
+
+                if len(short_path) != len(short_exit_allowed_path):
+                    raise RuntimeError(
+                        "Short path/exit mask length mismatch: "
+                        f"{len(short_path)=}, "
+                        f"{len(short_exit_allowed_path)=}, "
+                        f"{session_start=}, "
+                        f"{session_end=}, "
+                        f"{session_length=}, "
+                        f"{i=}, "
+                        f"{end=}, "
+                        f"{path_start=}, "
+                        f"{path_end=}"
+                    )
 
                 hit, time_to_profit, mae = pnl_metrics_from_path(
                     short_path,
-                    short_exit_allowed,
+                    short_exit_allowed_path,
                     profit,
                     session_times[i],
                     path_times,
