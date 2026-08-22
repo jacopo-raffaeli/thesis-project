@@ -317,7 +317,7 @@ def run_fixed_profit(
         for analysis in analysis_config.analyses
     )
 
-    for key, profit_analysis, summary in results:
+    for key, profit_analysis, summary in results:  # type: ignore
         experiment = {
             "config": analysis_config,
             "fractional_fut_contracts": fractional_fut_contracts,
