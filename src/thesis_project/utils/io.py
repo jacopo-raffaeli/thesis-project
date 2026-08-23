@@ -5,6 +5,7 @@ from typing import get_args
 
 import dataframe_image as dfi
 import pandas as pd
+import polars as pl
 
 from thesis_project import config
 
@@ -210,3 +211,37 @@ def list_lob_paths(
         return list_lob_paths_ticker(root=root, ticker=ticker)
 
     return list_lob_paths_role(root=root, ticker=ticker, role=role)
+
+
+def load_filtered_parquet_pl(
+    path: Path,
+    time_window: tuple[datetime.time, datetime.time] | None = None,
+    dates_to_exclude: list[datetime.date] | None = None,
+) -> pd.DataFrame | pd.Series:
+    if not path.exists():
+        raise ValueError("")
+
+    if not path.is_file():
+        raise ValueError("")
+
+    if not path.suffix == ".parquet":
+        raise ValueError("")
+
+    scan = pl.scan_parquet(path)
+
+    # TODO: Check that 'timestamp' column exists
+
+    if dates_to_exclude is not None:
+        scan = scan.filter(~pl.col("timestamp").dt.date().is_in(dates_to_exclude))
+
+    if time_window is not None:
+        min_time, max_time = time_window
+        scan = scan.filter(pl.col("timestamp").dt.time().is_between(min_time, max_time))
+
+    out = scan.collect().to_pandas().set_index("timestamp").sort_index()
+
+    if len(out.columns) == 1:
+        out = out.squeeze("columns")
+        assert isinstance(out, pd.Series)
+
+    return out
