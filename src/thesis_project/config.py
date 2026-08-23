@@ -287,12 +287,13 @@ LOB = LobConfig(
 # ==============================================================================
 
 
-# Matplotlib global settings
+# Matplotlib.pyplot global settings
 def default_plt():
     plt.rcdefaults()
     plt.style.use("seaborn-v0_8-paper")
 
 
+# Apply default settings
 def default():
     default_plt()
 
