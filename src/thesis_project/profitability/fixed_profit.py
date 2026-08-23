@@ -368,13 +368,13 @@ def run_fixed_profit(
     for key, profit_analysis, summary in results:  # type: ignore
         experiment = {
             "config": analysis_config,
-            "fractional_fut_contracts": fractional_fut_contracts,
-            "rounded_fut_contracts": rounded_fut_contracts,
-            "original_cf": cf,
-            "effective_cf": common.compute_eff_cf(
-                analysis_config.ctd_contracts,
-                rounded_fut_contracts,
-            ),
+            # "fractional_fut_contracts": fractional_fut_contracts,
+            # "rounded_fut_contracts": rounded_fut_contracts,
+            # "original_cf": cf,
+            # "effective_cf": common.compute_eff_cf(
+            #     analysis_config.ctd_contracts,
+            #     rounded_fut_contracts,
+            # ),
             "analyses": profit_analysis,
             "summaries": summary,
         }
@@ -427,17 +427,21 @@ def save_experiment(
     price: settings.PriceMode,
     contract: settings.FutContractMode,
 ):
-    path = (
-        config.RES_EXP_DIR
-        / ticker
-        / "profitability"
-        / "fixed_profit"
-        / f"{price}_price_{contract}_contract.pkl"
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_profit"
+    path.mkdir(parents=True, exist_ok=True)
 
-    with path.open("wb") as f:
-        pkl.dump(experiment, f)
+    analyses = experiment["analyses"].items()
+    for volume_mode, profit_analyses in analyses:
+        for profit_target, analysis in profit_analyses.items():
+            # Save analysis
+            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_profit_{profit_target}_analysis.parquet"
+            analysis.to_parquet(path / filename)
+            # Save summary
+            summary = experiment["summaries"][volume_mode].xs(
+                profit_target, level="profit", drop_level=False
+            )
+            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_profit_{profit_target}_summary.parquet"
+            summary.to_parquet(path / filename)
 
 
 def load_experiment(
