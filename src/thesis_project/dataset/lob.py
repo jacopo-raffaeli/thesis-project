@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: Add utilities to LobReportCollector
-# TODO: Refactor notebooks/data_integrity.ipynb -> preprocessing.ipynb
-# TODO: Write a plots/lob.py function for visualizing lob and lob reports
+# TODO: Add number of levels to LobReportCollector or preprocess()
+# TODO: Translate to float32
 
 
 LobRecordType = Literal[
@@ -111,12 +111,12 @@ class LobReport:
     def normalization_summary(self):
         print("Normalization summary:")
         for record in self.normalization:
-            print(f"- {record.description}")
+            print(record)
 
     def consistency_summary(self):
         print("Consistency summary:")
         for record in self.consistency:
-            print(f"- {record.description}")
+            print(record)
 
     def summary(self):
         print(f"LOB {self.date} {self.asset.role} summary:")
@@ -146,9 +146,23 @@ class LobReportCollector:
         self.reports[report.date] = report
 
     def summary(self):
+        summary: dict[LobRecordType, int] = {id: 0 for id in get_args(LobRecordType)}
         for report in self.reports.values():
-            report.summary()
-            print()
+            for record in report.records:
+                summary[record.id] += 1
+
+        print(f"Report summary for {self.ticker.upper()} {self.role.upper()} LOBs:")
+        print(f"- Number of dates: {len(self.reports)}")
+        print("- Issues count:")
+        for k, v in summary.items():
+            print(f"  - {k}: {v}")
+
+    def dates_by_id(self, id: LobRecordType):
+        foo = {}
+        for report in self.reports.values():
+            for record in report.records:
+                if record == id:
+                    foo[report.date]
 
 
 def load(path: Path) -> pd.DataFrame:
@@ -330,7 +344,7 @@ def _normalize_columns(
         report.normalization.append(
             LobRecord(
                 id="COLUMNS_MISSING_ADD",
-                description=f"LOB columns: add missing columns ({','.join(sorted(missing))})",
+                description=f"LOB columns: add missing columns ({', '.join(sorted(missing))})",
             )
         )
 
@@ -338,7 +352,7 @@ def _normalize_columns(
         report.normalization.append(
             LobRecord(
                 id="COLUMNS_EXTRA_DROP",
-                description=f"LOB columns: dropped extra columns ({','.join(sorted(extra))})",
+                description=f"LOB columns: dropped extra columns ({', '.join(sorted(extra))})",
             )
         )
 
