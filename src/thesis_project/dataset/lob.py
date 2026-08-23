@@ -912,20 +912,13 @@ def preprocess_all_lobs(*, ticker: config.FutTicker, metadata: config.LobConfig 
             # Save lob to preprocessed/... specular path
             pro_path = config.DATA_PRO_DIR / raw_path.relative_to(config.DATA_RAW_DIR)
             pro_path.parent.mkdir(parents=True, exist_ok=True)
-            lob.to_parquet(pro_path)
+            lob.astype("float32").to_parquet(pro_path)
 
-            # Save the report immediately
+            # Save report
             save_lob_report(report, ticker, role)
-
-            # Add to report collection
-            # reports.add(report)
 
             del lob
             del report
-
-        # Save report collection
-        # save_lob_reports(reports)
-        # del reports
 
         # Group report collection
         group_lob_reports(ticker, role)
