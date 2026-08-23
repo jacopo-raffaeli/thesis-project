@@ -15,12 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: Add utilities to LobReportCollector
+# TODO: Add utilities to generate dates to exclude (maybe better in utils than here)
 # TODO: Add number of levels to LobReportCollector or preprocess()
-# TODO: Translate to float32
 
-
-LobRecordType = Literal[
-    # NORMALIZATION
+LobRecordTypeNormalization = Literal[
     # LOB index timezone
     "TIMEZONE_LOCALIZED",
     "TIMEZONE_CONVERTED",
@@ -33,7 +31,10 @@ LobRecordType = Literal[
     # LOB columns
     "COLUMNS_EXTRA_DROP",
     "COLUMNS_MISSING_ADD",
-    # CONSISTENCY
+]
+
+
+LobRecordTypeConsistency = Literal[
     # Price consistency
     "PRICE_NON_POSITIVE",
     "PRICE_NON_MULTIPLE",
@@ -45,6 +46,14 @@ LobRecordType = Literal[
     "SIZE_NON_MULTIPLE",
     # Price-Size consistency
     "PRICE_SIZE_PARTIAL",
+]
+
+
+LobRecordType = Literal[
+    # NORMALIZATION
+    LobRecordTypeNormalization,
+    # CONSISTENCY
+    LobRecordTypeConsistency,
 ]
 
 
