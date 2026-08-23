@@ -17,11 +17,11 @@ def swtich_dates(df: pd.DataFrame):
 
 
 if __name__ == "__main__":
-    from thesis_project import config as global_config
+    from thesis_project import config as config
 
     TICKER = "fbtp"
     ctd_df = pd.read_csv(
-        global_config.DATA_RAW_DIR / TICKER / "daily_cf.csv", parse_dates=["Date"], index_col="Date"
+        config.DATA_RAW_DIR / TICKER / "daily_cf.csv", parse_dates=["Date"], index_col="Date"
     )
     switch_dates_df = swtich_dates(ctd_df)
-    switch_dates_df.to_csv(global_config.DATA_RAW_DIR / TICKER / "ctd_switch.csv", index=False)
+    switch_dates_df.to_csv(config.DATA_RAW_DIR / TICKER / "ctd_switch.csv", index=False)
