@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-from thesis_project import config as global_config
+from thesis_project import config as config
 
 
 def compute_bid_ask_price(
@@ -38,9 +38,9 @@ def compute_bid_ask_price(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
@@ -53,9 +53,9 @@ def compute_bid_ask_price(
         return None
 
     if side == "bid":
-        col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+        col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
     else:
-        col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+        col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
 
     required_cols = {
         col,
@@ -112,9 +112,9 @@ def compute_bid_ask_size(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
@@ -127,9 +127,9 @@ def compute_bid_ask_size(
         return None
 
     if side == "bid":
-        col = global_config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
+        col = config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
     else:
-        col = global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
+        col = config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
 
     required_cols = {
         col,
@@ -180,15 +180,15 @@ def compute_spread(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
 
-    bid_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    ask_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
     required_cols = {
         bid_col,
         ask_col,
@@ -242,15 +242,15 @@ def compute_mid_price(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
 
-    bid_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    ask_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
     required_cols = {
         bid_col,
         ask_col,
@@ -305,17 +305,17 @@ def compute_micro_price(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
 
-    bid_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    ask_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    bid_vol_col = global_config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
-    ask_vol_col = global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
+    bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    bid_vol_col = config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
+    ask_vol_col = config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
     required_cols = {
         bid_col,
         ask_col,
@@ -402,9 +402,9 @@ def compute_obi(
         return None
 
     levels = context.get("LOB level range", 1)
-    if not all(lvl in range(1, global_config.LEVELS + 1) for lvl in levels):
+    if not all(lvl in range(1, config.LEVELS + 1) for lvl in levels):
         warnings.warn(
-            f"{filename}: Context 'LOB level range' contains invalid levels. Expected levels in range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level range' contains invalid levels. Expected levels in range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
@@ -420,8 +420,8 @@ def compute_obi(
 
     required_cols = set()
     for lvl in levels:
-        bid_vol_col = global_config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
-        ask_vol_col = global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
+        bid_vol_col = config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
+        ask_vol_col = config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
 
         required_cols.update({bid_vol_col, ask_vol_col})
 
@@ -432,8 +432,8 @@ def compute_obi(
         )
         return None
 
-    bid_cols = [global_config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl) for lvl in levels]
-    ask_cols = [global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl) for lvl in levels]
+    bid_cols = [config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl) for lvl in levels]
+    ask_cols = [config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl) for lvl in levels]
     bid_vol = lob_df[bid_cols].sum(axis=1)
     ask_vol = lob_df[ask_cols].sum(axis=1)
     obi = bid_vol - ask_vol
@@ -497,17 +497,17 @@ def compute_ofi(
         return None
 
     lvl = context.get("LOB level")
-    if lvl not in range(1, global_config.LEVELS + 1):
+    if lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
 
-    bid_price_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    ask_price_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
-    bid_vol_col = global_config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
-    ask_vol_col = global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
+    bid_price_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    ask_price_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=lvl)
+    bid_vol_col = config.BID_SIZE_COL_TEMPLATE.format(lvl=lvl)
+    ask_vol_col = config.ASK_SIZE_COL_TEMPLATE.format(lvl=lvl)
     required_cols = {
         bid_price_col,
         ask_price_col,
@@ -600,9 +600,9 @@ def compute_slope_v1(
         return None
 
     max_lvl = context.get("LOB level")
-    if max_lvl not in range(1, global_config.LEVELS + 1):
+    if max_lvl not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({max_lvl}) out of range 1 - {global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({max_lvl}) out of range 1 - {config.LEVELS}",
             UserWarning,
         )
         return None
@@ -614,18 +614,14 @@ def compute_slope_v1(
         )
         return None
 
-    best_bid_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=1)
-    best_ask_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=1)
+    best_bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=1)
+    best_ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=1)
     if side == "bid":
-        price_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=max_lvl)
-        size_cols = [
-            global_config.BID_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, max_lvl + 1)
-        ]
+        price_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=max_lvl)
+        size_cols = [config.BID_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, max_lvl + 1)]
     if side == "ask":
-        price_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=max_lvl)
-        size_cols = [
-            global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, max_lvl + 1)
-        ]
+        price_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=max_lvl)
+        size_cols = [config.ASK_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, max_lvl + 1)]
 
     required_cols = {best_bid_col, best_ask_col, price_col} | set(size_cols)
     if not required_cols.issubset(lob_df.columns):
@@ -712,10 +708,9 @@ def compute_slope_v2(
 
     n_levels = context["LOB level"]
 
-    if n_levels not in range(1, global_config.LEVELS + 1):
+    if n_levels not in range(1, config.LEVELS + 1):
         warnings.warn(
-            f"{filename}: Context 'LOB level' ({n_levels}) out of range "
-            f"1-{global_config.LEVELS}",
+            f"{filename}: Context 'LOB level' ({n_levels}) out of range " f"1-{config.LEVELS}",
             UserWarning,
         )
         return None
@@ -729,23 +724,15 @@ def compute_slope_v2(
         )
         return None
 
-    best_bid_col = global_config.BID_PRICE_COL_TEMPLATE.format(lvl=1)
-    best_ask_col = global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=1)
+    best_bid_col = config.BID_PRICE_COL_TEMPLATE.format(lvl=1)
+    best_ask_col = config.ASK_PRICE_COL_TEMPLATE.format(lvl=1)
 
     if side == "bid":
-        price_cols = [
-            global_config.BID_PRICE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)
-        ]
-        size_cols = [
-            global_config.BID_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)
-        ]
+        price_cols = [config.BID_PRICE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)]
+        size_cols = [config.BID_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)]
     else:
-        price_cols = [
-            global_config.ASK_PRICE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)
-        ]
-        size_cols = [
-            global_config.ASK_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)
-        ]
+        price_cols = [config.ASK_PRICE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)]
+        size_cols = [config.ASK_SIZE_COL_TEMPLATE.format(lvl=i) for i in range(1, n_levels + 1)]
 
     required_cols = {best_bid_col, best_ask_col} | set(price_cols) | set(size_cols)
 

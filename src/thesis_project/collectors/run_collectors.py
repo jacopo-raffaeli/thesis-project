@@ -11,10 +11,10 @@ from typing import (
 
 import pandas as pd
 
-from thesis_project import config as global_config
+from thesis_project import config as config
 
 # Columns to drop from futures LOBs
-_FUTURES_DROP_COLUMNS = global_config.FUT_COL_TO_DROP
+_FUTURES_DROP_COLUMNS = config.FUT_COL_TO_DROP
 
 
 def infer_lob_type(base_path: Path) -> str:
