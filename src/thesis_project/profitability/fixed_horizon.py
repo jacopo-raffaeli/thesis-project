@@ -274,6 +274,7 @@ def summarize_fixed_horizon(
             )
 
     summary = pd.DataFrame(results).T
+    print(summary.index.names)
     summary.index.names = ["horizon", "direction"]
 
     return summary
@@ -285,7 +286,7 @@ def save_experiment(
     price: settings.PriceMode,
     contract: settings.FutContractMode,
 ):
-    path = config.RES_EXP_DIR / ticker / "profitrability" / "fixed_horizon"
+    path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"
     path.mkdir(parents=True, exist_ok=True)
 
     analyses = experiment["analyses"].items()
@@ -296,7 +297,29 @@ def save_experiment(
             analysis.to_parquet(path / filename)
             # Save summary
             summary = experiment["summaries"][volume_mode].xs(
-                horizon, level="profit", drop_level=False
+                horizon, level="horizon", drop_level=False
             )
             filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_horizon_{horizon}_summary.parquet"
             summary.to_parquet(path / filename)
+
+
+def load_experiment(
+    ticker: config.FutTicker,
+    price: settings.PriceMode,
+    contract: settings.FutContractMode,
+    volume: settings.VolumeMode,
+    horizon: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"
+
+    filename = (
+        f"price_{price}_contract_{contract}_volume_{volume}_horizon_{horizon}_analysis.parquet"
+    )
+    analysis = pd.read_parquet(path / filename)
+
+    filename = (
+        f"price_{price}_contract_{contract}_volume_{volume}_horizon_{horizon}_summary.parquet"
+    )
+    summary = pd.read_parquet(path / filename)
+
+    return analysis, summary
