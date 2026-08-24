@@ -106,7 +106,7 @@ def run_fixed_horizon_single(
 
 def run_fixed_horizon(
     analysis_config: FixedHorizonConfig,
-) -> dict:
+):
     data = common.load_market_data(
         ticker=analysis_config.ticker,
         min_time=analysis_config.min_time,
@@ -176,17 +176,22 @@ def run_fixed_horizon(
                 tolerance=analysis_config.tolerance,
             )
 
-    return {
-        "fractional_fut_contracts": fractional_fut_contracts,
-        "rounded_fut_contracts": rounded_fut_contracts,
-        "original_cf": cf,
-        "effective_cf": common.compute_eff_cf(
-            analysis_config.ctd_contracts,
-            rounded_fut_contracts,
-        ),
-        "analyses": analyses,
-        "summaries": summaries,
-    }
+    for key, horizon_analysis in analyses.items():
+        summary = summaries[key]
+        experiment = {
+            "config": analysis_config,
+            # "fractional_fut_contracts": fractional_fut_contracts,
+            # "rounded_fut_contracts": rounded_fut_contracts,
+            # "original_cf": cf,
+            # "effective_cf": common.compute_eff_cf(
+            #     analysis_config.ctd_contracts,
+            #     rounded_fut_contracts,
+            # ),
+            "analyses": horizon_analysis,
+            "summaries": summary,
+        }
+
+        save_experiment(experiment, analysis_config.ticker, key[0], key[1])
 
 
 def summarize_fixed_horizon_single(
@@ -272,3 +277,26 @@ def summarize_fixed_horizon(
     summary.index.names = ["horizon", "direction"]
 
     return summary
+
+
+def save_experiment(
+    experiment,
+    ticker: config.FutTicker,
+    price: settings.PriceMode,
+    contract: settings.FutContractMode,
+):
+    path = config.RES_EXP_DIR / ticker / "profitrability" / "fixed_horizon"
+    path.mkdir(parents=True, exist_ok=True)
+
+    analyses = experiment["analyses"].items()
+    for volume_mode, horizon_analyses in analyses:
+        for horizon, analysis in horizon_analyses.items():
+            # Save analysis
+            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_horizon_{horizon}_analysis.parquet"
+            analysis.to_parquet(path / filename)
+            # Save summary
+            summary = experiment["summaries"][volume_mode].xs(
+                horizon, level="profit", drop_level=False
+            )
+            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_horizon_{horizon}_summary.parquet"
+            summary.to_parquet(path / filename)
