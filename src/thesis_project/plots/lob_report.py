@@ -21,17 +21,22 @@ N_NAN_TO_TITLE: dict[str, str] = {
 }
 
 
+def _is_perc(key: str) -> bool:
+    return key.endswith("_perc")
+
+
 def _nans_generic_hist(data: list[int] | list[float], key: str, title: str):
     config.default_plt()
     fig, ax = plt.subplots(figsize=(8, 4))
 
-    if "perc" not in key:
-        bins = "fd"
-        xlabel = "Number of NaNs"
-    else:
+    if _is_perc(key):
         bins = range(0, 101, 1)
-        xlabel = "Percent of NaNs"
+        ax.set_xlabel("Percent of NaNs")
         ax.set_xticks(range(0, 105, 5))
+        ax.set_xticks(range(0, 101, 1), minor=True)
+    else:
+        bins = "fd"
+        ax.set_xlabel("Number of NaNs")
 
     ax.hist(
         data,
@@ -40,8 +45,6 @@ def _nans_generic_hist(data: list[int] | list[float], key: str, title: str):
         edgecolor="black",
         linewidth=0.5,
     )
-
-    ax.set_xlabel(xlabel)
 
     ax.set_ylabel("Number of dates")
 
@@ -150,8 +153,8 @@ def nans_hist_per_role(collection: dataset.lob.LobReportCollector, key: str):
 def nans_hist_per_ticker(
     collections: dict[config.AssetRole, dataset.lob.LobReportCollector], key: str
 ):
-    if key not in N_NAN_TO_TITLE.keys():
-        raise ValueError
+    if key not in N_NAN_TO_TITLE:
+        raise ValueError(f"Unknown {key=}")
 
     for collection in collections.values():
         nans_hist_per_role(collection, key)
