@@ -1,5 +1,4 @@
 import datetime
-import pickle as pkl
 from dataclasses import dataclass
 
 import numpy as np
@@ -434,8 +433,8 @@ def save_experiment(
     for volume_mode, profit_analyses in analyses:
         for profit_target, analysis in profit_analyses.items():
             # Save analysis
-            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_profit_{profit_target}_analysis.parquet"
-            analysis.to_parquet(path / filename)
+            # filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_profit_{profit_target}_analysis.parquet"
+            # analysis.to_parquet(path / filename)
             # Save summary
             summary = experiment["summaries"][volume_mode].xs(
                 profit_target, level="profit", drop_level=False
@@ -445,15 +444,20 @@ def save_experiment(
 
 
 def load_experiment(
-    ticker: config.FutTicker, price: settings.PriceMode, contract: settings.FutContractMode
-):
-    path = (
-        config.RES_EXP_DIR
-        / ticker
-        / "profitability"
-        / "fixed_profit"
-        / f"{price}_price_{contract}_contract.pkl"
-    )
+    ticker: config.FutTicker,
+    price: settings.PriceMode,
+    contract: settings.FutContractMode,
+    volume: settings.VolumeMode,
+    profit: float,
+) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:
+    path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_profit"
 
-    with path.open("rb") as f:
-        return pkl.load(f)
+    # filename = f"price_{price}_contract_{contract}_volume_{volume}_profit_{float(profit)}_analysis.parquet"
+    # analysis = pd.read_parquet(path / filename)
+
+    filename = (
+        f"price_{price}_contract_{contract}_volume_{volume}_profit_{float(profit)}_summary.parquet"
+    )
+    summary = pd.read_parquet(path / filename)
+
+    return summary

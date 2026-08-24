@@ -293,8 +293,8 @@ def save_experiment(
     for volume_mode, horizon_analyses in analyses:
         for horizon, analysis in horizon_analyses.items():
             # Save analysis
-            filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_horizon_{horizon}_analysis.parquet"
-            analysis.to_parquet(path / filename)
+            # filename = f"price_{price}_contract_{contract}_volume_{volume_mode}_horizon_{horizon}_analysis.parquet"
+            # analysis.to_parquet(path / filename)
             # Save summary
             summary = experiment["summaries"][volume_mode].xs(
                 horizon, level="horizon", drop_level=False
@@ -309,17 +309,17 @@ def load_experiment(
     contract: settings.FutContractMode,
     volume: settings.VolumeMode,
     horizon: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"
 
-    filename = (
-        f"price_{price}_contract_{contract}_volume_{volume}_horizon_{horizon}_analysis.parquet"
-    )
-    analysis = pd.read_parquet(path / filename)
+    # filename = (
+    #     f"price_{price}_contract_{contract}_volume_{volume}_horizon_{horizon}_analysis.parquet"
+    # )
+    # analysis = pd.read_parquet(path / filename)
 
     filename = (
         f"price_{price}_contract_{contract}_volume_{volume}_horizon_{horizon}_summary.parquet"
     )
     summary = pd.read_parquet(path / filename)
 
-    return analysis, summary
+    return summary
