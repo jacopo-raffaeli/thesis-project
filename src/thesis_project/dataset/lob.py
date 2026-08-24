@@ -918,7 +918,7 @@ def preprocess_all_lobs(*, ticker: config.FutTicker, metadata: config.LobConfig 
             # Run preprocessing
             lob, report = preprocess(raw_path, asset, metadata)
 
-            # Save lob to preprocessed/... specular path
+            # Save lob to data/processed/... specular path
             pro_path = config.DATA_PRO_DIR / raw_path.relative_to(config.DATA_RAW_DIR)
             pro_path.parent.mkdir(parents=True, exist_ok=True)
             lob.astype("float32").to_parquet(pro_path)
