@@ -8,7 +8,7 @@ from thesis_project import config, dataset
 # TODO: Address a proper xticks if not perc
 # TODO: Add timestamps distribution
 # TODO: Add gaps distribution
-# TODO: Add lobs retrivial for given condition
+# TODO: Add lobs/dates retrivial for given condition
 
 
 N_NAN_TO_TITLE: dict[str, str] = {
@@ -21,7 +21,7 @@ N_NAN_TO_TITLE: dict[str, str] = {
 }
 
 
-def _n_nan_generic_hist(data: list, key: str, title: str):
+def _nans_generic_hist(data: list[int] | list[float], key: str, title: str):
     config.default_plt()
     fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -53,16 +53,16 @@ def _n_nan_generic_hist(data: list, key: str, title: str):
     plt.show()
 
 
-def n_nan_hist_lob(collection: dataset.lob.LobReportCollector, key: str):
+def nans_hist_lob(collection: dataset.lob.LobReportCollector, key: str):
     data = []
     for _, report in collection.reports.items():
         data.append(report.integrity["nans"]["lob"][key])
 
     title = f"Distribution of the {N_NAN_TO_TITLE[key]} in {collection.ticker.upper()} {collection.role.upper()} LOB"
-    _n_nan_generic_hist(data, key, title)
+    _nans_generic_hist(data, key, title)
 
 
-def n_nan_hist_level(collection: dataset.lob.LobReportCollector, key: str, level: int):
+def nans_hist_level(collection: dataset.lob.LobReportCollector, key: str, level: int):
     data = []
     for _, report in collection.reports.items():
         try:
@@ -77,10 +77,10 @@ def n_nan_hist_level(collection: dataset.lob.LobReportCollector, key: str, level
         f"Distribution of the {N_NAN_TO_TITLE[key]} in {collection.ticker.upper()} {collection.role.upper()} LOB"
         f"\nLevel {level!r}"
     )
-    _n_nan_generic_hist(data, key, title)
+    _nans_generic_hist(data, key, title)
 
 
-def n_nan_hist_side(
+def nans_hist_side(
     collection: dataset.lob.LobReportCollector, key: str, level: int, side: config.LobSide
 ):
     data = []
@@ -97,10 +97,10 @@ def n_nan_hist_side(
         f"Distribution of the {N_NAN_TO_TITLE[key]} in {collection.ticker.upper()} {collection.role.upper()} LOB"
         f"\nLevel {level!r} Side {side.capitalize()!r}"
     )
-    _n_nan_generic_hist(data, key, title)
+    _nans_generic_hist(data, key, title)
 
 
-def n_nan_hist_column(
+def nans_hist_column(
     collection: dataset.lob.LobReportCollector,
     key: str,
     level: int,
@@ -128,30 +128,30 @@ def n_nan_hist_column(
         f"Distribution of the {N_NAN_TO_TITLE[key]} in {collection.ticker.upper()} {collection.role.upper()} LOB"
         f"\nLevel {level!r} Side {side.capitalize()!r} Column {column.capitalize()!r}"
     )
-    _n_nan_generic_hist(data, key, title)
+    _nans_generic_hist(data, key, title)
 
 
-def n_nan_hist_per_role(collection: dataset.lob.LobReportCollector, key: str):
-    n_nan_hist_lob(collection, key)
+def nans_hist_per_role(collection: dataset.lob.LobReportCollector, key: str):
+    nans_hist_lob(collection, key)
 
     for level in config.LOB.levels:
-        n_nan_hist_level(collection, key, level)
+        nans_hist_level(collection, key, level)
 
     for level in config.LOB.levels:
         for side in get_args(config.LobSide):
-            n_nan_hist_side(collection, key, level, side)
+            nans_hist_side(collection, key, level, side)
 
     for level in config.LOB.levels:
         for side in get_args(config.LobSide):
             for column in get_args(config.LobColumn):
-                n_nan_hist_column(collection, key, level, side, column)
+                nans_hist_column(collection, key, level, side, column)
 
 
-def n_nan_hist_per_ticker(
+def nans_hist_per_ticker(
     collections: dict[config.AssetRole, dataset.lob.LobReportCollector], key: str
 ):
     if key not in N_NAN_TO_TITLE.keys():
         raise ValueError
 
     for collection in collections.values():
-        n_nan_hist_per_role(collection, key)
+        nans_hist_per_role(collection, key)
