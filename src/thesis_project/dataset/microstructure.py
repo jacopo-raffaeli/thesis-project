@@ -90,11 +90,10 @@ def compute_obi(lob: pd.DataFrame, max_level: int, ratio: bool) -> pd.Series:
     bid_columns = config.LOB.get_columns(levels=levels, sides="bid", column_types="size")
     lob = _validate_columns(lob, bid_columns + ask_columns)
 
-    ask_depth = lob[ask_columns].sum(axis=1)
-    bid_depth = lob[bid_columns].sum(axis=1)
+    ask_depth = lob[ask_columns].fillna(0).sum(axis=1)
+    bid_depth = lob[bid_columns].fillna(0).sum(axis=1)
     s = bid_depth - ask_depth
     if ratio:
-        # TODO: Evaluate how to handle correctly division by zero
         den = (bid_depth + ask_depth).replace(0, np.nan)
         s /= den
 
