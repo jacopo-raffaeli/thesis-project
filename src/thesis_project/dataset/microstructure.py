@@ -1,3 +1,5 @@
+from typing import Callable, Literal
+
 import numpy as np
 import pandas as pd
 
@@ -31,6 +33,7 @@ def get_price(lob: pd.DataFrame, level: int, side: config.LobSide) -> pd.Series:
     s = lob[columns].squeeze("columns")
     s = _validate_series(s)
     s = s.rename(f"price_level_{level}_side_{side}")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
@@ -42,6 +45,7 @@ def get_size(lob: pd.DataFrame, level: int, side: config.LobSide) -> pd.Series:
     s = lob[columns].squeeze("columns")
     s = _validate_series(s)
     s = s.rename(f"size_level_{level}_side_{side}")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
@@ -53,6 +57,7 @@ def compute_mid_price(lob: pd.DataFrame) -> pd.Series:
     s = (lob["L1-AskPrice"] + lob["L1-BidPrice"]) / 2
     s = _validate_series(s)
     s = s.rename("mid_price")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
@@ -64,6 +69,7 @@ def compute_spread(lob: pd.DataFrame) -> pd.Series:
     s = (lob["L1-AskPrice"] - lob["L1-BidPrice"]) / 2
     s = _validate_series(s)
     s = s.rename("spread")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
@@ -80,6 +86,7 @@ def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
     s = num / den
     s = _validate_series(s)
     s = s.rename("micro_price")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
@@ -101,20 +108,103 @@ def compute_obi(lob: pd.DataFrame, max_level: int, ratio: bool) -> pd.Series:
 
     suffix = "_ratio" if ratio else ""
     s = s.rename(f"obi_level_{1}_{max_level}{suffix}")
+    s = s.rename(index=config.LOB.index_name)
 
     return s
 
 
-def compute_bof(lob: pd.DataFrame) -> pd.Series: ...
+def compute_bof(lob: pd.DataFrame, level: int) -> pd.Series:
+    price_col = config.LOB.get_columns(levels=[level], sides="bid", column_types="price")
+    size_col = config.LOB.get_columns(levels=[level], sides="bid", column_types="size")
+    lob = _validate_columns(lob, price_col + size_col)
+
+    price = lob[price_col]
+    size = lob[size_col]
+    s = np.select(
+        [
+            price > price.shift(1),
+            price == price.shift(1),
+            price < price.shift(1),
+        ],
+        [
+            size + 0,
+            size - size.shift(1),
+            0 - size.shift(1),
+        ],
+        default=np.nan,
+    )
+    s = pd.Series(s, index=lob.index)
+    s = _validate_series(s)
+    s = s.rename(f"bof_level_{level}")
+    s = s.rename(index=config.LOB.index_name)
+
+    return s
 
 
-def compute_aof(lob: pd.DataFrame) -> pd.Series: ...
+def compute_aof(lob: pd.DataFrame, level: int) -> pd.Series:
+    price_col = config.LOB.get_columns(levels=[level], sides="ask", column_types="price")
+    size_col = config.LOB.get_columns(levels=[level], sides="ask", column_types="size")
+    lob = _validate_columns(lob, price_col + size_col)
+
+    price = lob[price_col]
+    size = lob[size_col]
+    s = np.select(
+        [
+            price > price.shift(1),
+            price == price.shift(1),
+            price < price.shift(1),
+        ],
+        [
+            0 - size.shift(1),
+            size - size.shift(1),
+            size + 0,
+        ],
+        default=np.nan,
+    )
+    s = pd.Series(s, index=lob.index)
+    s = _validate_series(s)
+    s = s.rename(f"aof_level_{level}")
+    s = s.rename(index=config.LOB.index_name)
+
+    return s
 
 
-def compute_ofi(lob: pd.DataFrame) -> pd.Series: ...
+def compute_ofi(lob: pd.DataFrame, level: int) -> pd.Series:
+    bof = compute_bof(lob, level)
+    aof = compute_aof(lob, level)
+
+    s = bof + aof
+    s = _validate_series(s)
+    s = s.rename(f"ofi_level_{level}")
+    s = s.rename(index=config.LOB.index_name)
+
+    return s
 
 
 def compute_slope_v1(lob: pd.DataFrame) -> pd.Series: ...
 
 
 def compute_slope_v2(lob: pd.DataFrame) -> pd.Series: ...
+
+
+SlopeType = Literal[
+    "Naes, Skjeltorp (2006)",
+    "Della Vedova, Gao, Grant (2021)",
+]
+
+SLOPE_DICT: dict[SlopeType, Callable] = {
+    "Naes, Skjeltorp (2006)": compute_slope_v1,
+    "Della Vedova, Gao, Grant (2021)": compute_slope_v2,
+}
+
+
+def compute_slope(lob: pd.DataFrame, slope_type: SlopeType) -> pd.Series:
+    match slope_type:
+        case "Naes, Skjeltorp (2006)":
+            return compute_slope_v1(lob)
+
+        case "Della Vedova, Gao, Grant (2021)":
+            return compute_slope_v2(lob)
+
+        case _:
+            raise ValueError("")
