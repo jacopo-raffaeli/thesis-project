@@ -50,9 +50,9 @@ LobRecordTypeConsistency = Literal[
 
 
 LobRecordType = Literal[
-    # NORMALIZATION
+    # Normalization
     LobRecordTypeNormalization,
-    # CONSISTENCY
+    # Consistency
     LobRecordTypeConsistency,
 ]
 
@@ -154,24 +154,40 @@ class LobReportCollector:
 
         self.reports[report.date] = report
 
-    def summary(self):
-        summary: dict[LobRecordType, int] = {id: 0 for id in get_args(LobRecordType)}
-        for report in self.reports.values():
-            for record in report.records:
-                summary[record.id] += 1
+    # TODO: Define the following function:
+    # - Print a generic summary
+    # - Number of LOBs preprocessed
+    # - For each LobRecordType the number of issues found if any
+    # - It can be also 2 functions collect/print
 
-        print(f"Report summary for {self.ticker.upper()} {self.role.upper()} LOBs:")
-        print(f"- Number of dates: {len(self.reports)}")
-        print("- Issues count:")
-        for k, v in summary.items():
-            print(f"  - {k}: {v}")
+    # TODO: Define the following function:
+    # - Given an id LobRecordType
+    # - Search for all souch records in reports
+    # - print a summary list like:
+    #   - number of LOBs affected
+    #   - LOB identified by date
+    #   - report the number of records in such date
+    #   - print the description of every such record
+    #   - print the affected timestamps
+    #   - it can be also 2 functions collect/print
 
-    def dates_by_id(self, id: LobRecordType):
-        foo = {}
-        for report in self.reports.values():
-            for record in report.records:
-                if record == id:
-                    foo[report.date]
+    # TODO: Define the following function:
+    # - Like the one above iterating on all ids of type normalization/consistency all
+    # - It can be also 2 functions collect/print
+
+    # TODO: Define the following function/object:
+    # - Scan a collection of reports
+    # - Produce a list of dates to be exxcluded from future analysis
+    # - Dates that must finish in such list are:
+    #   - Dates with LobRecordTypeConsistency issues if the timestamps are in a certain window
+    #   - Or maybe it is better to collect them anyway and only later filter only the dates with timestamps in the window of interest?
+    #   - I maybe prefer the second but I am open to opinions
+    #   - Also dates with critical issues in integrity should be put in here but this is more subjective to be defined
+    #   - Maybe something like add all dates with nans > threshold or something like this
+    #   - Should save this list in some reasonable way, even a csv could work for me so that I can also consultate it
+    #   - Be able to put add dates by hand too
+    #   - the analysis is perfomred per ticker - role I should be able to load the per ticker or per ticker and role
+    #   - the natural saving path is processed/ticker/role/dates_to_excluded.csv or something like this
 
 
 def load(path: Path) -> pd.DataFrame:

@@ -1,5 +1,8 @@
 import pandas as pd
 
+# TODO: Implement the tradable basis
+# Follow the notes
+
 
 def compute_gross_basis(
     *, price_ctd: pd.Series, price_fut: pd.Series, cf: float | pd.Series
@@ -32,4 +35,12 @@ def compute_gross_basis(
 def compute_net_basis(): ...
 
 
-def compute_tradable_basis(): ...
+def compute_tradable_basis(
+    *,
+    price_ctd: pd.Series,
+    price_fut: pd.Series,
+    cf: float | pd.Series,
+    notional_ctd: float,
+    notional_fut: float,
+    n_contracts_ctd: float,
+): ...
