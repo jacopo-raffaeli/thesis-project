@@ -272,4 +272,4 @@ def compute_slope(
             return compute_slope_v2(lob, max_level=max_level, side=side)
 
         case _:
-            raise ValueError("")
+            raise ValueError("Unknown slope type")
