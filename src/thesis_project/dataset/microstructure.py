@@ -5,10 +5,12 @@ import pandas as pd
 
 from thesis_project import config
 
-# TODO: Refactor collectors/microstructure.py and collectors/relationships.py
-# TODO: Leverage available code from utils and config
-# TODO: Define a standard signature for single asset and cross asset functions
-# TODO: Define utilities for common operations
+# TODO: Define where it is appropiate to use fillna(0)
+# e.g. when summing volumes along levels one nan should not invalidate the whole sum
+# TODO: Define where it is appropiate to use replace(0, np.nan)
+# e.g. division by 0
+# TODO: Define other appropriate edge case handling
+# TODO: Define missing/better validations
 
 
 def _validate_columns(lob: pd.DataFrame, columns: list[str]):
@@ -51,10 +53,15 @@ def get_size(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Serie
 
 
 def compute_mid_price(lob: pd.DataFrame) -> pd.Series:
-    columns = config.LOB.get_columns(levels=[1], sides=("bid", "ask"), column_types="price")
+    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
+    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
+    columns = best_bid_price_column + best_ask_price_column
     lob = _validate_columns(lob, columns)
 
-    s = (lob["L1-AskPrice"] + lob["L1-BidPrice"]) / 2
+    best_bid_price = lob[best_bid_price_column]
+    best_ask_price = lob[best_ask_price_column]
+
+    s = (best_ask_price + best_bid_price) / 2
     s = _validate_series(s)
     s = s.rename("mid_price")
     s = s.rename(index=config.LOB.index_name)
@@ -63,10 +70,15 @@ def compute_mid_price(lob: pd.DataFrame) -> pd.Series:
 
 
 def compute_spread(lob: pd.DataFrame) -> pd.Series:
-    columns = config.LOB.get_columns(levels=[1], sides=("bid", "ask"), column_types="price")
+    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
+    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
+    columns = best_bid_price_column + best_ask_price_column
     lob = _validate_columns(lob, columns)
 
-    s = (lob["L1-AskPrice"] - lob["L1-BidPrice"]) / 2
+    best_bid_price = lob[best_bid_price_column]
+    best_ask_price = lob[best_ask_price_column]
+
+    s = (best_ask_price - best_bid_price) / 2
     s = _validate_series(s)
     s = s.rename("spread")
     s = s.rename(index=config.LOB.index_name)
@@ -75,13 +87,22 @@ def compute_spread(lob: pd.DataFrame) -> pd.Series:
 
 
 def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
-    columns = config.LOB.get_columns(
-        levels=[1], sides=("bid", "ask"), column_types=("price", "size")
+    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
+    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
+    best_bid_size_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="size")
+    best_ask_size_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="size")
+    columns = (
+        best_bid_price_column + best_ask_price_column + best_bid_size_column + best_ask_size_column
     )
     lob = _validate_columns(lob, columns)
 
-    num = lob["L1-AskPrice"] * lob["L1-BidSize"] + lob["L1-BidPrice"] * lob["L1-AskSize"]
-    den = lob["L1-BidSize"] + lob["L1-AskSize"]
+    best_bid_price = lob[best_bid_price_column]
+    best_ask_price = lob[best_ask_price_column]
+    best_bid_size = lob[best_bid_size_column]
+    best_ask_size = lob[best_ask_size_column]
+
+    num = best_ask_price * best_bid_size + best_bid_price * best_ask_size
+    den = best_bid_size + best_ask_size
 
     s = num / den
     s = _validate_series(s)
@@ -170,8 +191,8 @@ def compute_aof(lob: pd.DataFrame, *, level: int) -> pd.Series:
 
 
 def compute_ofi(lob: pd.DataFrame, *, level: int) -> pd.Series:
-    bof = compute_bof(lob, level)
-    aof = compute_aof(lob, level)
+    bof = compute_bof(lob, level=level)
+    aof = compute_aof(lob, level=level)
 
     s = bof + aof
     s = _validate_series(s)
