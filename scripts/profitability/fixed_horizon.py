@@ -27,21 +27,21 @@ def main():
 
     # fmt: off
     ANALYSES = [
-        # settings.AnalysisConfig(
-        #     price_mode="mid",
-        #     fut_contract_mode="frac",
-        #     volume_modes=("ignore", "level"),
-        # ),
-        # settings.AnalysisConfig(
-        #     price_mode="mid",
-        #     fut_contract_mode="round",
-        #     volume_modes=("ignore", "level"),
-        # ),
-        # settings.AnalysisConfig(
-        #     price_mode="quoted",
-        #     fut_contract_mode="frac",
-        #     volume_modes=("ignore", "level"),
-        # ),
+        settings.AnalysisConfig(
+            price_mode="mid",
+            fut_contract_mode="frac",
+            volume_modes=("ignore", "level"),
+        ),
+        settings.AnalysisConfig(
+            price_mode="mid",
+            fut_contract_mode="round",
+            volume_modes=("ignore", "level"),
+        ),
+        settings.AnalysisConfig(
+            price_mode="quoted",
+            fut_contract_mode="frac",
+            volume_modes=("ignore", "level"),
+        ),
         settings.AnalysisConfig(
             price_mode="quoted",
             fut_contract_mode="round",
@@ -55,15 +55,15 @@ def main():
         1*60,
         5*60,
         10*60,
-        # 15*60,
+        15*60,
         30*60,
-        # 45*60,
+        45*60,
         1*60**2,
         2*60**2,
-        # 3*60**2,
-        # 24*60**2,
-        # 3*24*60**2,
-        # 5*24*60**2
+        3*60**2,
+        24*60**2,
+        3*24*60**2,
+        5*24*60**2
     ]
 
     CONFIG = fixed_horizon.FixedHorizonConfig(
