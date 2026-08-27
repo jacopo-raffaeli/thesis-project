@@ -1,100 +1,176 @@
-from typing import Literal
+from typing import Callable, Literal, get_args
 
 import numpy as np
 import pandas as pd
 
-from thesis_project import config
+from thesis_project import config, utils
 
-# TODO: Define where it is appropiate to use fillna(0)
-# e.g. when summing volumes along levels one nan should not invalidate the whole sum
-# TODO: Define where it is appropiate to use replace(0, np.nan)
-# e.g. division by 0
-# TODO: Define other appropriate edge case handling
-# TODO: Define missing/better validations
+# TODO: Define the semantic meaning of NaN in the raw LOB and
+#       feature-specific missing-value handling.
+
+# TODO: Define feature-specific handling of zero denominators
+#       and other numerical edge cases.
+
+# TODO: Centralize/canonicalize feature naming.
+
+# TODO: Define the final feature registry / preprocessing pipeline.
+
+# TODO: Add tests for feature formulas and edge cases.
 
 
-def _validate_columns(lob: pd.DataFrame, columns: list[str]):
+def _validate_columns(lob: pd.DataFrame, columns: list[str] | str):
+    if isinstance(columns, str):
+        columns = [columns]
+
     missing = set(columns).difference(lob.columns)
     if missing:
         raise ValueError(f"Missing columns: {', '.join(sorted(missing))}")
 
-    return lob
 
+def _to_series(df: pd.DataFrame | pd.Series) -> pd.Series:
+    if isinstance(df, pd.Series):
+        return df
 
-def _validate_series(s) -> pd.Series:
-    if not isinstance(s, pd.Series):
-        raise TypeError(f"Expected a Series after squeeze, got {type(s)}")
+    if len(df.columns) != 1:
+        raise ValueError(f"Expected a single column DataFrame, got {len(df.columns)} columns")
+
+    s = df.squeeze("columns")
+    assert isinstance(s, pd.Series)
 
     return s
 
 
-def get_price(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Series:
-    columns = config.LOB.get_columns(levels=level, sides=side, column_types="price")
-    lob = _validate_columns(lob, columns)
+def _validate_microstructure_series(s: pd.Series):
+    if not isinstance(s, pd.Series):
+        raise TypeError(f"Expected a Series, got {type(s)!r}")
 
-    s = lob[columns].squeeze("columns")
-    s = _validate_series(s)
-    s = s.rename(f"price_level_{level}_side_{side}")
-    s = s.rename(index=config.LOB.index_name)
+    if not isinstance(s.index, pd.DatetimeIndex):
+        raise TypeError(f"Expected a DatetimeIndex, got {type(s.index)!r}")
+
+    if s.index.hasnans:
+        raise ValueError("Found NaNs in the index")
+
+    if s.index.has_duplicates:
+        raise ValueError("Found duplicates in the index")
+
+    if not s.index.is_monotonic_increasing:
+        raise ValueError("The index is not ordered")
+
+
+def get_price(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Series:
+    """
+    Extract the prices timeseries for a certain level and side for a daily LOB
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * level: LOB level
+    * side: LOB side
+
+    ## Return:
+    s: The extracted prices series
+    """
+    column = config.LOB.get_column(level=level, side=side, column_type="price")
+    _validate_columns(lob, column)
+
+    s = lob[column]
+    s = _to_series(s)
 
     return s
 
 
 def get_size(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Series:
-    columns = config.LOB.get_columns(levels=level, sides=side, column_types="size")
-    lob = _validate_columns(lob, columns)
+    """
+    Extract the sizes timeseries for a certain level and side for a daily LOB
 
-    s = lob[columns].squeeze("columns")
-    s = _validate_series(s)
-    s = s.rename(f"size_level_{level}_side_{side}")
-    s = s.rename(index=config.LOB.index_name)
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * level: LOB level
+    * side: LOB side
+
+    ## Return:
+    s: The extracted sizes series
+    """
+    column = config.LOB.get_column(level=level, side=side, column_type="size")
+    _validate_columns(lob, column)
+
+    s = lob[column]
+    s = _to_series(s)
 
     return s
 
 
 def compute_mid_price(lob: pd.DataFrame) -> pd.Series:
-    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
-    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
-    columns = best_bid_price_column + best_ask_price_column
-    lob = _validate_columns(lob, columns)
+    """
+    Compute the mid prices timeseries for a daily LOB
+    \nThe mid price is computed as: (L1-AskPrice + L1-BidPrice) / 2
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+
+    ## Return:
+    s: The mid price series
+    """
+    best_bid_price_column = config.LOB.get_column(level=1, side="bid", column_type="price")
+    best_ask_price_column = config.LOB.get_column(level=1, side="ask", column_type="price")
+    columns = [best_bid_price_column, best_ask_price_column]
+    _validate_columns(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
 
     s = (best_ask_price + best_bid_price) / 2
-    s = _validate_series(s)
-    s = s.rename("mid_price")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_spread(lob: pd.DataFrame) -> pd.Series:
-    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
-    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
-    columns = best_bid_price_column + best_ask_price_column
-    lob = _validate_columns(lob, columns)
+    """
+    Compute the spreads timeseries for a daily LOB
+    \nThe spread is computed as: L1-AskPrice - L1-BidPrice
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+
+    ## Return:
+    s: The spread series
+    """
+    best_bid_price_column = config.LOB.get_column(level=1, side="bid", column_type="price")
+    best_ask_price_column = config.LOB.get_column(level=1, side="ask", column_type="price")
+    columns = [best_bid_price_column, best_ask_price_column]
+    _validate_columns(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
 
-    s = (best_ask_price - best_bid_price) / 2
-    s = _validate_series(s)
-    s = s.rename("spread")
-    s = s.rename(index=config.LOB.index_name)
+    s = best_ask_price - best_bid_price
+    s = _to_series(s)
 
     return s
 
 
 def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
-    best_bid_price_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="price")
-    best_ask_price_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="price")
-    best_bid_size_column = config.LOB.get_columns(levels=[1], sides="bid", column_types="size")
-    best_ask_size_column = config.LOB.get_columns(levels=[1], sides="ask", column_types="size")
-    columns = (
-        best_bid_price_column + best_ask_price_column + best_bid_size_column + best_ask_size_column
-    )
-    lob = _validate_columns(lob, columns)
+    """
+    Compute the micro prices timeseries for a daily LOB
+    \nThe micro price is computed as: (L1-AskPrice * L1-BidSize + L1-BidPrice * L1-AskSize) / (L1-Asksize + L1-BidSize)
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+
+    ## Return:
+    s: The micro price series
+    """
+    best_bid_price_column = config.LOB.get_column(level=1, side="bid", column_type="price")
+    best_ask_price_column = config.LOB.get_column(level=1, side="ask", column_type="price")
+    best_bid_size_column = config.LOB.get_column(level=1, side="bid", column_type="size")
+    best_ask_size_column = config.LOB.get_column(level=1, side="ask", column_type="size")
+    columns = [
+        best_bid_price_column,
+        best_ask_price_column,
+        best_bid_size_column,
+        best_ask_size_column,
+    ]
+    _validate_columns(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
@@ -105,18 +181,30 @@ def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
     den = best_bid_size + best_ask_size
 
     s = num / den
-    s = _validate_series(s)
-    s = s.rename("micro_price")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_obi(lob: pd.DataFrame, *, max_level: int, ratio: bool) -> pd.Series:
+    """
+    Compute the order book imbalance timeseries from 1 to max_level for a daily LOB
+    \nThe OBI is computed as: sum_{i = 1}^{max_level} (L{i}-BidSize - L{i}-AskSize)
+    \nIf ratio == True the OBI is normalized by sum_{i = 1}^{max_level} (L{i}-BidSize + L{i}-AskSize)
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * max_level: The maximum level to include in the OBI
+    * ratio: If True normalize the OBI
+
+    ## Return:
+    s: The OBI series
+    """
     levels = list(range(1, max_level + 1, 1))
     ask_columns = config.LOB.get_columns(levels=levels, sides="ask", column_types="size")
     bid_columns = config.LOB.get_columns(levels=levels, sides="bid", column_types="size")
-    lob = _validate_columns(lob, bid_columns + ask_columns)
+    columns = bid_columns + ask_columns
+    _validate_columns(lob, columns)
 
     ask_depth = lob[ask_columns].fillna(0).sum(axis=1)
     bid_depth = lob[bid_columns].fillna(0).sum(axis=1)
@@ -125,19 +213,28 @@ def compute_obi(lob: pd.DataFrame, *, max_level: int, ratio: bool) -> pd.Series:
         den = (bid_depth + ask_depth).replace(0, np.nan)
         s /= den
 
-    s = _validate_series(s)
-
-    suffix = "_ratio" if ratio else ""
-    s = s.rename(f"obi_level_{max_level}{suffix}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_bof(lob: pd.DataFrame, *, level: int) -> pd.Series:
-    price_column = config.LOB.get_columns(levels=[level], sides="bid", column_types="price")
-    size_column = config.LOB.get_columns(levels=[level], sides="bid", column_types="size")
-    lob = _validate_columns(lob, price_column + size_column)
+    """
+    Compute the bid Order Flow timeseries for a certain level for a daily LOB
+    \nThe bOF is computed as:
+    \n
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * level: LOB level
+
+    ## Return:
+    s: The bOF series
+    """
+    price_column = config.LOB.get_column(level=level, side="bid", column_type="price")
+    size_column = config.LOB.get_column(level=level, side="bid", column_type="size")
+    columns = [price_column, size_column]
+    _validate_columns(lob, columns)
 
     price = lob[price_column]
     size = lob[size_column]
@@ -155,20 +252,31 @@ def compute_bof(lob: pd.DataFrame, *, level: int) -> pd.Series:
         default=np.nan,
     )
     s = pd.Series(s, index=lob.index)
-    s = _validate_series(s)
-    s = s.rename(f"bof_level_{level}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_aof(lob: pd.DataFrame, *, level: int) -> pd.Series:
-    price_col = config.LOB.get_columns(levels=[level], sides="ask", column_types="price")
-    size_col = config.LOB.get_columns(levels=[level], sides="ask", column_types="size")
-    lob = _validate_columns(lob, price_col + size_col)
+    """
+    Compute the ask Order Flow timeseries for a certain level for a daily LOB
+    \nThe aOF is computed as:
+    \n
 
-    price = lob[price_col]
-    size = lob[size_col]
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * level: LOB level
+
+    ## Return:
+    s: The aOF series
+    """
+    price_column = config.LOB.get_column(level=level, side="ask", column_type="price")
+    size_column = config.LOB.get_column(level=level, side="ask", column_type="size")
+    columns = [price_column, size_column]
+    _validate_columns(lob, columns)
+
+    price = lob[price_column]
+    size = lob[size_column]
     s = np.select(
         [
             price > price.shift(1),
@@ -183,74 +291,116 @@ def compute_aof(lob: pd.DataFrame, *, level: int) -> pd.Series:
         default=np.nan,
     )
     s = pd.Series(s, index=lob.index)
-    s = _validate_series(s)
-    s = s.rename(f"aof_level_{level}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_ofi(lob: pd.DataFrame, *, level: int) -> pd.Series:
+    """
+    Compute the Order Flow Imbalance timeseries for a certain level for a daily LOB
+    \nThe OFI is computed as: bOF + aOF
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * level: LOB level
+
+    ## Return:
+    s: The OFI series
+    """
     bof = compute_bof(lob, level=level)
     aof = compute_aof(lob, level=level)
 
     s = bof + aof
-    s = _validate_series(s)
-    s = s.rename(f"ofi_level_{level}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_slope_v1(lob: pd.DataFrame, *, max_level: int, side: config.LobSide) -> pd.Series:
-    levels = list(range(1, max_level + 1, 1))
-    price_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="price")
-    size_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="size")
-    _validate_columns(lob, price_columns + size_columns)
+    """
+    Compute the Order Book slope timeseries from 1 to max_level for a certain side for a daily LOB
+    \nThe slope is computed as descibed in: "Naes and Skjeltorp (2006)"
 
-    n = len(levels)
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * max_level: The maximum level to include in the OBI
+    * side: LOB side
+
+    ## Return:
+    s: The slope series
+    """
+    best_price_column = config.LOB.get_column(level=1, side=side, column_type="price")
+    best_size_column = config.LOB.get_column(level=1, side=side, column_type="size")
+    columns = [best_price_column, best_size_column]
+
+    if max_level > 1:
+        levels = list(range(1, max_level + 1, 1))
+        price_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="price")
+        size_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="size")
+        columns = price_columns + size_columns
+
+    _validate_columns(lob, columns)
+
     mid_price = compute_mid_price(lob)
-
-    best_price_column = price_columns[0]
-    best_size_column = size_columns[0]
     best_price = lob[best_price_column]
     best_size = lob[best_size_column]
 
     num1 = best_size
-    den1 = np.abs((best_price / mid_price) - 1)
+    den1 = (best_price / mid_price).sub(1).abs().replace(0, np.nan)
     s = num1 / den1
 
-    if len(levels) > 1:
-        num2 = np.abs((lob[size_columns[1:]] / lob[size_columns[:-1]]) - 1)
-        den2 = np.abs((lob[price_columns[1:]] / lob[price_columns[:-1]]) - 1)
+    if max_level > 1:
+        num2 = (
+            lob[size_columns]
+            .div(lob[size_columns].shift(1, axis=1).replace(0, np.nan))
+            .iloc[:, 1:]
+            .sub(1)
+        )
+        den2 = (
+            lob[price_columns]
+            .div(lob[price_columns].shift(1, axis=1).replace(0, np.nan))
+            .iloc[:, 1:]
+            .sub(1)
+            .abs()
+            .replace(0, np.nan)
+        )
         s += (num2 / den2).sum(axis=1)
+        s /= max_level
 
-    s /= n
-    s = _validate_series(s)
-    s = s.rename(f"slope_v1_level_{max_level}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
 
 def compute_slope_v2(lob: pd.DataFrame, *, max_level: int, side: config.LobSide) -> pd.Series:
+    """
+    Compute the Order Book slope timeseries from 1 to max_level for a certain side for a daily LOB
+    \nThe slope is computed as descibed in: "Della Vedova, Gao, Grant and Westerholm (2021)"
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * max_level: The maximum level to include in the OBI
+    * side: LOB side
+
+    ## Return:
+    s: The slope series
+    """
     levels = list(range(1, max_level + 1, 1))
+    max_level_price_column = config.LOB.get_column(level=max_level, side=side, column_type="price")
     price_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="price")
     size_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="size")
-    _validate_columns(lob, price_columns + size_columns)
+    columns = price_columns + size_columns
+    _validate_columns(lob, columns)
 
     mid_price = compute_mid_price(lob)
-
-    max_level_price_column = price_columns[-1]
     max_level_price = lob[max_level_price_column]
 
     num = lob[size_columns].fillna(0).sum(axis=1)
-    den = np.abs(max_level_price - mid_price)
+    den = (max_level_price - mid_price).abs().replace(0, np.nan)
 
     s = num / den
-    s = _validate_series(s)
-    s = s.rename(f"slope_v2_level_{max_level}")
-    s = s.rename(index=config.LOB.index_name)
+    s = _to_series(s)
 
     return s
 
@@ -260,12 +410,30 @@ SlopeType = Literal[
     "Della Vedova, Gao, Grant and Westerholm (2021)",
 ]
 
+SLOPE_DICT: dict[SlopeType, str] = {
+    "Naes and Skjeltorp (2006)": "v1",
+    "Della Vedova, Gao, Grant and Westerholm (2021)": "v2",
+}
+
 
 def compute_slope(
     lob: pd.DataFrame, *, max_level: int, side: config.LobSide, slope_type: SlopeType
 ) -> pd.Series:
+    """
+    Compute the Order Book slope timeseries from 1 to max_level for a certain side for a daily LOB
+    \nThe slope is computed based on SlopeType passed
+
+    ## Args:
+    * lob: DataFrame containing a preprocessed LOB
+    * max_level: The maximum level to include in the OBI
+    * side: LOB side
+    * slope_type: SlopeType literal
+
+    ## Return:
+    s: The slope series
+    """
     match slope_type:
-        case "Naes, Skjeltorp (2006)":
+        case "Naes and Skjeltorp (2006)":
             return compute_slope_v1(lob, max_level=max_level, side=side)
 
         case "Della Vedova, Gao, Grant and Westerholm (2021)":
@@ -273,3 +441,83 @@ def compute_slope(
 
         case _:
             raise ValueError("Unknown slope type")
+
+
+def microstructure_feature_lobs(
+    *,
+    ticker: config.FutTicker,
+    role: config.AssetRole,
+    par_func: Callable[[pd.DataFrame], pd.Series],
+) -> pd.Series:
+    """
+    Compute a microstructure feature over all LOBs of a certain ticker and role and concatentate them in a single series
+    \nThe function must be partially initialized in all its arguments aside for the LOB DataFrame
+
+    ## Args:
+    * ticker: FutTicker literal
+    * role: AssetRole literal
+    * par_func: Partially initialized function with signature (DataFrame) -> Series
+
+    ## Return:
+    * s: Series of the microstructure feature
+    """
+    paths = utils.io.list_lob_paths(root=config.DATA_PRO_DIR, ticker=ticker, role=role)
+
+    if not paths:
+        base = config.DATA_PRO_DIR / ticker / role
+        raise ValueError(f"No LOB found in {base!r}")
+
+    s_daily: list[pd.Series] = []
+    for path in paths:
+        lob = pd.read_parquet(path)
+        s_daily.append(par_func(lob))
+
+    s = pd.concat(s_daily)
+    _validate_microstructure_series(s)
+
+    return s
+
+
+def microstructure_per_role(
+    *,
+    ticker: config.FutTicker,
+    role: config.AssetRole,
+    par_funcs: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Series]],
+):
+    """
+    Compute a set of microstructure feature over all LOBs of a certain ticker and role
+    \nThe functions must be partially initialized in all its arguments aside for the LOB DataFrame
+    \nThe Series are saved to data/processed/ticker/microstructure/folder/role_name.parquet
+
+    ## Args:
+    * ticker: FutTicker literal
+    * role: AssetRole literal
+    * par_funcs: Dict of keys (folder, name) and partially initialized functions
+    """
+    root = config.DATA_PRO_DIR / ticker / "microstructure"
+    for (folder, name), par_func in par_funcs.items():
+        path = root / folder
+        path.mkdir(parents=True, exist_ok=True)
+        filename = f"{role}_{name}.parquet"
+
+        s = microstructure_feature_lobs(ticker=ticker, role=role, par_func=par_func)
+        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
+        s.to_parquet(path / filename)
+
+
+def microstructure_per_ticker(
+    *,
+    ticker: config.FutTicker,
+    par_funcs: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Series]],
+):
+    """
+    Compute a set of microstructure feature over all LOBs of a certain ticker
+    \nThe functions must be partially initialized in all its arguments aside for the LOB DataFrame
+    \nThe Series are saved to data/processed/ticker/microstructure/folder/role_name.parquet
+
+    ## Args:
+    * ticker: FutTicker literal
+    * par_funcs: Dict of keys (folder, name) and partially initialized functions
+    """
+    for role in get_args(config.AssetRole):
+        microstructure_per_role(ticker=ticker, role=role, par_funcs=par_funcs)
