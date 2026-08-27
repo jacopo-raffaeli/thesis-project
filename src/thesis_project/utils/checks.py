@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def assert_one_second_index(obj: pd.DataFrame | pd.Series, freq: pd.Timedelta | str = "1s") -> None:
+def is_sampled_at_freq(obj: pd.DataFrame | pd.Series, freq: pd.Timedelta | str = "1s") -> None:
     """
     Assert that obj has a DatetimeIndex sampled exactly once per 'freq' (default '1s').
 
