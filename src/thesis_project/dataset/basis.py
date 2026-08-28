@@ -3,7 +3,6 @@ from typing import Literal
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.profitability.settings import CTD_FACE_VALUE, FUT_FACE_VALUE
 
 
 def _validate_series(s: pd.Series):
@@ -34,6 +33,36 @@ def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
         raise ValueError(f"Missing conversion factor for dates: {missing_dates.tolist()}")
 
     return aligned
+
+
+def frac_fut_contracts(
+    cf: pd.Series,
+    ctd_contracts: int,
+    ctd_face_value: float = config.BTP.contract_size,
+    fut_face_value: float = config.FBTP.contract_size,
+) -> pd.Series:
+    return (cf * ctd_contracts * (ctd_face_value / fut_face_value)).rename("fut_contracts")
+
+
+def round_fut_contracts(
+    fut_contracts: pd.Series,
+) -> pd.Series:
+    fut_contracts = fut_contracts.round().astype(int)
+    if (fut_contracts == 0).any():
+        raise ValueError("Position size produces zero futures contracts")
+
+    return fut_contracts.rename("fut_contracts")
+
+
+def compute_eff_cf(
+    ctd_contracts: int,
+    fut_contracts: pd.Series,
+    ctd_face_value: float = config.BTP.contract_size,
+    fut_face_value: float = config.FBTP.contract_size,
+) -> pd.Series:
+    return (fut_contracts * fut_face_value / (ctd_contracts * ctd_face_value)).rename(
+        "effective_cf"
+    )
 
 
 def _compute_gross_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series) -> pd.Series:
@@ -149,13 +178,13 @@ GrossBasisType = Literal[
 def compute_gross_basis(*, ticker: config.FutTicker, mode: GrossBasisType) -> pd.Series:
     match mode:
         case "mid":
-            compute_gross_basis_mid(ticker)
+            return compute_gross_basis_mid(ticker)
 
         case "ask":
-            compute_gross_basis_ask(ticker)
+            return compute_gross_basis_ask(ticker)
 
         case "bid":
-            compute_gross_basis_bid(ticker)
+            return compute_gross_basis_bid(ticker)
 
         case _:
             raise ValueError(f"Unexpected GrossBasisType: {mode!r}")
@@ -173,33 +202,3 @@ def compute_tradable_basis(
 
 
 def compute_net_basis(): ...
-
-
-def frac_fut_contracts(
-    cf: pd.Series,
-    ctd_contracts: int,
-    ctd_face_value: float = CTD_FACE_VALUE,
-    fut_face_value: float = FUT_FACE_VALUE,
-) -> pd.Series:
-    return (cf * ctd_contracts * (ctd_face_value / fut_face_value)).rename("fut_contracts")
-
-
-def round_fut_contracts(
-    fut_contracts: pd.Series,
-) -> pd.Series:
-    fut_contracts = fut_contracts.round().astype(int)
-    if (fut_contracts == 0).any():
-        raise ValueError("Position size produces zero futures contracts")
-
-    return fut_contracts.rename("fut_contracts")
-
-
-def compute_eff_cf(
-    ctd_contracts: int,
-    fut_contracts: pd.Series,
-    ctd_face_value: float = CTD_FACE_VALUE,
-    fut_face_value: float = FUT_FACE_VALUE,
-) -> pd.Series:
-    return (fut_contracts * fut_face_value / (ctd_contracts * ctd_face_value)).rename(
-        "effective_cf"
-    )
