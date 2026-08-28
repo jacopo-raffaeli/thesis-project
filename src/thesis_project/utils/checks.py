@@ -1,13 +1,13 @@
 import pandas as pd
 
 
-def is_sampled_at_freq(obj: pd.DataFrame | pd.Series, freq: pd.Timedelta | str = "1s") -> None:
+def is_sampled_at_freq(
+    obj: pd.DataFrame | pd.Series,
+    freq: pd.Timedelta | str = "1s",
+) -> None:
     """
-    Assert that obj has a DatetimeIndex sampled exactly once per 'freq' (default '1s').
-
-    ## Args:
-    * obj: A DataFrame or a Series
-    * freq: The frequency to check
+    Assert that obj has a DatetimeIndex sampled exactly once per `freq`
+    within each calendar day.
     """
     index = obj.index
 
@@ -15,13 +15,19 @@ def is_sampled_at_freq(obj: pd.DataFrame | pd.Series, freq: pd.Timedelta | str =
         raise TypeError(f"Expected a DatetimeIndex, got {type(index).__name__}")
 
     if len(index) < 2:
-        raise ValueError("Expected at least two timestamps to verify 1-second frequency")
+        raise ValueError("Expected at least two timestamps to verify frequency")
+
+    if not index.is_monotonic_increasing:
+        raise ValueError("DatetimeIndex must be monotonically increasing")
 
     expected = pd.Timedelta(freq)
-    deltas = index.to_series().diff().iloc[1:]
 
-    if not (deltas == expected).all():
-        bad = deltas[deltas != expected]
+    days = index.normalize()
+    deltas = index.to_series().groupby(days).diff().dropna()
+
+    bad = deltas[deltas != expected]
+
+    if not bad.empty:
         raise ValueError(
             f"Index is not sampled exactly at {expected} frequency. "
             f"Found {len(bad)} invalid interval(s); "
