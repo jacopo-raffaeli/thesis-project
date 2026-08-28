@@ -83,7 +83,7 @@ def load_market_data(
 def naive_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     if index.tz is None:
         return index.normalize()
-    return index.tz_convert(None).normalize()
+    return index.tz_localize(None).normalize()
 
 
 def count_days(index: pd.DatetimeIndex) -> int:
@@ -96,7 +96,7 @@ def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
     cf = daily_cf.copy()
     cf.index = pd.to_datetime(cf.index).normalize()
 
-    dates = prices.index.tz_convert(None).normalize()
+    dates = prices.index.tz_localize(None).normalize()
     aligned = pd.Series(cf.reindex(dates).to_numpy(), index=prices.index, name="cf")
 
     if aligned.isna().any():
