@@ -12,7 +12,7 @@ def _validate_series(s: pd.Series):
     if not isinstance(s.index, pd.DatetimeIndex):
         raise TypeError("")
 
-    utils.checks.is_sampled_at_freq(s)
+    # utils.checks.is_sampled_at_freq(s)
 
 
 def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
@@ -28,6 +28,9 @@ def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
     dates = prices.index.tz_localize(None).normalize()
     aligned = pd.Series(cf.reindex(dates).to_numpy(), index=prices.index, name="cf")
 
+    if cf.index.has_duplicates:
+        raise ValueError("Conversion factor series contains duplicate dates")
+
     if aligned.isna().any():
         missing_dates = dates[aligned.isna()].unique()
         raise ValueError(f"Missing conversion factor for dates: {missing_dates.tolist()}")
@@ -37,7 +40,7 @@ def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
 
 def frac_fut_contracts(
     cf: pd.Series,
-    ctd_contracts: int,
+    ctd_contracts: float | int,
     ctd_face_value: float = config.BTP.contract_size,
     fut_face_value: float = config.FBTP.contract_size,
 ) -> pd.Series:
@@ -55,20 +58,28 @@ def round_fut_contracts(
 
 
 def compute_eff_cf(
-    ctd_contracts: int,
-    fut_contracts: pd.Series,
+    ctd_contracts: float | int,
+    fut_contracts: pd.Series | float | int,
     ctd_face_value: float = config.BTP.contract_size,
     fut_face_value: float = config.FBTP.contract_size,
-) -> pd.Series:
-    return (fut_contracts * fut_face_value / (ctd_contracts * ctd_face_value)).rename(
-        "effective_cf"
-    )
+) -> pd.Series | float:
+    if ctd_contracts <= 0:
+        raise ValueError("CTD contracts must be a positive number")
+
+    if isinstance(fut_contracts, int | float) and fut_contracts <= 0:
+        raise ValueError("FUT contracts must be a positive number")
+
+    eff_cf = (fut_contracts * fut_face_value) / (ctd_contracts * ctd_face_value)
+
+    if isinstance(eff_cf, pd.Series):
+        eff_cf.rename("effective_cf")
+
+    return eff_cf
 
 
 def _compute_gross_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series) -> pd.Series:
     _validate_series(ctd_price)
     _validate_series(fut_price)
-    _validate_series(cf)
 
     aligned = pd.concat(
         [ctd_price.rename("ctd"), fut_price.rename("fut")],
@@ -78,27 +89,21 @@ def _compute_gross_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.S
 
     cf = align_cf(aligned, cf)
 
-    return ctd_price - cf * fut_price
+    return aligned["ctd"] - cf * aligned["fut"]
 
 
 def compute_gross_basis_mid(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "mid_price"
     ctd_filename = "ctd_mid_price"
     fut_filename = "fut_mid_price"
-    ctd_path = root / ctd_filename
-    fut_path = root / fut_filename
-
-    if not ctd_path.exists():
-        raise ValueError("The ctd mid price path do not exists")
+    ctd_path = (root / ctd_filename).with_suffix(".parquet")
+    fut_path = (root / fut_filename).with_suffix(".parquet")
 
     if not ctd_path.is_file():
-        raise ValueError("The ctd mid price file does not exists")
-
-    if not fut_path.exists():
-        raise ValueError("The fut mid price path do not exists")
+        raise FileNotFoundError(f"CTD price not found: {ctd_path.relative_to(config.ROOT)!r}")
 
     if not fut_path.is_file():
-        raise ValueError("The fut mid price file does not exists")
+        raise FileNotFoundError(f"FUT price not found: {fut_path.relative_to(config.ROOT)!r}")
 
     ctd_mid_price = pd.read_parquet(ctd_path).squeeze("columns")
     fut_mid_price = pd.read_parquet(fut_path).squeeze("columns")
@@ -114,20 +119,14 @@ def compute_gross_basis_ask(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "prices"
     ctd_filename = "ctd_ask_price_1"
     fut_filename = "fut_bid_price_1"
-    ctd_path = root / ctd_filename
-    fut_path = root / fut_filename
-
-    if not ctd_path.exists():
-        raise ValueError("The ctd best ask price path do not exists")
+    ctd_path = (root / ctd_filename).with_suffix(".parquet")
+    fut_path = (root / fut_filename).with_suffix(".parquet")
 
     if not ctd_path.is_file():
-        raise ValueError("The ctd best ask price file does not exists")
-
-    if not fut_path.exists():
-        raise ValueError("The fut best bid price path do not exists")
+        raise FileNotFoundError(f"CTD price not found: {ctd_path.relative_to(config.ROOT)!r}")
 
     if not fut_path.is_file():
-        raise ValueError("The fut best bid price file does not exists")
+        raise FileNotFoundError(f"FUT price not found: {fut_path.relative_to(config.ROOT)!r}")
 
     ctd_ask_price = pd.read_parquet(ctd_path).squeeze("columns")
     fut_bid_price = pd.read_parquet(fut_path).squeeze("columns")
@@ -143,20 +142,14 @@ def compute_gross_basis_bid(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "prices"
     ctd_filename = "ctd_bid_price_1"
     fut_filename = "fut_ask_price_1"
-    ctd_path = root / ctd_filename
-    fut_path = root / fut_filename
-
-    if not ctd_path.exists():
-        raise ValueError("The ctd best bid price path do not exists")
+    ctd_path = (root / ctd_filename).with_suffix(".parquet")
+    fut_path = (root / fut_filename).with_suffix(".parquet")
 
     if not ctd_path.is_file():
-        raise ValueError("The ctd best bid price file does not exists")
-
-    if not fut_path.exists():
-        raise ValueError("The fut best ask price path do not exists")
+        raise FileNotFoundError(f"CTD price not found: {ctd_path.relative_to(config.ROOT)!r}")
 
     if not fut_path.is_file():
-        raise ValueError("The fut best ask price file does not exists")
+        raise FileNotFoundError(f"FUT price not found: {fut_path.relative_to(config.ROOT)!r}")
 
     ctd_bid_price = pd.read_parquet(ctd_path).squeeze("columns")
     fut_ask_price = pd.read_parquet(fut_path).squeeze("columns")
