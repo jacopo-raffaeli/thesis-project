@@ -90,26 +90,6 @@ def count_days(index: pd.DatetimeIndex) -> int:
     return naive_dates(index).nunique()
 
 
-def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
-    if not isinstance(prices.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(prices.index).__name__!r}")
-
-    if not isinstance(daily_cf.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(daily_cf.index).__name__!r}")
-
-    cf = daily_cf.copy()
-    cf.index = pd.to_datetime(cf.index).normalize()
-
-    dates = prices.index.tz_localize(None).normalize()
-    aligned = pd.Series(cf.reindex(dates).to_numpy(), index=prices.index, name="cf")
-
-    if aligned.isna().any():
-        missing_dates = dates[aligned.isna()].unique()
-        raise ValueError(f"Missing conversion factor for dates: {missing_dates.tolist()}")
-
-    return aligned
-
-
 def compute_basis(
     ctd_price: pd.Series,
     fut_price: pd.Series,
