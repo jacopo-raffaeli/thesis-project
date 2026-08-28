@@ -38,11 +38,12 @@ def main():
     setup_logging(level=args.log_level)
 
     basis = dataset.basis.compute_gross_basis(ticker=args.ticker, mode="mid")
-
     filename = "gross_basis_mid"
-    path = config.DATA_PRO_DIR / args.ticker / "microstructure" / "basis"
-    path.mkdir(parents=True, exists_ok=True)
-    basis.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path / filename)
+
+    path = config.DATA_PRO_DIR / str(args.ticker) / "microstructure" / "basis" / filename
+    path = path.with_suffix(".parquet")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    basis.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path)
 
 
 if __name__ == "__main__":

@@ -190,15 +190,7 @@ def compute_gross_basis(*, ticker: config.FutTicker, mode: GrossBasisType) -> pd
             raise ValueError(f"Unexpected GrossBasisType: {mode!r}")
 
 
-def compute_tradable_basis(
-    *,
-    price_ctd: pd.Series,
-    price_fut: pd.Series,
-    cf: float | pd.Series,
-    notional_ctd: float,
-    notional_fut: float,
-    n_contracts_ctd: float,
-): ...
+def compute_tradable_basis(): ...
 
 
 def compute_net_basis(): ...
