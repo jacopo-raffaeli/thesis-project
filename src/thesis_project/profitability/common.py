@@ -8,7 +8,6 @@ import polars as pl
 from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.profitability import settings
-from thesis_project.profitability.settings import CTD_FACE_VALUE, FUT_FACE_VALUE
 from thesis_project.rl_trading.dataset_config import DatasetConfig, get_dates_to_exclude
 
 
@@ -101,36 +100,6 @@ def compute_basis(
         raise ValueError("Price and conversion-factor indexes do not match")
 
     return ctd_price - cf * fut_price
-
-
-def frac_fut_contracts(
-    cf: pd.Series,
-    ctd_contracts: int,
-    ctd_face_value: float = CTD_FACE_VALUE,
-    fut_face_value: float = FUT_FACE_VALUE,
-) -> pd.Series:
-    return (cf * ctd_contracts * (ctd_face_value / fut_face_value)).rename("fut_contracts")
-
-
-def round_fut_contracts(
-    fut_contracts: pd.Series,
-) -> pd.Series:
-    fut_contracts = fut_contracts.round().astype(int)
-    if (fut_contracts == 0).any():
-        raise ValueError("Position size produces zero futures contracts")
-
-    return fut_contracts.rename("fut_contracts")
-
-
-def compute_eff_cf(
-    ctd_contracts: int,
-    fut_contracts: pd.Series,
-    ctd_face_value: float = CTD_FACE_VALUE,
-    fut_face_value: float = FUT_FACE_VALUE,
-) -> pd.Series:
-    return (fut_contracts * fut_face_value / (ctd_contracts * ctd_face_value)).rename(
-        "effective_cf"
-    )
 
 
 def execution_prices(
