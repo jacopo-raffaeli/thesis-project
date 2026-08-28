@@ -5,11 +5,11 @@ from typing import Callable, get_args
 import pandas as pd
 
 from thesis_project import config
-from thesis_project.dataset import microstructure
+from thesis_project.dataset import basis, irr, microstructure
 from thesis_project.utils.logging import setup_logging
 
 # fmt: off
-PARTIAL_FUNCTIONS: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Series]] = {
+MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Series]] = {
     # Prices
     **{
         ("price", f"{side}_price_{level}"): partial(microstructure.get_price, level=level, side=side)
@@ -95,8 +95,26 @@ def main():
 
     microstructure.microstructure_per_ticker(
         ticker=args.ticker,
-        par_funcs=PARTIAL_FUNCTIONS,
+        par_funcs=MICROSTRUCTURE_FEATURES,
     )
+
+    root = config.DATA_PRO_DIR / str(args.ticker) / "microstructure"
+
+    # Compute gross basis
+    s = basis.compute_gross_basis(ticker=args.ticker, mode="mid")
+    filename = "basis"
+    path = root / filename / filename
+    path = path.with_suffix(".parquet")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    s.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path)
+
+    # Compute implied repo rate
+    s = irr.compute_irr(ticker=args.ticker, mode="mid")
+    filename = "irr"
+    path = root / filename / filename
+    path = path.with_suffix(".parquet")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    s.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path)
 
 
 if __name__ == "__main__":
