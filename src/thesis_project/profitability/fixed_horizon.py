@@ -6,6 +6,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 from thesis_project import config, utils
+from thesis_project.dataset import basis
 from thesis_project.profitability import common, settings
 
 
@@ -114,7 +115,7 @@ def run_fixed_horizon(
     )
 
     cf = utils.io.load_cf(analysis_config.ticker)["CF"]
-    cf = common.align_cf(data, cf)
+    cf = basis.align_cf(data, cf)
 
     fut_last_trading_dates = utils.io.load_fut_rollover_dates(analysis_config.ticker)
     ctd_switch_dates = utils.io.load_ctd_switch_dates(analysis_config.ticker)
