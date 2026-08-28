@@ -87,7 +87,9 @@ def load_ctd_switch_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["CTD Switch Date"])["CTD Switch Date"]
-    return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
+    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+
+    return pd.DatetimeIndex(dates).sort_values()
 
 
 def load_fut_rollover_dates(
@@ -106,15 +108,17 @@ def load_fut_rollover_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Last Trading Date"])["Last Trading Date"]
-    return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
+    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+
+    return pd.DatetimeIndex(dates).sort_values()
 
 
 def load_fut_delivery_dates(
     ticker: config.FutTicker, filename: str = "fut_metadata.csv"
 ) -> pd.DatetimeIndex:
     """
-    Load future delivery dates \n
-    Such dates are the ones in which the short part deliver the underlying to
+    Load future delivery dates
+    \nSuch dates are the ones in which the short part deliver the underlying to
     the long one, usually a couple of day after the respective rollover date
 
     ## Args:
@@ -126,7 +130,9 @@ def load_fut_delivery_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Delivery Date"])["Delivery Date"]
-    return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
+    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+
+    return pd.DatetimeIndex(dates).sort_values()
 
 
 def load_ctd_metadata(
@@ -235,11 +241,14 @@ def list_lob_paths(
     return list_lob_paths_role(root=root, ticker=ticker, role=role)
 
 
-def load_filtered_parquet_pl(
+def load_filtered_parquet(
     path: Path,
     time_window: tuple[datetime.time, datetime.time] | None = None,
     dates_to_exclude: list[datetime.date] | None = None,
 ) -> pd.DataFrame | pd.Series:
+    """"""
+    idx = config.LOB.index_name
+
     if not path.exists():
         raise ValueError("")
 
@@ -247,23 +256,26 @@ def load_filtered_parquet_pl(
         raise ValueError("")
 
     if not path.suffix == ".parquet":
-        raise ValueError("")
+        raise ValueError(f"Expected suffix '.parquet', got {path.suffix!r}")
 
     scan = pl.scan_parquet(path)
+    if dates_to_exclude is not None or time_window is not None:
+        if idx not in scan.collect_schema().names():
+            raise ValueError(f"Expected {idx} column to perform date-time filtering")
 
-    # TODO: Check that 'timestamp' column exists
+        if dates_to_exclude is not None:
+            scan = scan.filter(~pl.col(idx).dt.date().is_in(dates_to_exclude))
 
-    if dates_to_exclude is not None:
-        scan = scan.filter(~pl.col("timestamp").dt.date().is_in(dates_to_exclude))
+        if time_window is not None:
+            min_time, max_time = time_window
+            scan = scan.filter(pl.col(idx).dt.time().is_between(min_time, max_time))
 
-    if time_window is not None:
-        min_time, max_time = time_window
-        scan = scan.filter(pl.col("timestamp").dt.time().is_between(min_time, max_time))
+    data = scan.collect().to_pandas().set_index("timestamp").sort_index()
 
-    out = scan.collect().to_pandas().set_index("timestamp").sort_index()
+    if len(data.columns) == 1:
+        data = data.squeeze("columns")
 
-    if len(out.columns) == 1:
-        out = out.squeeze("columns")
-        assert isinstance(out, pd.Series)
+        if not isinstance(data, pd.Series):
+            raise TypeError("")
 
-    return out
+    return data
