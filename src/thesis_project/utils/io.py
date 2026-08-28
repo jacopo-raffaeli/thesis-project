@@ -129,6 +129,28 @@ def load_fut_delivery_dates(
     return pd.DatetimeIndex(dates.dropna().dt.normalize().unique()).sort_values()
 
 
+def load_ctd_metadata(
+    ticker: config.FutTicker,
+    filename: str = "ctd_metadata.csv",
+) -> pd.DataFrame:
+    """
+    Load CTD bond metadata.
+
+    ## Args:
+    * ticker: FutTicker
+    * filename: CSV filename
+
+    ## Returns:
+    * DataFrame containing CTD metadata
+    """
+    path = config.DATA_RAW_DIR / ticker / filename
+
+    return pd.read_csv(
+        path,
+        parse_dates=["First Coupon Date", "Maturity Date"],
+    )
+
+
 def list_lob_paths_role(
     *, root: Path = config.DATA_RAW_DIR, ticker: config.FutTicker, role: config.AssetRole
 ) -> list[Path]:
