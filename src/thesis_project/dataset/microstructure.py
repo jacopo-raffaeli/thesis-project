@@ -1,3 +1,4 @@
+import logging
 from typing import Callable, Literal, get_args
 
 import numpy as np
@@ -5,15 +6,7 @@ import pandas as pd
 
 from thesis_project import config, utils
 
-# TODO: Define the semantic meaning of NaN in the raw LOB and
-#       feature-specific missing-value handling.
-
-# TODO: Define feature-specific handling of zero denominators
-#       and other numerical edge cases.
-
-# TODO: Centralize/canonicalize feature naming.
-
-# TODO: Define the final feature registry / preprocessing pipeline.
+logger = logging.getLogger(__name__)
 
 # TODO: Add tests for feature formulas and edge cases.
 
@@ -27,25 +20,25 @@ def _validate_columns(lob: pd.DataFrame, columns: list[str] | str):
         raise ValueError(f"Missing columns: {', '.join(sorted(missing))}")
 
 
-def _to_series(df: pd.DataFrame | pd.Series) -> pd.Series:
-    if isinstance(df, pd.Series):
-        return df
+def _to_series(obj) -> pd.Series:
+    if isinstance(obj, pd.Series):
+        return obj
 
-    if len(df.columns) != 1:
-        raise ValueError(f"Expected a single column DataFrame, got {len(df.columns)} columns")
+    if len(obj.columns) != 1:
+        raise ValueError(f"Expected a single column DataFrame, got {len(obj.columns)} columns")
 
-    s = df.squeeze("columns")
-    assert isinstance(s, pd.Series)
+    obj = obj.squeeze("columns")
+    assert isinstance(obj, pd.Series)
 
-    return s
+    return obj
 
 
 def _validate_microstructure_series(s: pd.Series):
     if not isinstance(s, pd.Series):
-        raise TypeError(f"Expected a Series, got {type(s)!r}")
+        raise TypeError(f"Expected a Series, got {type(s).__name__!r}")
 
     if not isinstance(s.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(s.index)!r}")
+        raise TypeError(f"Expected a DatetimeIndex, got {type(s.index).__name__!r}")
 
     if s.index.hasnans:
         raise ValueError("Found NaNs in the index")
@@ -502,7 +495,11 @@ def microstructure_per_role(
 
         s = microstructure_feature_lobs(ticker=ticker, role=role, par_func=par_func)
         s = s.to_frame(filename).rename_axis(config.LOB.index_name)
-        s.to_parquet(path / filename)
+        logger.debug("Computed: %s", filename.replace(".parquet", ""))
+        # s.to_parquet(path / filename)
+        logger.debug(
+            "Saved: %s", str((path / filename.replace(".parquet", "")).relative_to(config.ROOT))
+        )
 
 
 def microstructure_per_ticker(
