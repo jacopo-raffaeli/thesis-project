@@ -120,11 +120,11 @@ def run_fixed_horizon(
     fut_last_trading_dates = utils.io.load_fut_rollover_dates(analysis_config.ticker)
     ctd_switch_dates = utils.io.load_ctd_switch_dates(analysis_config.ticker)
 
-    fractional_fut_contracts = common.frac_fut_contracts(
+    fractional_fut_contracts = basis.frac_fut_contracts(
         cf,
         analysis_config.ctd_contracts,
     )
-    rounded_fut_contracts = common.round_fut_contracts(
+    rounded_fut_contracts = basis.round_fut_contracts(
         fractional_fut_contracts,
     )
 
