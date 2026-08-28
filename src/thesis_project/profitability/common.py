@@ -91,7 +91,11 @@ def count_days(index: pd.DatetimeIndex) -> int:
 
 
 def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
-    assert isinstance(prices.index, pd.DatetimeIndex)
+    if not isinstance(prices.index, pd.DatetimeIndex):
+        raise TypeError(f"Expected a DatetimeIndex, got {type(prices.index).__name__!r}")
+
+    if not isinstance(daily_cf.index, pd.DatetimeIndex):
+        raise TypeError(f"Expected a DatetimeIndex, got {type(daily_cf.index).__name__!r}")
 
     cf = daily_cf.copy()
     cf.index = pd.to_datetime(cf.index).normalize()
