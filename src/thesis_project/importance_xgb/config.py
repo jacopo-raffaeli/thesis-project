@@ -101,15 +101,15 @@ class AnalysisConfig:
     # Calendar features
     calendar_features: List[str] = field(
         default_factory=lambda: [
-            # "month",
-            # "day_of_month",
-            # "day_of_week",
-            # "hour_of_day",
-            # "minute_of_day",
-            # "minute_of_hour",
-            # "second_of_day",
-            # "second_of_hour",
-            # "second_of_minute",
+            "month",
+            "day_of_month",
+            "day_of_week",
+            "hour_of_day",
+            "minute_of_day",
+            "minute_of_hour",
+            "second_of_day",
+            "second_of_hour",
+            "second_of_minute",
         ]
     )
 
@@ -132,27 +132,6 @@ class AnalysisConfig:
                 "column": "Last Trading Date",
                 "transforms": ["days_to_next", "days_to_prev"],
             },
-            # "fut_delivery_day": {
-            #     "file": "fut_metadata.csv",
-            #     "column": "Delivery Date",
-            #     "transforms": ["days_to_next", "days_to_prev"],
-            # },
-            # "FUT Option Maturity Day": {
-            #     "file": None,
-            #     "column": None,
-            #     "transforms": [
-            #        "days_to_next",
-            #        "days_to_prev"
-            #    ]
-            # },
-            # "CTD Auction Day": {
-            #     "file": None,
-            #     "column": None,
-            #     "transforms": [
-            #        "days_to_next",
-            #        "days_to_prev"
-            #    ]
-            # }
         }
     )
 
@@ -247,8 +226,8 @@ def get_xgb_fixed_params(config_obj: AnalysisConfig):
             "early_stopping_rounds": 50,
             "learning_rate": 1e-2,
             "max_depth": 11,
-            "min_child_weight": 25,
-            "lambda": 10,
+            "min_child_weight": 5,
+            "lambda": 1e-3,
             "alpha": 1e-3,
             "gamma": 1e-3,
         }
