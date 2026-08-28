@@ -23,7 +23,7 @@ def is_sampled_at_freq(obj: pd.DataFrame | pd.Series, freq: pd.Timedelta | str =
     if not (deltas == expected).all():
         bad = deltas[deltas != expected]
         raise ValueError(
-            f"Index is not sampled exactly at {expected} frequency."
+            f"Index is not sampled exactly at {expected} frequency. "
             f"Found {len(bad)} invalid interval(s); "
             f"first invalid interval: {bad.index[0]!s} "
             f"({bad.iloc[0]})."
