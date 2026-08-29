@@ -1,4 +1,6 @@
+import datetime
 import datetime as dt
+from typing import Iterable
 
 import pandas as pd
 
@@ -86,3 +88,39 @@ def add_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
 
 def sub_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
     return (dt.datetime.combine(dt.date.today(), time) - dt.timedelta(seconds=seconds)).time()
+
+
+def load_dates_to_exclude(ticker: str) -> dict[str, set[pd.Timestamp]]:
+    """ """
+    out = {}
+    for key, dates in config.DATES_TO_EXCLUDE[ticker].items():
+        out[key] = {pd.Timestamp(d).normalize() for d in dates}
+
+    return out
+
+
+def expand_dates_to_exclude(
+    dates: Iterable[pd.Timestamp], offset: tuple[int, int]
+) -> set[pd.Timestamp]:
+    """ """
+    before, after = offset
+    out = set()
+    for d in dates:
+        out.update(d + datetime.timedelta(days=n) for n in range(-before, after + 1))
+
+    return out
+
+
+def get_dates_to_exclude(ticker: str, offsets: dict[str, tuple[int, int]]) -> set[pd.Timestamp]:
+    """ """
+    dates_dict = load_dates_to_exclude(ticker)
+    excluded = set()
+    for key, dates in dates_dict.items():
+        offset = offsets.get(key)
+
+        if offset is None:
+            excluded.update(dates)
+        else:
+            excluded.update(expand_dates_to_exclude(dates, offset))
+
+    return excluded

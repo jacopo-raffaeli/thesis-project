@@ -5,9 +5,9 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 
-from thesis_project.rl_trading.dataset_config import DatasetConfig
-from thesis_project.rl_trading.env_config import EnvConfig
-from thesis_project.rl_trading.features import FEATURES
+from thesis_project.rl.dataset_config import DatasetConfig
+from thesis_project.rl.env_config import EnvConfig
+from thesis_project.rl.features import FEATURES
 
 
 @dataclass(frozen=True)
@@ -426,7 +426,7 @@ class BasisTradingEnv(gym.Env):
 if __name__ == "__main__":
     from gymnasium.utils.env_checker import check_env
 
-    from thesis_project.rl_trading.dataset import build_rl_dataset
+    from thesis_project.rl.dataset import build_rl_dataset
 
     dataset_config = DatasetConfig(
         ticker="fbtp",

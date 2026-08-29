@@ -3,9 +3,9 @@ from pandas.api.typing import SeriesGroupBy
 
 from thesis_project.dataset.data import BASE_FEATURES, BaseFeature
 from thesis_project.dataset.features import FeatureSpec
-from thesis_project.rl_trading.dataset_config import DatasetConfig
-from thesis_project.rl_trading.env import RLDataset
-from thesis_project.rl_trading.env_config import EnvConfig
+from thesis_project.rl.dataset_config import DatasetConfig
+from thesis_project.rl.env import RLDataset
+from thesis_project.rl.env_config import EnvConfig
 
 
 def _validate_feature_specs(feature_specs: list[FeatureSpec]):
