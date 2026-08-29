@@ -8,8 +8,8 @@ from tqdm.auto import tqdm
 from tqdm_joblib import tqdm_joblib
 
 from thesis_project import config, utils
-from thesis_project.dataset import basis
 from thesis_project.profitability import common, settings
+from thesis_project.utils import misc
 
 
 @dataclass(frozen=True)
@@ -334,14 +334,14 @@ def run_fixed_profit(
     )
 
     cf = utils.io.load_cf(analysis_config.ticker)["CF"]
-    cf = basis.align_cf(data, cf)
+    cf = misc.align_cf(data, cf)
 
-    fractional_fut_contracts = basis.frac_fut_contracts(
+    fractional_fut_contracts = misc.frac_fut_contracts(
         cf,
         analysis_config.ctd_contracts,
     )
 
-    rounded_fut_contracts = basis.round_fut_contracts(
+    rounded_fut_contracts = misc.round_fut_contracts(
         fractional_fut_contracts,
     )
 
