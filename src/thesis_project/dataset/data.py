@@ -104,8 +104,8 @@ BASE_FEATURES: dict[str, BaseFeature] = {
     # Bid/Ask Order Flow
     **{
         f"{role}_{str(side)[0]}of_{level}": BaseFeature(
-            base_id=f"{role}_{side}of_{level}",
-            filename=f"{role}_{side}of_{level}",
+            base_id=f"{role}_{str(side)[0]}of_{level}",
+            filename=f"{role}_{str(side)[0]}of_{level}",
             directory=FBTP_DIR / "ofi",
         )
         for role in get_args(config.AssetRole)
