@@ -3,83 +3,13 @@ from typing import Literal
 import pandas as pd
 
 from thesis_project import config, utils
+from thesis_project.utils.checks import check_series
+from thesis_project.utils.misc import align_cf
 
 
-def _validate_series(s: pd.Series):
-    if not isinstance(s, pd.Series):
-        raise TypeError("")
-
-    if not isinstance(s.index, pd.DatetimeIndex):
-        raise TypeError("")
-
-    # utils.checks.is_sampled_at_freq(s)
-
-
-def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
-    if not isinstance(prices.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(prices.index).__name__!r}")
-
-    if not isinstance(daily_cf.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(daily_cf.index).__name__!r}")
-
-    cf = daily_cf.copy()
-    cf.index = pd.to_datetime(cf.index).normalize()
-
-    dates = prices.index.tz_localize(None).normalize()
-    aligned = pd.Series(cf.reindex(dates).to_numpy(), index=prices.index, name="cf")
-
-    if cf.index.has_duplicates:
-        raise ValueError("Conversion factor series contains duplicate dates")
-
-    if aligned.isna().any():
-        missing_dates = dates[aligned.isna()].unique()
-        raise ValueError(f"Missing conversion factor for dates: {missing_dates.tolist()}")
-
-    return aligned
-
-
-def frac_fut_contracts(
-    cf: pd.Series,
-    ctd_contracts: float | int,
-    ctd_face_value: float = config.BTP.contract_size,
-    fut_face_value: float = config.FBTP.contract_size,
-) -> pd.Series:
-    return (cf * ctd_contracts * (ctd_face_value / fut_face_value)).rename("fut_contracts")
-
-
-def round_fut_contracts(
-    fut_contracts: pd.Series,
-) -> pd.Series:
-    fut_contracts = fut_contracts.round().astype(int)
-    if (fut_contracts == 0).any():
-        raise ValueError("Position size produces zero futures contracts")
-
-    return fut_contracts.rename("fut_contracts")
-
-
-def compute_eff_cf(
-    ctd_contracts: float | int,
-    fut_contracts: pd.Series | float | int,
-    ctd_face_value: float = config.BTP.contract_size,
-    fut_face_value: float = config.FBTP.contract_size,
-) -> pd.Series | float:
-    if ctd_contracts <= 0:
-        raise ValueError("CTD contracts must be a positive number")
-
-    if isinstance(fut_contracts, int | float) and fut_contracts <= 0:
-        raise ValueError("FUT contracts must be a positive number")
-
-    eff_cf = (fut_contracts * fut_face_value) / (ctd_contracts * ctd_face_value)
-
-    if isinstance(eff_cf, pd.Series):
-        eff_cf.rename("effective_cf")
-
-    return eff_cf
-
-
-def _compute_gross_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series) -> pd.Series:
-    _validate_series(ctd_price)
-    _validate_series(fut_price)
+def _compute_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series) -> pd.Series:
+    check_series(ctd_price)
+    check_series(fut_price)
 
     aligned = pd.concat(
         [ctd_price.rename("ctd"), fut_price.rename("fut")],
@@ -92,7 +22,7 @@ def _compute_gross_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.S
     return aligned["ctd"] - cf * aligned["fut"]
 
 
-def compute_gross_basis_mid(ticker: config.FutTicker) -> pd.Series:
+def compute_basis_mid(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "mid_price"
     ctd_filename = "ctd_mid_price"
     fut_filename = "fut_mid_price"
@@ -112,10 +42,10 @@ def compute_gross_basis_mid(ticker: config.FutTicker) -> pd.Series:
 
     cf = utils.io.load_cf(ticker, "daily_cf.csv")["CF"]
 
-    return _compute_gross_basis(ctd_price=ctd_mid_price, fut_price=fut_mid_price, cf=cf)
+    return _compute_basis(ctd_price=ctd_mid_price, fut_price=fut_mid_price, cf=cf)
 
 
-def compute_gross_basis_ask(ticker: config.FutTicker) -> pd.Series:
+def compute_basis_ask(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "prices"
     ctd_filename = "ctd_ask_price_1"
     fut_filename = "fut_bid_price_1"
@@ -135,10 +65,10 @@ def compute_gross_basis_ask(ticker: config.FutTicker) -> pd.Series:
 
     cf = utils.io.load_cf(ticker, "daily_cf.csv")["CF"]
 
-    return _compute_gross_basis(ctd_price=ctd_ask_price, fut_price=fut_bid_price, cf=cf)
+    return _compute_basis(ctd_price=ctd_ask_price, fut_price=fut_bid_price, cf=cf)
 
 
-def compute_gross_basis_bid(ticker: config.FutTicker) -> pd.Series:
+def compute_basis_bid(ticker: config.FutTicker) -> pd.Series:
     root = config.DATA_PRO_DIR / ticker / "microstructure" / "prices"
     ctd_filename = "ctd_bid_price_1"
     fut_filename = "fut_ask_price_1"
@@ -158,7 +88,7 @@ def compute_gross_basis_bid(ticker: config.FutTicker) -> pd.Series:
 
     cf = utils.io.load_cf(ticker, "daily_cf.csv")["CF"]
 
-    return _compute_gross_basis(ctd_price=ctd_bid_price, fut_price=fut_ask_price, cf=cf)
+    return _compute_basis(ctd_price=ctd_bid_price, fut_price=fut_ask_price, cf=cf)
 
 
 GrossBasisType = Literal[
@@ -168,16 +98,16 @@ GrossBasisType = Literal[
 ]
 
 
-def compute_gross_basis(*, ticker: config.FutTicker, mode: GrossBasisType) -> pd.Series:
+def compute_basis(*, ticker: config.FutTicker, mode: GrossBasisType) -> pd.Series:
     match mode:
         case "mid":
-            return compute_gross_basis_mid(ticker)
+            return compute_basis_mid(ticker)
 
         case "ask":
-            return compute_gross_basis_ask(ticker)
+            return compute_basis_ask(ticker)
 
         case "bid":
-            return compute_gross_basis_bid(ticker)
+            return compute_basis_bid(ticker)
 
         case _:
             raise ValueError(f"Unexpected GrossBasisType: {mode!r}")
