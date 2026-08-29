@@ -80,9 +80,9 @@ def to_series(obj) -> pd.Series:
     return obj
 
 
-def _add_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
+def add_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
     return (dt.datetime.combine(dt.date.today(), time) + dt.timedelta(seconds=seconds)).time()
 
 
-def _sub_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
+def sub_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
     return (dt.datetime.combine(dt.date.today(), time) - dt.timedelta(seconds=seconds)).time()
