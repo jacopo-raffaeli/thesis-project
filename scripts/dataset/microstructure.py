@@ -32,8 +32,9 @@ MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Serie
     },
     # OBI
     **{
-        ("obi", f"obi_{max_level}"): partial(microstructure.compute_obi, max_level=max_level, ratio=True)
+        ("obi", f"obi_{max_level}"): partial(microstructure.compute_obi, max_level=max_level, ratio=ratio)
         for max_level in [1, 2, 3]
+        for ratio in [True]
     },
     # bOF
     **{
