@@ -26,6 +26,10 @@ MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Serie
     **{
         ("mid-price", "mid_price"): microstructure.compute_mid_price
     },
+    # Spread
+    **{
+        ("spread", "spread"): microstructure.compute_spread
+    },
     # Micro Price
     **{
         ("micro-price", "micro_price"): microstructure.compute_micro_price
@@ -53,7 +57,7 @@ MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Serie
     },
     # Slope
     **{
-        ("slope", f"{side}_slope_{microstructure.SLOPE_DICT[slope_type]}_{max_level}"): partial(microstructure.compute_slope, max_level=max_level, side=side, slope_type=slope_type)
+        ("slope", f"{side}_slope_{max_level}_{microstructure.SLOPE_DICT[slope_type]}"): partial(microstructure.compute_slope, max_level=max_level, side=side, slope_type=slope_type)
         for max_level in [1, 2, 3]
         for side in get_args(config.LobSide)
         for slope_type in get_args(microstructure.SlopeType)
