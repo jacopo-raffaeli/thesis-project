@@ -3,13 +3,13 @@ from typing import Literal
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.utils.checks import check_series
+from thesis_project.utils.checks import check_s
 from thesis_project.utils.misc import align_cf
 
 
 def _compute_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series) -> pd.Series:
-    check_series(ctd_price)
-    check_series(fut_price)
+    check_s(ctd_price)
+    check_s(fut_price)
 
     aligned = pd.concat(
         [ctd_price.rename("ctd"), fut_price.rename("fut")],

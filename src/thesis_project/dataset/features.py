@@ -76,3 +76,23 @@ def summary(features: list[FeatureSpec]) -> None:
             print(f"  - {name}")
 
         print()
+
+
+def validate_feature_specs(feature_specs: list[FeatureSpec]):
+    """
+    Check for duplicates in FeatureSpec base ids
+    """
+    seen = set()
+    for spec in feature_specs:
+        if spec.base_id in seen:
+            raise ValueError(f"Duplicate FeatureSpec object '{spec.base_id}'")
+
+        seen.add(spec.base_id)
+
+    seen = set()
+    for spec in feature_specs:
+        for name in spec.output_names:
+            if name in seen:
+                raise ValueError(f"Duplicate feature '{name}'")
+
+            seen.add(name)

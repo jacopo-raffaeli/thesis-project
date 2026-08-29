@@ -4,7 +4,7 @@ import pandas as pd
 
 from thesis_project import config, utils
 from thesis_project.utils import misc
-from thesis_project.utils.checks import check_series
+from thesis_project.utils.checks import check_s
 
 # TODO:
 # - Handle ex-coupon dates correctly.
@@ -245,10 +245,10 @@ def _compute_irr(
 
     The IRR calculation is vectorized within each trading day.
     """
-    check_series(fut_price)
-    check_series(ctd_price)
-    check_series(cf)
-    check_series(isin)
+    check_s(fut_price)
+    check_s(ctd_price)
+    check_s(cf)
+    check_s(isin)
 
     if not isinstance(delivery_dates, pd.DatetimeIndex):
         raise TypeError(

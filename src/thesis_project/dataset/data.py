@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
-from thesis_project import config
+import pandas as pd
+
+from thesis_project import config, utils
 from thesis_project.dataset import microstructure
 
 FBTP_DIR = config.DATA_PRO_DIR / "fbtp" / "microstructure"
@@ -150,3 +152,26 @@ BASE_FEATURES: dict[str, BaseFeature] = {
     ),
 }
 # fmt: on
+
+
+def load_base_feature(base: BaseFeature) -> pd.Series:
+    """
+    Load a base feature and perform preliminary checks.
+    """
+    df = pd.read_parquet(base.path)
+
+    if df.empty:
+        raise ValueError(f"BaseFeature '{base.base_id}': empty DataFrame")
+
+    if df.shape[1] != 1:
+        raise ValueError(
+            f"BaseFeature '{base.base_id}': expected 1 column DataFrame, found {df.shape[1]} columns instead"
+        )
+
+    s = df.squeeze("columns")
+    assert isinstance(s, pd.Series)
+    utils.checks.check_s(s)
+
+    s = s.rename(base.base_id)
+
+    return s
