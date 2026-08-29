@@ -24,11 +24,11 @@ MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Serie
     },
     # Mid Price
     **{
-        ("mid_price", "mid_price"): microstructure.compute_mid_price
+        ("mid-price", "mid_price"): microstructure.compute_mid_price
     },
     # Micro Price
     **{
-        ("micro_price", "micro_price"): microstructure.compute_micro_price
+        ("micro-price", "micro_price"): microstructure.compute_micro_price
     },
     # OBI
     **{
