@@ -23,7 +23,7 @@ def _compute_basis(*, ctd_price: pd.Series, fut_price: pd.Series, cf: pd.Series)
 
 
 def compute_basis_mid(ticker: config.FutTicker) -> pd.Series:
-    root = config.DATA_PRO_DIR / ticker / "microstructure" / "mid_price"
+    root = config.DATA_PRO_DIR / ticker / "microstructure" / "mid-price"
     ctd_filename = "ctd_mid_price"
     fut_filename = "fut_mid_price"
     ctd_path = (root / ctd_filename).with_suffix(".parquet")

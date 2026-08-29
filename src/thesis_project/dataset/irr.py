@@ -394,7 +394,7 @@ def _compute_irr_from_prices(
 def compute_irr_mid(ticker: config.FutTicker) -> pd.Series:
     return _compute_irr_from_prices(
         ticker=ticker,
-        price_directory="mid_price",
+        price_directory="mid-price",
         ctd_price_filename="ctd_mid_price",
         fut_price_filename="fut_mid_price",
     )
