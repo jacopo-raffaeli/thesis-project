@@ -8,7 +8,8 @@ import polars as pl
 from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.profitability import settings
-from thesis_project.rl_trading.dataset_config import DatasetConfig, get_dates_to_exclude
+from thesis_project.rl.dataset_config import DatasetConfig
+from thesis_project.utils.misc import get_dates_to_exclude
 
 
 def load_prices(
