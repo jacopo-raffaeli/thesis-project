@@ -98,7 +98,7 @@ GrossBasisType = Literal[
 ]
 
 
-def compute_basis(*, ticker: config.FutTicker, mode: GrossBasisType) -> pd.Series:
+def compute_basis(ticker: config.FutTicker, *, mode: GrossBasisType) -> pd.Series:
     match mode:
         case "mid":
             return compute_basis_mid(ticker)

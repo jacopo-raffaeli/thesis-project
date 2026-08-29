@@ -436,8 +436,8 @@ IrrType = Literal[
 
 
 def compute_irr(
-    *,
     ticker: config.FutTicker,
+    *,
     mode: IrrType,
 ) -> pd.Series:
     match mode:
