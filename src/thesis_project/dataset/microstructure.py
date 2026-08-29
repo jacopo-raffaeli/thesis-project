@@ -5,49 +5,13 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config, utils
+from thesis_project.utils.checks import check_cols_in_df
+from thesis_project.utils.misc import to_series
 
 logger = logging.getLogger(__name__)
 
-# TODO: Add tests for feature formulas and edge cases.
-
-
-def _validate_columns(lob: pd.DataFrame, columns: list[str] | str):
-    if isinstance(columns, str):
-        columns = [columns]
-
-    missing = set(columns).difference(lob.columns)
-    if missing:
-        raise ValueError(f"Missing columns: {', '.join(sorted(missing))}")
-
-
-def _to_series(obj) -> pd.Series:
-    if isinstance(obj, pd.Series):
-        return obj
-
-    if len(obj.columns) != 1:
-        raise ValueError(f"Expected a single column DataFrame, got {len(obj.columns)} columns")
-
-    obj = obj.squeeze("columns")
-    assert isinstance(obj, pd.Series)
-
-    return obj
-
-
-def _validate_microstructure_series(s: pd.Series):
-    if not isinstance(s, pd.Series):
-        raise TypeError(f"Expected a Series, got {type(s).__name__!r}")
-
-    if not isinstance(s.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(s.index).__name__!r}")
-
-    if s.index.hasnans:
-        raise ValueError("Found NaNs in the index")
-
-    if s.index.has_duplicates:
-        raise ValueError("Found duplicates in the index")
-
-    if not s.index.is_monotonic_increasing:
-        raise ValueError("The index is not ordered")
+# TODO:
+# - Add tests for feature formulas and edge cases.
 
 
 def get_price(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Series:
@@ -63,10 +27,10 @@ def get_price(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Seri
     s: The extracted prices series
     """
     column = config.LOB.get_column(level=level, side=side, column_type="price")
-    _validate_columns(lob, column)
+    check_cols_in_df(lob, column)
 
     s = lob[column]
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -84,10 +48,10 @@ def get_size(lob: pd.DataFrame, *, level: int, side: config.LobSide) -> pd.Serie
     s: The extracted sizes series
     """
     column = config.LOB.get_column(level=level, side=side, column_type="size")
-    _validate_columns(lob, column)
+    check_cols_in_df(lob, column)
 
     s = lob[column]
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -106,13 +70,13 @@ def compute_mid_price(lob: pd.DataFrame) -> pd.Series:
     best_bid_price_column = config.LOB.get_column(level=1, side="bid", column_type="price")
     best_ask_price_column = config.LOB.get_column(level=1, side="ask", column_type="price")
     columns = [best_bid_price_column, best_ask_price_column]
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
 
     s = (best_ask_price + best_bid_price) / 2
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -131,13 +95,13 @@ def compute_spread(lob: pd.DataFrame) -> pd.Series:
     best_bid_price_column = config.LOB.get_column(level=1, side="bid", column_type="price")
     best_ask_price_column = config.LOB.get_column(level=1, side="ask", column_type="price")
     columns = [best_bid_price_column, best_ask_price_column]
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
 
     s = best_ask_price - best_bid_price
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -163,7 +127,7 @@ def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
         best_bid_size_column,
         best_ask_size_column,
     ]
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     best_bid_price = lob[best_bid_price_column]
     best_ask_price = lob[best_ask_price_column]
@@ -174,7 +138,7 @@ def compute_micro_price(lob: pd.DataFrame) -> pd.Series:
     den = best_bid_size + best_ask_size
 
     s = num / den
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -197,7 +161,7 @@ def compute_obi(lob: pd.DataFrame, *, max_level: int, ratio: bool) -> pd.Series:
     ask_columns = config.LOB.get_columns(levels=levels, sides="ask", column_types="size")
     bid_columns = config.LOB.get_columns(levels=levels, sides="bid", column_types="size")
     columns = bid_columns + ask_columns
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     ask_depth = lob[ask_columns].fillna(0).sum(axis=1)
     bid_depth = lob[bid_columns].fillna(0).sum(axis=1)
@@ -206,7 +170,7 @@ def compute_obi(lob: pd.DataFrame, *, max_level: int, ratio: bool) -> pd.Series:
         den = (bid_depth + ask_depth).replace(0, np.nan)
         s /= den
 
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -227,7 +191,7 @@ def compute_bof(lob: pd.DataFrame, *, level: int) -> pd.Series:
     price_column = config.LOB.get_column(level=level, side="bid", column_type="price")
     size_column = config.LOB.get_column(level=level, side="bid", column_type="size")
     columns = [price_column, size_column]
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     price = lob[price_column]
     size = lob[size_column]
@@ -245,7 +209,7 @@ def compute_bof(lob: pd.DataFrame, *, level: int) -> pd.Series:
         default=np.nan,
     )
     s = pd.Series(s, index=lob.index)
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -266,7 +230,7 @@ def compute_aof(lob: pd.DataFrame, *, level: int) -> pd.Series:
     price_column = config.LOB.get_column(level=level, side="ask", column_type="price")
     size_column = config.LOB.get_column(level=level, side="ask", column_type="size")
     columns = [price_column, size_column]
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     price = lob[price_column]
     size = lob[size_column]
@@ -284,7 +248,7 @@ def compute_aof(lob: pd.DataFrame, *, level: int) -> pd.Series:
         default=np.nan,
     )
     s = pd.Series(s, index=lob.index)
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -305,7 +269,7 @@ def compute_ofi(lob: pd.DataFrame, *, level: int) -> pd.Series:
     aof = compute_aof(lob, level=level)
 
     s = bof + aof
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -333,7 +297,7 @@ def compute_slope_v1(lob: pd.DataFrame, *, max_level: int, side: config.LobSide)
         size_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="size")
         columns = price_columns + size_columns
 
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     mid_price = compute_mid_price(lob)
     best_price = lob[best_price_column]
@@ -361,7 +325,7 @@ def compute_slope_v1(lob: pd.DataFrame, *, max_level: int, side: config.LobSide)
         s += (num2 / den2).sum(axis=1)
         s /= max_level
 
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -384,7 +348,7 @@ def compute_slope_v2(lob: pd.DataFrame, *, max_level: int, side: config.LobSide)
     price_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="price")
     size_columns = config.LOB.get_columns(levels=levels, sides=side, column_types="size")
     columns = price_columns + size_columns
-    _validate_columns(lob, columns)
+    check_cols_in_df(lob, columns)
 
     mid_price = compute_mid_price(lob)
     max_level_price = lob[max_level_price_column]
@@ -393,7 +357,7 @@ def compute_slope_v2(lob: pd.DataFrame, *, max_level: int, side: config.LobSide)
     den = (max_level_price - mid_price).abs().replace(0, np.nan)
 
     s = num / den
-    s = _to_series(s)
+    s = to_series(s)
 
     return s
 
@@ -466,7 +430,6 @@ def microstructure_feature_lobs(
         s_daily.append(par_func(lob))
 
     s = pd.concat(s_daily)
-    _validate_microstructure_series(s)
 
     return s
 
@@ -494,12 +457,15 @@ def microstructure_per_role(
         filename = f"{role}_{name}.parquet"
 
         s = microstructure_feature_lobs(ticker=ticker, role=role, par_func=par_func)
-        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
-        logger.debug("Computed: %s", filename.replace(".parquet", ""))
-        s.to_parquet(path / filename)
-        logger.debug(
-            "Saved: %s", str((path / filename.replace(".parquet", "")).relative_to(config.ROOT))
+        utils.checks.check_series(
+            s,
+            # check_sampling=True
         )
+        logger.debug("Computed: %s", filename.replace(".parquet", ""))
+
+        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
+        # s.to_parquet(path / filename)
+        logger.debug("Saved: %s", str((path / filename).relative_to(config.ROOT)))
 
 
 def microstructure_per_ticker(
@@ -518,3 +484,26 @@ def microstructure_per_ticker(
     """
     for role in get_args(config.AssetRole):
         microstructure_per_role(ticker=ticker, role=role, par_funcs=par_funcs)
+
+
+def cross_asset_per_ticker(
+    *,
+    ticker: config.FutTicker,
+    par_funcs: dict[tuple[str, str], Callable[[config.FutTicker], pd.Series]],
+):
+    root = config.DATA_PRO_DIR / ticker / "microstructure"
+    for (folder, name), par_func in par_funcs.items():
+        path = root / folder
+        path.mkdir(parents=True, exist_ok=True)
+        filename = f"{name}.parquet"
+
+        s = par_func(ticker)
+        utils.checks.check_series(
+            s,
+            # check_sampling=True
+        )
+        logger.debug("Computed: %s", filename.replace(".parquet", ""))
+
+        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
+        # s.to_parquet(path / filename)
+        logger.debug("Saved: %s", str((path / filename).relative_to(config.ROOT)))
