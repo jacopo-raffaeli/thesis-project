@@ -2,21 +2,13 @@ from typing import Literal
 
 import pandas as pd
 
-from thesis_project import config, dataset, utils
+from thesis_project import config, utils
+from thesis_project.utils import misc
+from thesis_project.utils.checks import check_series
 
 # TODO:
 # - Handle ex-coupon dates correctly.
 # - Verify/document whether the current delivery-date convention is the desired one.
-
-
-def _validate_series(s: pd.Series) -> None:
-    if not isinstance(s, pd.Series):
-        raise TypeError(f"Expected a Series, got {type(s).__name__!r}")
-
-    if not isinstance(s.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(s.index).__name__!r}")
-
-    # utils.checks.is_sampled_at_freq(s)
 
 
 def _get_coupon_schedule(
@@ -253,10 +245,10 @@ def _compute_irr(
 
     The IRR calculation is vectorized within each trading day.
     """
-    _validate_series(fut_price)
-    _validate_series(ctd_price)
-    _validate_series(cf)
-    _validate_series(isin)
+    check_series(fut_price)
+    check_series(ctd_price)
+    check_series(cf)
+    check_series(isin)
 
     if not isinstance(delivery_dates, pd.DatetimeIndex):
         raise TypeError(
@@ -284,7 +276,7 @@ def _compute_irr(
         raise ValueError("Futures and CTD price series have no common timestamps")
 
     # Align daily CF to the common price timestamps.
-    aligned_cf = dataset.basis.align_cf(
+    aligned_cf = misc.align_cf(
         prices=prices,
         daily_cf=cf,
     )
@@ -293,7 +285,7 @@ def _compute_irr(
 
     # ISIN is daily information. Reuse the same date-alignment convention as
     # conversion factors.
-    aligned_isin = dataset.basis.align_cf(
+    aligned_isin = misc.align_cf(
         prices=prices,
         daily_cf=isin,
     )
