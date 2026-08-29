@@ -127,8 +127,8 @@ BASE_FEATURES: dict[str, BaseFeature] = {
     # Slope
     **{
         f"{role}_{side}_slope__{max_level}_{microstructure.SLOPE_DICT[slope_type]}": BaseFeature(
-            base_id=f"{role}_{side}_slope_{microstructure.SLOPE_DICT[slope_type]}_{max_level}",
-            filename=f"{role}_{side}_slope_{microstructure.SLOPE_DICT[slope_type]}_{max_level}",
+            base_id=f"{role}_{side}_slope_{max_level}_{microstructure.SLOPE_DICT[slope_type]}",
+            filename=f"{role}_{side}_slope_{max_level}_{microstructure.SLOPE_DICT[slope_type]}",
             directory=FBTP_DIR / "slope",
         )
         for role in get_args(config.AssetRole)
