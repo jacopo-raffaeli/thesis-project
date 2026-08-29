@@ -457,14 +457,11 @@ def microstructure_per_role(
         filename = f"{role}_{name}.parquet"
 
         s = microstructure_feature_lobs(ticker=ticker, role=role, par_func=par_func)
-        utils.checks.check_series(
-            s,
-            # check_sampling=True
-        )
+        utils.checks.check_series(s, check_sampling=True)
         logger.debug("Computed: %s", filename.replace(".parquet", ""))
 
-        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
-        # s.to_parquet(path / filename)
+        s = s.to_frame(filename).rename_axis(config.LOB.index_name).astype("float32")
+        s.to_parquet(path / filename)
         logger.debug("Saved: %s", str((path / filename).relative_to(config.ROOT)))
 
 
@@ -498,12 +495,9 @@ def cross_asset_per_ticker(
         filename = f"{name}.parquet"
 
         s = par_func(ticker)
-        utils.checks.check_series(
-            s,
-            # check_sampling=True
-        )
+        utils.checks.check_series(s, check_sampling=True)
         logger.debug("Computed: %s", filename.replace(".parquet", ""))
 
-        s = s.to_frame(filename).rename_axis(config.LOB.index_name)
-        # s.to_parquet(path / filename)
+        s = s.to_frame(filename).rename_axis(config.LOB.index_name).astype("float32")
+        s.to_parquet(path / filename)
         logger.debug("Saved: %s", str((path / filename).relative_to(config.ROOT)))

@@ -58,11 +58,18 @@ MICROSTRUCTURE_FEATURES: dict[tuple[str, str], Callable[[pd.DataFrame], pd.Serie
         for slope_type in get_args(microstructure.SlopeType)
     }
 }
+
+CROSS_ASSET: dict[tuple[str, str], Callable[[config.FutTicker], pd.Series]] = {
+    ("basis", "basis"): partial(basis.compute_basis, mode="mid"),
+    ("irr", "irr"): partial(irr.compute_irr, mode="mid"),
+}
 # fmt: on
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Script to easily generate all the time series used on the project for a specified ticker"
+    )
 
     parser.add_argument(
         "--ticker",
@@ -93,28 +100,14 @@ def main():
 
     setup_logging(level=args.log_level)
 
-    microstructure.microstructure_per_ticker(
-        ticker=args.ticker,
-        par_funcs=MICROSTRUCTURE_FEATURES,
-    )
+    if len(MICROSTRUCTURE_FEATURES) > 0:
+        microstructure.microstructure_per_ticker(
+            ticker=args.ticker,
+            par_funcs=MICROSTRUCTURE_FEATURES,
+        )
 
-    root = config.DATA_PRO_DIR / str(args.ticker) / "microstructure"
-
-    # Compute gross basis
-    s = basis.compute_gross_basis(ticker=args.ticker, mode="mid")
-    filename = "basis"
-    path = root / filename / filename
-    path = path.with_suffix(".parquet")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    s.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path)
-
-    # Compute implied repo rate
-    s = irr.compute_irr(ticker=args.ticker, mode="mid")
-    filename = "irr"
-    path = root / filename / filename
-    path = path.with_suffix(".parquet")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    s.to_frame(filename).rename_axis(config.LOB.index_name).to_parquet(path)
+    if len(CROSS_ASSET) > 0:
+        microstructure.cross_asset_per_ticker(ticker=args.ticker, par_funcs=CROSS_ASSET)
 
 
 if __name__ == "__main__":
