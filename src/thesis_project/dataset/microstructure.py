@@ -496,7 +496,7 @@ def microstructure_per_role(
         s = microstructure_feature_lobs(ticker=ticker, role=role, par_func=par_func)
         s = s.to_frame(filename).rename_axis(config.LOB.index_name)
         logger.debug("Computed: %s", filename.replace(".parquet", ""))
-        # s.to_parquet(path / filename)
+        s.to_parquet(path / filename)
         logger.debug(
             "Saved: %s", str((path / filename.replace(".parquet", "")).relative_to(config.ROOT))
         )
