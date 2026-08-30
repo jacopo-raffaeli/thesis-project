@@ -1,10 +1,10 @@
 import datetime
 import datetime as dt
-from typing import Iterable
 
 import pandas as pd
 
 from thesis_project import config
+from thesis_project.utils.io import load_criticalities, load_fut_rollover_dates
 
 
 def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
@@ -90,18 +90,19 @@ def sub_seconds_to_time(time: dt.time, seconds: int) -> dt.time:
     return (dt.datetime.combine(dt.date.today(), time) - dt.timedelta(seconds=seconds)).time()
 
 
-def load_dates_to_exclude(ticker: str) -> dict[str, set[pd.Timestamp]]:
-    """ """
-    out = {}
-    for key, dates in config.DATES_TO_EXCLUDE[ticker].items():
-        out[key] = {datetime.date.fromisoformat(d) for d in dates}
+def _dates_by_type(ticker: config.FutTicker, name: config.DateType) -> list[datetime.date]:
+    match name:
+        case "Critical":
+            return load_criticalities(ticker)
 
-    return out
+        case "Rollover":
+            return load_fut_rollover_dates(ticker)
+
+        case _:
+            raise ValueError("")
 
 
-def expand_dates_to_exclude(
-    dates: Iterable[pd.Timestamp], offset: tuple[int, int]
-) -> set[pd.Timestamp]:
+def expand_dates(dates: list[datetime.date], offset: tuple[int, int]) -> set[datetime.date]:
     """ """
     before, after = offset
     out = set()
@@ -111,16 +112,14 @@ def expand_dates_to_exclude(
     return out
 
 
-def get_dates_to_exclude(ticker: str, offsets: dict[str, tuple[int, int]]) -> set[pd.Timestamp]:
-    """ """
-    dates_dict = load_dates_to_exclude(ticker)
-    excluded = set()
-    for key, dates in dates_dict.items():
-        offset = offsets.get(key)
-
+def get_dates_to_exclude(
+    ticker: config.FutTicker, dates_dict: dict[config.DateType, tuple[int, int] | None]
+) -> list[datetime.date]:
+    dates = set()
+    for date_type, offset in dates_dict.items():
         if offset is None:
-            excluded.update(dates)
+            dates.update(_dates_by_type(ticker, date_type))
         else:
-            excluded.update(expand_dates_to_exclude(dates, offset))
+            dates.update(expand_dates(_dates_by_type(ticker, date_type), offset))
 
-    return excluded
+    return sorted(dates)
