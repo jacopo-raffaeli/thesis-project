@@ -73,7 +73,7 @@ def load_cf(ticker: config.FutTicker, filename: str = "daily_cf.csv") -> pd.Data
 
 def load_ctd_switch_dates(
     ticker: config.FutTicker, filename: str = "ctd_switch.csv"
-) -> pd.DatetimeIndex:
+) -> list[datetime.date]:
     """
     Load ctd bond switch dates \n
     Such dates are the first in which a new bond is considered the cheapest
@@ -87,14 +87,14 @@ def load_ctd_switch_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["CTD Switch Date"])["CTD Switch Date"]
-    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+    dates = dates.dropna().dt.date.sort_values().to_list()
 
-    return pd.DatetimeIndex(dates).sort_values()
+    return dates
 
 
 def load_fut_rollover_dates(
     ticker: config.FutTicker, filename: str = "fut_metadata.csv"
-) -> pd.DatetimeIndex:
+) -> list[datetime.date]:
     """
     Load future rollover dates \n
     Such dates are the last in which a certain future contract is traded
@@ -108,14 +108,35 @@ def load_fut_rollover_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Last Trading Date"])["Last Trading Date"]
-    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+    dates = dates.dropna().dt.date.sort_values().to_list()
 
-    return pd.DatetimeIndex(dates).sort_values()
+    return dates
+
+
+def load_criticalities(
+    ticker: config.FutTicker, filename: str = "criticalities.csv"
+) -> list[datetime.date]:
+    """
+    Load default list of critical dates from data/processed/ticker/filename
+
+    ## Args:
+    * ticker: FutTicker
+
+    Return:
+    * dates: list of datetime.date
+    * filename: csv filename
+    """
+    path = config.DATA_PRO_DIR / ticker / filename
+    path = path.with_suffix(".csv")
+    df = pd.read_csv(path, parse_dates=["Date"])
+    dates = df["Date"].dt.date.drop_duplicates().to_list()
+
+    return dates
 
 
 def load_fut_delivery_dates(
     ticker: config.FutTicker, filename: str = "fut_metadata.csv"
-) -> pd.DatetimeIndex:
+) -> list[datetime.date]:
     """
     Load future delivery dates
     \nSuch dates are the ones in which the short part deliver the underlying to
@@ -130,9 +151,9 @@ def load_fut_delivery_dates(
     """
     path = config.DATA_RAW_DIR / ticker / filename
     dates = pd.read_csv(path, parse_dates=["Delivery Date"])["Delivery Date"]
-    dates = dates.dropna().dt.normalize().astype("datetime64[ns]")
+    dates = dates.dropna().dt.date.sort_values().to_list()
 
-    return pd.DatetimeIndex(dates).sort_values()
+    return dates
 
 
 def load_ctd_metadata(
@@ -281,19 +302,3 @@ def load_filtered_parquet(
         raise TypeError("")
 
     return data
-
-
-def load_criticalities(ticker: config.FutTicker) -> list[datetime.date]:
-    """
-    Load default list of critical dates from data/processed/ticker/criticalities.csv
-
-    ## Args:
-    * ticker: FutTicker
-
-    Return:
-    * dates: list of datetime.date
-    """
-    path = config.DATA_PRO_DIR / ticker / "criticalities.csv"
-    df = pd.read_csv(path, parse_dates=["Date"])
-    dates = df["Date"].dt.date.drop_duplicates().to_list()
-    return dates
