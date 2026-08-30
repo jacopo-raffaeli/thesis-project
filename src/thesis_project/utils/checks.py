@@ -2,7 +2,7 @@ import pandas as pd
 
 
 def check_sampling_freq(
-    obj: pd.DataFrame | pd.Series,
+    index: pd.DatetimeIndex,
     freq: pd.Timedelta | str = "1s",
 ) -> None:
     """
@@ -15,8 +15,6 @@ def check_sampling_freq(
     * obj: A DataFrame or a Series
     * freq: The expected sampling frequency
     """
-    index = obj.index
-
     if not isinstance(index, pd.DatetimeIndex):
         raise TypeError(f"Expected a DatetimeIndex, got {type(index).__name__}")
 
@@ -42,7 +40,7 @@ def check_sampling_freq(
         )
 
 
-def check_series(s: pd.Series, check_sampling: bool = False) -> None:
+def check_s(s: pd.Series, check_sampling: bool = False) -> None:
     """
     Perform common checks on a Series
 
@@ -69,7 +67,37 @@ def check_series(s: pd.Series, check_sampling: bool = False) -> None:
         raise ValueError("The index is not ordered")
 
     if check_sampling:
-        check_sampling_freq(s)
+        check_sampling_freq(s.index)
+
+
+def check_df(df: pd.Series, check_sampling: bool = False) -> None:
+    """
+    Perform common checks on a DataFrame
+
+    ## Args:
+    * df: DataFrame
+    * check_sampling: Perform sampling check (can be computationally expensive)
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError(f"Expected a DataFrame, got {type(df).__name__!r}")
+
+    if df.empty:
+        raise ValueError("The series is empty")
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise TypeError(f"Expected a DatetimeIndex, got {type(df.index).__name__!r}")
+
+    if df.index.hasnans:
+        raise ValueError("Found NaNs in the index")
+
+    if df.index.has_duplicates:
+        raise ValueError("Found duplicates in the index")
+
+    if not df.index.is_monotonic_increasing:
+        raise ValueError("The index is not ordered")
+
+    if check_sampling:
+        check_sampling_freq(df.index)
 
 
 def check_cols_in_df(lob: pd.DataFrame, columns: list[str] | str):
