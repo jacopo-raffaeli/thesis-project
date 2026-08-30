@@ -1,4 +1,5 @@
 from . import basis as basis
+from . import criticalities as criticalities
 from . import data as data
 from . import features as features
 from . import irr as irr
