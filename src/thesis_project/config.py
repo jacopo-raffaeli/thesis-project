@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import ClassVar, Literal, get_args
 
 import matplotlib.pyplot as plt
-import pandas as pd
 
 # ==============================================================================
 # DIRECTORIES
@@ -281,6 +280,20 @@ LOB = LobConfig(
     columns=("price", "size"),
 )
 
+# ==============================================================================
+# DATES TO EXCLUDE
+# ==============================================================================
+
+DateType = Literal[
+    "Critical",
+    "Rollover",
+]
+
+DEFAULT_EXCLUDED_DATES: dict[DateType, tuple[int, int] | None] = {
+    "Critical": None,
+    "Rollover": (2, 0),
+}
+
 
 # ==============================================================================
 # PLOTTING
@@ -296,29 +309,3 @@ def default_plt():
 # Apply default settings
 def default():
     default_plt()
-
-
-# ==============================================================================
-
-# DATES TO EXCLUDE
-
-fbts_fut_meta_df = pd.read_csv(
-    DATA_RAW_DIR / "fbtp" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
-)
-# fbts_fut_meta_df = pd.read_csv(
-#     RAW_DIR / "fbts" / "fut_metadata.csv", parse_dates=["Last Trading Date", "Delivery Date"]
-# )
-
-DATES_TO_EXCLUDE = {
-    "fbtp": {
-        "structural": [
-            "2022-08-29",  # FUT LOB stops early
-            "2024-12-02",  # FUT LOB spread violation (1)
-            "2024-06-11",  # CTD LOB spread violation (127)
-            "2023-09-06",  # FUT LOB price order violation (2)
-            "2023-12-06",  # FUT LOB price order violation (9)
-        ],
-        "fut_last_trading_days": fbts_fut_meta_df["Last Trading Date"].dt.date.unique().tolist(),
-    },
-    "fbts": {"structural": [], "last_trading_days": []},
-}
