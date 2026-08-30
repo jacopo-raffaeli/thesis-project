@@ -9,7 +9,7 @@ from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.profitability import settings
 from thesis_project.rl.dataset_config import DatasetConfig
-from thesis_project.utils.misc import get_dates_to_exclude
+from thesis_project.utils.misc import get_dates_to_exclude, naive_dates
 
 
 def load_prices(
@@ -78,12 +78,6 @@ def load_market_data(
     data = prices.join(volumes)
 
     return data
-
-
-def naive_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
-    if index.tz is None:
-        return index.normalize()
-    return index.tz_localize(None).normalize()
 
 
 def count_days(index: pd.DatetimeIndex) -> int:

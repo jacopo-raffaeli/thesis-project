@@ -123,3 +123,9 @@ def get_dates_to_exclude(
             dates.update(expand_dates(_dates_by_type(ticker, date_type), offset))
 
     return sorted(dates)
+
+
+def naive_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    if index.tz is None:
+        return index.normalize()
+    return index.tz_localize(None).normalize()
