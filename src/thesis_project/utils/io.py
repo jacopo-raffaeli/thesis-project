@@ -255,22 +255,22 @@ def load_filtered_parquet(
     if not path.is_file():
         raise ValueError("")
 
-    if not path.suffix == ".parquet":
+    if path.suffix != ".parquet":
         raise ValueError(f"Expected suffix '.parquet', got {path.suffix!r}")
 
     scan = pl.scan_parquet(path)
-    if dates_to_exclude is not None or time_window is not None:
-        if idx not in scan.collect_schema().names():
-            raise ValueError(f"Expected {idx} column to perform date-time filtering")
 
-        if dates_to_exclude is not None:
-            scan = scan.filter(~pl.col(idx).dt.date().is_in(dates_to_exclude))
+    if idx not in scan.collect_schema().names():
+        raise ValueError(f"Expected {idx} column not found")
 
-        if time_window is not None:
-            min_time, max_time = time_window
-            scan = scan.filter(pl.col(idx).dt.time().is_between(min_time, max_time))
+    if dates_to_exclude is not None:
+        scan = scan.filter(~pl.col(idx).dt.date().is_in(dates_to_exclude))
 
-    data = scan.collect().to_pandas().set_index("timestamp").sort_index()
+    if time_window is not None:
+        min_time, max_time = time_window
+        scan = scan.filter(pl.col(idx).dt.time().is_between(min_time, max_time))
+
+    data = scan.collect().to_pandas().set_index(idx).sort_index()
 
     if len(data.columns) == 1:
         data = data.squeeze("columns")
@@ -279,3 +279,10 @@ def load_filtered_parquet(
             raise TypeError("")
 
     return data
+
+
+def load_dates_to_exclude(ticker: config.FutTicker) -> list[datetime.date]:
+    path = config.DATA_PRO_DIR / ticker / "criticalities.csv"
+    df = pd.read_csv(path, parse_dates=["Date"])
+    dates = df["Date"].dt.date.drop_duplicates().to_list()
+    return dates
