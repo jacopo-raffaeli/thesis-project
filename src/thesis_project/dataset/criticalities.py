@@ -1,10 +1,14 @@
 import datetime as dt
+import logging
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
 
 import pandas as pd
 
-from thesis_project import config, dataset
+from thesis_project import config, utils
+from thesis_project.dataset.lob import LobReportCollector, load_lob_reports
+
+logger = logging.getLogger(__name__)
 
 CriticalityCheck = Literal[
     "consistency",
@@ -37,7 +41,7 @@ def _valid_timestamps(timestamps: pd.DatetimeIndex, settings: Settings) -> pd.Da
 
 
 def _consistency_rows(
-    collection: dataset.lob.LobReportCollector,
+    collection: LobReportCollector,
     settings: Settings,
     relevant_columns,  # TODO: Is not this already in settings?
 ):
@@ -63,15 +67,12 @@ def _consistency_rows(
                     "Date": date,
                     "Role": collection.role,
                     "Check": record.id,
-                    "Columns": ", ".join(columns),
-                    "N_Timestamps": len(timestamps),
-                    "Value": None,
                 }
             )
     return rows
 
 
-def _nan_rows(collection: dataset.lob.LobReportCollector, settings: Settings):
+def _nan_rows(collection: LobReportCollector, settings: Settings):
     rows = []
     threshold = settings.nan_threshold
     for date, report in collection.reports.items():
@@ -82,36 +83,26 @@ def _nan_rows(collection: dataset.lob.LobReportCollector, settings: Settings):
                     "Date": date,
                     "Role": collection.role,
                     "Check": "NANS_LEVEL_1",
-                    "Columns": None,
-                    "N_Timestamps": None,
-                    "Value": float(value),
                 }
             )
 
     return rows
 
 
-def _window_rows(collection: dataset.lob.LobReportCollector, settings: Settings):
+def _window_rows(collection: LobReportCollector, settings: Settings):
     rows = []
     for date, report in collection.reports.items():
         info = report.integrity["timestamps"]["levels"][1]
         opening, closing = info["min_valid_idx"], info["max_valid_idx"]
 
-        if opening is None or closing is None:
-            value = "no valid level-1 timestamps"
-        elif opening.time() <= settings.min_time and closing.time() >= settings.max_time:
+        if opening.time() <= settings.min_time and closing.time() >= settings.max_time:
             continue
-        else:
-            value = f"{opening.time()} - {closing.time()}"
 
         rows.append(
             {
                 "Date": date,
                 "Role": collection.role,
                 "Check": "VALID_WINDOW",
-                "Columns": None,
-                "N_Timestamps": None,
-                "Value": value,
             }
         )
 
@@ -119,7 +110,7 @@ def _window_rows(collection: dataset.lob.LobReportCollector, settings: Settings)
 
 
 def _gap_rows(
-    collection: dataset.lob.LobReportCollector,
+    collection: LobReportCollector,
     settings: Settings,
 ):
     rows = []
@@ -151,9 +142,6 @@ def _gap_rows(
                     "Date": date,
                     "Role": collection.role,
                     "Check": "GAPS_LEVEL_1",
-                    "Columns": None,
-                    "N_Timestamps": None,
-                    "Value": max(length for _, _, length in relevant),
                 }
             )
 
@@ -174,7 +162,6 @@ def find_criticalities(
     ## Return:
     * result: DataFrame containing a detailed report of critical dates
     """
-    # NOTE: I prefer settings to always be explicitly passed in input
     relevant_columns = set(
         settings.relevant_columns
         if settings.relevant_columns is not None
@@ -182,8 +169,9 @@ def find_criticalities(
     )
 
     rows = []
-    for role in ("fut", "ctd"):
-        collection = dataset.lob.load_lob_reports(ticker, role)
+    for role in get_args(config.AssetRole):
+        logger.debug("Scanning %s %s LOB reports...", str(ticker).upper(), str(role).upper())
+        collection = load_lob_reports(ticker, role)
 
         if "consistency" in settings.checks:
             rows.extend(_consistency_rows(collection, settings, relevant_columns))
@@ -194,17 +182,18 @@ def find_criticalities(
         if "gaps" in settings.checks:
             rows.extend(_gap_rows(collection, settings))
 
+        logger.debug("%s %s LOB reports scanned", str(ticker).upper(), str(role).upper())
+
     columns = [
         "Date",
         "Role",
         "Check",
-        "Columns",
-        "N_Timestamps",
-        "Value",
     ]
     result = pd.DataFrame(rows, columns=columns)
     if not result.empty:
         result = result.sort_values(["Date", "Role", "Check"], ignore_index=True)
+
+    logger.debug("Scan complete %d unique dates collected", result["Date"].nunique())
 
     return result
 
@@ -221,14 +210,10 @@ def get_critical_dates(
     * settings: Settings, if not provided return the default list
 
     ## Return:
-    * dates: list of datetime.date to exclude
+    * dates: list of datetime.date
     """
     if settings is not None:
-        dates = find_criticalities(ticker, settings)["Date"].drop_duplicates().to_list()
+        return find_criticalities(ticker, settings)["Date"].drop_duplicates().to_list()
 
     else:
-        path = config.DATA_PRO_DIR / ticker / "criticalities.csv"
-        df = pd.read_csv(path, parse_dates=["Date"])
-        dates = df["Date"].dt.date.drop_duplicates().to_list()
-
-    return dates
+        return utils.io.load_dates_to_exclude(ticker)
