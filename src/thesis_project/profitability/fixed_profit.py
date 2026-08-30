@@ -20,8 +20,8 @@ class FixedProfitConfig:
     max_holding_time: int | None
     n_jobs: int
     analyses: list[settings.AnalysisConfig]
-    min_time: datetime.time = config.STD_OPENING_TIME
-    max_time: datetime.time = config.STD_CLOSING_TIME
+    min_time: datetime.time = config.DEFAULT_OPENING_TIME
+    max_time: datetime.time = config.DEFAULT_CLOSING_TIME
 
 
 def session_bounds(

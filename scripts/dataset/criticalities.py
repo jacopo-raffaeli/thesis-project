@@ -9,16 +9,16 @@ from thesis_project.dataset.criticalities import DEFAULT_CHECKS, Settings, find_
 DEFAULT_SETTINGS: dict[config.FutTicker, Settings] = {
     "fbtp": Settings(
         checks=DEFAULT_CHECKS,
-        min_time=config.STD_OPENING_TIME,
-        max_time=config.STD_CLOSING_TIME,
+        min_time=config.DEFAULT_OPENING_TIME,
+        max_time=config.DEFAULT_CLOSING_TIME,
         nan_threshold=0.25 * 100,
         sec_threshold=60.0,
         relevant_columns=tuple(config.LOB.get_columns(levels=[1, 2, 3])),
     ),
     "fbts": Settings(
         checks=DEFAULT_CHECKS,
-        min_time=config.STD_OPENING_TIME,
-        max_time=config.STD_CLOSING_TIME,
+        min_time=config.DEFAULT_OPENING_TIME,
+        max_time=config.DEFAULT_CLOSING_TIME,
         nan_threshold=0.25 * 100,
         sec_threshold=60.0,
         relevant_columns=tuple(config.LOB.get_columns(levels=[1, 2, 3])),

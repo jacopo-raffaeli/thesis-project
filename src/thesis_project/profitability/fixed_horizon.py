@@ -17,8 +17,8 @@ class FixedHorizonConfig:
     horizons: list[int]
     tolerance: int
     analyses: list[settings.AnalysisConfig]
-    min_time: datetime.time = config.STD_OPENING_TIME
-    max_time: datetime.time = config.STD_CLOSING_TIME
+    min_time: datetime.time = config.DEFAULT_OPENING_TIME
+    max_time: datetime.time = config.DEFAULT_CLOSING_TIME
 
 
 def episode_pnl(
