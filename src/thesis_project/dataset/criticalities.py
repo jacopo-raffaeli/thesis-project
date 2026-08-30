@@ -216,4 +216,4 @@ def get_critical_dates(
         return find_criticalities(ticker, settings)["Date"].drop_duplicates().to_list()
 
     else:
-        return utils.io.load_dates_to_exclude(ticker)
+        return utils.io.load_criticalities(ticker)

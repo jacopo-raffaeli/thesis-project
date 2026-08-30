@@ -245,7 +245,7 @@ def load_filtered_parquet(
     path: Path,
     time_window: tuple[datetime.time, datetime.time] | None = None,
     dates_to_exclude: list[datetime.date] | None = None,
-) -> pd.DataFrame | pd.Series:
+) -> pd.Series:
     """"""
     idx = config.LOB.index_name
 
@@ -272,16 +272,27 @@ def load_filtered_parquet(
 
     data = scan.collect().to_pandas().set_index(idx).sort_index()
 
-    if len(data.columns) == 1:
-        data = data.squeeze("columns")
+    if len(data.columns) != 1:
+        raise ValueError("")
 
-        if not isinstance(data, pd.Series):
-            raise TypeError("")
+    data = data.squeeze("columns")
+
+    if not isinstance(data, pd.Series):
+        raise TypeError("")
 
     return data
 
 
-def load_dates_to_exclude(ticker: config.FutTicker) -> list[datetime.date]:
+def load_criticalities(ticker: config.FutTicker) -> list[datetime.date]:
+    """
+    Load default list of critical dates from data/processed/ticker/criticalities.csv
+
+    ## Args:
+    * ticker: FutTicker
+
+    Return:
+    * dates: list of datetime.date
+    """
     path = config.DATA_PRO_DIR / ticker / "criticalities.csv"
     df = pd.read_csv(path, parse_dates=["Date"])
     dates = df["Date"].dt.date.drop_duplicates().to_list()
