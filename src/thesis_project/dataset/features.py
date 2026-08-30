@@ -52,15 +52,19 @@ class FeatureSpec:
 
         return max_lookback
 
+    @property
+    def lookback(self) -> int:
+        return self.max_lag + self.max_lookback
 
-def summary(features: list[FeatureSpec]) -> None:
+
+def summary(specs: list[FeatureSpec]) -> None:
     """
     Print a summary of the configured features.
     """
 
     merged: dict[str, list[str]] = defaultdict(list)
 
-    for feature in features:
+    for feature in specs:
         merged[feature.base_id].extend(feature.output_names)
 
     total = sum(len(names) for names in merged.values())
@@ -78,19 +82,19 @@ def summary(features: list[FeatureSpec]) -> None:
         print()
 
 
-def validate_feature_specs(feature_specs: list[FeatureSpec]):
+def validate_feature_specs(specs: list[FeatureSpec]):
     """
     Check for duplicates in FeatureSpec base ids
     """
     seen = set()
-    for spec in feature_specs:
+    for spec in specs:
         if spec.base_id in seen:
             raise ValueError(f"Duplicate FeatureSpec object '{spec.base_id}'")
 
         seen.add(spec.base_id)
 
     seen = set()
-    for spec in feature_specs:
+    for spec in specs:
         for name in spec.output_names:
             if name in seen:
                 raise ValueError(f"Duplicate feature '{name}'")
