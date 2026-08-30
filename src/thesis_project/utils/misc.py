@@ -94,7 +94,7 @@ def load_dates_to_exclude(ticker: str) -> dict[str, set[pd.Timestamp]]:
     """ """
     out = {}
     for key, dates in config.DATES_TO_EXCLUDE[ticker].items():
-        out[key] = {pd.Timestamp(d).normalize() for d in dates}
+        out[key] = {datetime.date.fromisoformat(d) for d in dates}
 
     return out
 
