@@ -287,11 +287,13 @@ LOB = LobConfig(
 DateType = Literal[
     "Critical",
     "Rollover",
+    "Extra",
 ]
 
 DEFAULT_EXCLUDED_DATES: dict[DateType, tuple[int, int] | None] = {
     "Critical": None,
     "Rollover": (2, 0),
+    "Extra": None,
 }
 
 

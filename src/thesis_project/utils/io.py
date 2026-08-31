@@ -134,6 +134,25 @@ def load_criticalities(
     return dates
 
 
+def load_extra(ticker: config.FutTicker, filename: str = "extra.csv") -> list[datetime.date]:
+    """
+    Load extra list of critical dates from data/processed/ticker/filename
+
+    ## Args:
+    * ticker: FutTicker
+
+    Return:
+    * dates: list of datetime.date
+    * filename: csv filename
+    """
+    path = config.DATA_PRO_DIR / ticker / filename
+    path = path.with_suffix(".csv")
+    df = pd.read_csv(path, parse_dates=["Date"])
+    dates = df["Date"].dt.date.drop_duplicates().to_list()
+
+    return dates
+
+
 def load_fut_delivery_dates(
     ticker: config.FutTicker, filename: str = "fut_metadata.csv"
 ) -> list[datetime.date]:

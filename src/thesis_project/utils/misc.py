@@ -4,7 +4,7 @@ import datetime as dt
 import pandas as pd
 
 from thesis_project import config
-from thesis_project.utils.io import load_criticalities, load_fut_rollover_dates
+from thesis_project.utils.io import load_criticalities, load_extra, load_fut_rollover_dates
 
 
 def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
@@ -97,6 +97,9 @@ def _dates_by_type(ticker: config.FutTicker, name: config.DateType) -> list[date
 
         case "Rollover":
             return load_fut_rollover_dates(ticker)
+
+        case "Other":
+            return load_extra(ticker)
 
         case _:
             raise ValueError("")
