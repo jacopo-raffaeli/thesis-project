@@ -98,7 +98,7 @@ def _dates_by_type(ticker: config.FutTicker, name: config.DateType) -> list[date
         case "Rollover":
             return load_fut_rollover_dates(ticker)
 
-        case "Other":
+        case "Extra":
             return load_extra(ticker)
 
         case _:
