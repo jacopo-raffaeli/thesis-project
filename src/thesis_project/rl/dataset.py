@@ -14,9 +14,9 @@ from thesis_project.rl.env_config import EnvConfig
 @dataclass(frozen=True)
 class Settings:
     ticker: config.FutTicker
-    min_time: datetime.time
-    max_time: datetime.time
     n_jobs: int
+    min_time: datetime.time = config.DEFAULT_OPENING_TIME
+    max_time: datetime.time = config.DEFAULT_CLOSING_TIME
 
     offsets: dict[config.DateType, tuple[int, int] | None] = config.DEFAULT_EXCLUDED_DATES
 
