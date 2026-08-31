@@ -5,7 +5,7 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 
-from thesis_project.rl.dataset_config import DatasetConfig
+from thesis_project.rl.dataset import Settings
 from thesis_project.rl.env_config import EnvConfig
 from thesis_project.rl.features import FEATURES
 
@@ -428,8 +428,9 @@ if __name__ == "__main__":
 
     from thesis_project.rl.dataset import build_rl_dataset
 
-    dataset_config = DatasetConfig(
+    dataset_config = Settings(
         ticker="fbtp",
+        n_jobs=4,
     )
 
     env_config = EnvConfig(mode="random", include_cost=True, persistence_min=10)
