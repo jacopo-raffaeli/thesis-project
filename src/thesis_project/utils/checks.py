@@ -70,7 +70,7 @@ def check_s(s: pd.Series, check_sampling: bool = False) -> None:
         check_sampling_freq(s.index)
 
 
-def check_df(df: pd.Series, check_sampling: bool = False) -> None:
+def check_df(df: pd.DataFrame, check_sampling: bool = False) -> None:
     """
     Perform common checks on a DataFrame
 
