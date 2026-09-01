@@ -1,11 +1,12 @@
 from thesis_project.dataset.features import FeatureSpec
+from thesis_project.dataset.temporal import CalFeatType
 from thesis_project.dataset.transforms import (
     Delta,
     Identity,
 )
 
 # fmt: off
-FEATURES: list[FeatureSpec] = [
+MARKET_FEATURES: list[FeatureSpec] = [
     FeatureSpec(
         base_id="basis",
         transforms=[
@@ -42,4 +43,16 @@ FEATURES: list[FeatureSpec] = [
     #     ]
     # )
 ]
+
+CALENDAR_FEATURES: list[CalFeatType] = [
+    "hour_of_day",
+    "minute_of_day",
+    "second_of_day",
+]
+
+# CALENDAR_FEATURES_ENCODED: list[CalFeatEncType] = [
+#     "hour_of_day",
+#     "minute_of_day",
+#     "second_of_day",
+# ]
 # fmt: on
