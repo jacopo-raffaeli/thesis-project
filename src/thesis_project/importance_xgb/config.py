@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, get_args
 
 from thesis_project import config as global_config
 from thesis_project.importance_xgb import registry
@@ -250,10 +250,10 @@ def validate_config(config_obj: AnalysisConfig):
 
 
 def _validate_ticker(config_obj: AnalysisConfig):
-    if config_obj.ticker not in global_config.VALID_TICKERS:
+    if config_obj.ticker not in get_args(global_config.FutTicker):
         raise ValueError(
             f"Invalid ticker '{config_obj.ticker}', "
-            f"expected one of {sorted(global_config.VALID_TICKERS)}"
+            f"expected one of {sorted(get_args(global_config.FutTicker))}"
         )
 
 
