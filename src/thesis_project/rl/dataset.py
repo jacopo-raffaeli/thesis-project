@@ -70,7 +70,7 @@ def build_rl_dataset(
     # Compose features dataset
     features = pd.concat(
         [market_features, calendar_features, calendar_features_encoded],
-        axis=0,
+        axis=1,
     )
 
     # Mid prices
