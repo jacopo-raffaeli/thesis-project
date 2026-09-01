@@ -1,17 +1,13 @@
 from dataclasses import dataclass
-from typing import Literal
 
 import pandas as pd
 
 from thesis_project import config
+from thesis_project.config import FutContractMode, PriceMode, VolumeMode
 
 CTD_FACE_VALUE = config.ASSETS["btp"].contract_size
 FUT_FACE_VALUE = config.ASSETS["fbtp"].contract_size
 SAMPLING_INTERVAL = pd.Timedelta(config.LOB.freq)
-
-FutContractMode = Literal["frac", "round"]
-PriceMode = Literal["mid", "quoted"]
-VolumeMode = Literal["ignore", "level", "lob"]
 
 
 @dataclass(frozen=True)

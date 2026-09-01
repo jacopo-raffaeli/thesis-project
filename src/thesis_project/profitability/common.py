@@ -7,7 +7,6 @@ import polars as pl
 
 from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
-from thesis_project.profitability import settings
 from thesis_project.utils.misc import get_dates_to_exclude, naive_dates
 
 
@@ -94,7 +93,7 @@ def compute_basis(
 
 def execution_prices(
     data: pd.DataFrame,
-    price_mode: settings.PriceMode,
+    price_mode: config.PriceMode,
 ) -> dict[str, pd.Series]:
     match price_mode:
         case "mid":
@@ -121,7 +120,7 @@ def entry_execution_mask(
     data: pd.DataFrame,
     fut_contracts: pd.Series,
     ctd_contracts: int,
-    volume_mode: settings.VolumeMode,
+    volume_mode: config.VolumeMode,
 ) -> pd.DataFrame:
     match volume_mode:
         case "ignore":
@@ -159,7 +158,7 @@ def exit_execution_mask(
     data: pd.DataFrame,
     fut_contracts: pd.Series,
     ctd_contracts: int,
-    volume_mode: settings.VolumeMode,
+    volume_mode: config.VolumeMode,
 ) -> pd.DataFrame:
     match volume_mode:
         case "ignore":

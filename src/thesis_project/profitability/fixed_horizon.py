@@ -46,8 +46,8 @@ def run_fixed_horizon_single(
     data: pd.DataFrame,
     fut_contracts: pd.Series,
     ctd_contracts: int,
-    price_mode: settings.PriceMode,
-    volume_mode: settings.VolumeMode,
+    price_mode: config.PriceMode,
+    volume_mode: config.VolumeMode,
     ctd_face_value: float = settings.CTD_FACE_VALUE,
     fut_face_value: float = settings.FUT_FACE_VALUE,
 ) -> pd.DataFrame:
@@ -284,8 +284,8 @@ def summarize_fixed_horizon(
 def save_experiment(
     experiment,
     ticker: config.FutTicker,
-    price: settings.PriceMode,
-    contract: settings.FutContractMode,
+    price: config.PriceMode,
+    contract: config.FutContractMode,
 ):
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"
     path.mkdir(parents=True, exist_ok=True)
@@ -306,9 +306,9 @@ def save_experiment(
 
 def load_experiment(
     ticker: config.FutTicker,
-    price: settings.PriceMode,
-    contract: settings.FutContractMode,
-    volume: settings.VolumeMode,
+    price: config.PriceMode,
+    contract: config.FutContractMode,
+    volume: config.VolumeMode,
     horizon: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"

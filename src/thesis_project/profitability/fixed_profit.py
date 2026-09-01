@@ -77,8 +77,8 @@ def run_fixed_profit_single(
     profit: float,
     max_holding_time: int | None,
     ctd_contracts: int,
-    price_mode: settings.PriceMode,
-    volume_mode: settings.VolumeMode,
+    price_mode: config.PriceMode,
+    volume_mode: config.VolumeMode,
 ) -> pd.DataFrame:
     if not isinstance(data.index, pd.DatetimeIndex):
         raise TypeError("data must have a DatetimeIndex")
@@ -287,7 +287,7 @@ def run_analysis(
     data: pd.DataFrame,
     fractional_fut_contracts: pd.Series,
     rounded_fut_contracts: pd.Series,
-) -> tuple[tuple[settings.PriceMode, settings.FutContractMode], dict, dict]:
+) -> tuple[tuple[config.PriceMode, config.FutContractMode], dict, dict]:
     match analysis.fut_contract_mode:
         case "frac":
             fut_contracts = fractional_fut_contracts
@@ -424,8 +424,8 @@ def summarize_fixed_profit(
 def save_experiment(
     experiment,
     ticker: config.FutTicker,
-    price: settings.PriceMode,
-    contract: settings.FutContractMode,
+    price: config.PriceMode,
+    contract: config.FutContractMode,
 ):
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_profit"
     path.mkdir(parents=True, exist_ok=True)
@@ -446,9 +446,9 @@ def save_experiment(
 
 def load_experiment(
     ticker: config.FutTicker,
-    price: settings.PriceMode,
-    contract: settings.FutContractMode,
-    volume: settings.VolumeMode,
+    price: config.PriceMode,
+    contract: config.FutContractMode,
+    volume: config.VolumeMode,
     profit: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_profit"
