@@ -7,9 +7,9 @@ from thesis_project import config
 from thesis_project.utils.io import load_criticalities, load_extra, load_fut_rollover_dates
 
 
-def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
-    if not isinstance(prices.index, pd.DatetimeIndex):
-        raise TypeError(f"Expected a DatetimeIndex, got {type(prices.index).__name__!r}")
+def align_cf(reference: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
+    if not isinstance(reference.index, pd.DatetimeIndex):
+        raise TypeError(f"Expected a DatetimeIndex, got {type(reference.index).__name__!r}")
 
     if not isinstance(daily_cf.index, pd.DatetimeIndex):
         raise TypeError(f"Expected a DatetimeIndex, got {type(daily_cf.index).__name__!r}")
@@ -17,8 +17,8 @@ def align_cf(prices: pd.DataFrame, daily_cf: pd.Series) -> pd.Series:
     cf = daily_cf.copy()
     cf.index = pd.to_datetime(cf.index).normalize()
 
-    dates = prices.index.tz_localize(None).normalize()
-    aligned = pd.Series(cf.reindex(dates).to_numpy(), index=prices.index, name="cf")
+    dates = reference.index.tz_localize(None).normalize()
+    aligned = pd.Series(cf.reindex(dates).to_numpy(), index=reference.index, name="cf")
 
     if cf.index.has_duplicates:
         raise ValueError("Conversion factor series contains duplicate dates")
