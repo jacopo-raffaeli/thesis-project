@@ -1,6 +1,6 @@
+from thesis_project.dataset import temporal
 from thesis_project.importance_xgb import (
     sampling,
-    temporal,
     transforms,
 )
 

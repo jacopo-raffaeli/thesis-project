@@ -8,12 +8,12 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from thesis_project import config as global_config
+from thesis_project.dataset import temporal
 from thesis_project.importance_xgb import (
     config,
     data_paths,
     registry,
     sampling,
-    temporal,
 )
 
 logger = logging.getLogger(__name__)
