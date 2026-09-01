@@ -3,6 +3,7 @@ from joblib import Parallel, delayed
 
 from thesis_project import config, dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
+from thesis_project.dataset.temporal import CalFeatEncType, CalFeatType
 from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
 from thesis_project.rl.env_config import EnvConfig
@@ -48,19 +49,38 @@ def build_specs(settings: DatasetConfig, specs: list[dataset.features.FeatureSpe
 
 
 def build_rl_dataset(
-    dataset_config: DatasetConfig, env_config: EnvConfig, specs: list[dataset.features.FeatureSpec]
+    dataset_config: DatasetConfig,
+    env_config: EnvConfig,
+    specs: list[dataset.features.FeatureSpec],
+    cal_feature: list[CalFeatType],
+    cal_enc_feature: list[CalFeatEncType],
 ) -> RLDataset:
-    features = build_specs(dataset_config, specs).ffill(axis=0)
-    assert isinstance(features.index, pd.DatetimeIndex)
+    # Market features
+    market_features = build_specs(dataset_config, specs).ffill(axis=0)
+
+    # Calendar features
+    assert isinstance(market_features.index, pd.DatetimeIndex)
+    calendar_features = dataset.temporal.compute_calendar_features(
+        market_features.index, cal_feature
+    )
+    calendar_features_encoded = dataset.temporal.compute_calendar_features_encoded(
+        market_features.index, cal_enc_feature
+    )
+
+    # Compose features dataset
+    features = pd.concat(
+        [market_features, calendar_features, calendar_features_encoded],
+        axis=0,
+    )
 
     # Mid prices
+    assert isinstance(features.index, pd.DatetimeIndex)
     ctd_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
     fut_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
 
     # Contracts
     ctd_contracts = env_config.ctd_contracts
     cf = utils.io.load_cf(dataset_config.ticker)["CF"]
-    # cf = utils.misc.align_cf(features, cf)
     fut_contracts = utils.misc.frac_fut_contracts(cf, ctd_contracts)
     if env_config.contract_mode == "round":
         fut_contracts = utils.misc.round_fut_contracts(fut_contracts)
