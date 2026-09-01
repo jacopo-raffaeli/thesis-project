@@ -285,7 +285,7 @@ def save_experiment(
     experiment,
     ticker: config.FutTicker,
     price: config.PriceMode,
-    contract: config.FutContractMode,
+    contract: config.ContractMode,
 ):
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_horizon"
     path.mkdir(parents=True, exist_ok=True)
@@ -307,7 +307,7 @@ def save_experiment(
 def load_experiment(
     ticker: config.FutTicker,
     price: config.PriceMode,
-    contract: config.FutContractMode,
+    contract: config.ContractMode,
     volume: config.VolumeMode,
     horizon: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:

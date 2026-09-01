@@ -287,7 +287,7 @@ def run_analysis(
     data: pd.DataFrame,
     fractional_fut_contracts: pd.Series,
     rounded_fut_contracts: pd.Series,
-) -> tuple[tuple[config.PriceMode, config.FutContractMode], dict, dict]:
+) -> tuple[tuple[config.PriceMode, config.ContractMode], dict, dict]:
     match analysis.fut_contract_mode:
         case "frac":
             fut_contracts = fractional_fut_contracts
@@ -425,7 +425,7 @@ def save_experiment(
     experiment,
     ticker: config.FutTicker,
     price: config.PriceMode,
-    contract: config.FutContractMode,
+    contract: config.ContractMode,
 ):
     path = config.RES_EXP_DIR / ticker / "profitability" / "fixed_profit"
     path.mkdir(parents=True, exist_ok=True)
@@ -447,7 +447,7 @@ def save_experiment(
 def load_experiment(
     ticker: config.FutTicker,
     price: config.PriceMode,
-    contract: config.FutContractMode,
+    contract: config.ContractMode,
     volume: config.VolumeMode,
     profit: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | pd.DataFrame:

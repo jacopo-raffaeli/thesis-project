@@ -47,7 +47,7 @@ LobSide = Literal["ask", "bid"]
 LobColumn = Literal["price", "size"]
 
 # Standard settings naming convetions
-FutContractMode = Literal["frac", "round"]
+ContractMode = Literal["frac", "round"]
 PriceMode = Literal["mid", "quoted"]
 VolumeMode = Literal["ignore", "level", "lob"]
 
