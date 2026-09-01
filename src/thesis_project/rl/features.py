@@ -1,8 +1,10 @@
 from thesis_project.dataset.features import FeatureSpec
-from thesis_project.dataset.temporal import CalFeatType
+from thesis_project.dataset.temporal import CalFeatEncType, CalFeatType
 from thesis_project.dataset.transforms import (
     Delta,
     Identity,
+    Ratio,
+    Rolling,
 )
 
 # fmt: off
@@ -10,49 +12,60 @@ MARKET_FEATURES: list[FeatureSpec] = [
     FeatureSpec(
         base_id="basis",
         transforms=[
-            Identity(
-                lags=60,
-            ),
+            Identity(),
             Delta(
                 deltas=[60],
-                lags=[60, 120, 180],
+                lags=[60],
             ),
-        ]
+            Ratio(
+                references=["day", "hour"],
+            ),
+            Rolling(
+                stats=["std"],
+                windows=[300, 1800],
+            ),
+            Rolling(
+                stats=["mean"],
+                windows=[1800],
+            ),
+        ],
     ),
-    # FeatureSpec(
-    #     base_id="ctd_obi_lvl_1",
-    #     transforms=[
-    #         Identity(),
-    #         Rolling(
-    #             stats=["mean"],
-    #             windows=[60, 120],
-    #         ),
-    #         Rolling(
-    #             stats=["std"],
-    #             windows=[180],
-    #             lags=60
-    #         )
-    #     ]
-    # ),
-    # FeatureSpec(
-    #     base_id="fut_mid_price",
-    #     transforms=[
-    #         Ratio(
-    #             references="day",
-    #         )
-    #     ]
-    # )
+    FeatureSpec(
+        base_id="irr",
+        transforms=[
+            Identity(),
+            Rolling(
+                stats=["mean"],
+                windows=[300, 1800],
+            ),
+            Ratio(
+                references=["day", "hour"],
+            ),
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_obi_1",
+        transforms=[
+            Identity()
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_spread",
+        transforms=[
+            Identity()
+        ],
+    ),
 ]
 
 CALENDAR_FEATURES: list[CalFeatType] = [
+    # "hour_of_day",
+    # "minute_of_day",
+    # "second_of_day",
+]
+
+CALENDAR_FEATURES_ENCODED: list[CalFeatEncType] = [
     "hour_of_day",
     "minute_of_day",
     "second_of_day",
 ]
-
-# CALENDAR_FEATURES_ENCODED: list[CalFeatEncType] = [
-#     "hour_of_day",
-#     "minute_of_day",
-#     "second_of_day",
-# ]
 # fmt: on
