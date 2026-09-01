@@ -212,9 +212,9 @@ class Delta(BaseTransform):
 
 @dataclass(frozen=True)
 class Rolling(BaseTransform):
-    VALID_STATS = ["mean", "std", "min", "max"]
+    RollingStat = Literal["mean", "std", "min", "max"]
 
-    stats: list[str] | str = field(default_factory=list[str])
+    stats: list[RollingStat] | RollingStat = field(default_factory=list[RollingStat])
     windows: list[int] | int = field(default_factory=list[int])
 
     def __post_init__(self):
@@ -269,11 +269,9 @@ class Rolling(BaseTransform):
 
 @dataclass(frozen=True)
 class Ratio(BaseTransform):
-    RatioReferences = Literal["day", "hour"]
+    RatioReference = Literal["day", "hour"]
 
-    references: list[RatioReferences] | RatioReferences = field(
-        default_factory=list[RatioReferences]
-    )
+    references: list[RatioReference] | RatioReference = field(default_factory=list[RatioReference])
 
     def __post_init__(self):
         super().__post_init__()
@@ -426,8 +424,8 @@ def _validate_stats(stats: list[str]):
     if len(stats) == 0:
         raise ValueError("Rolling stats must be non-empty")
 
-    if any(stat not in Rolling.VALID_STATS for stat in stats):
-        raise ValueError(f"Rolling stats must be in [{Rolling.VALID_STATS}]")
+    if any(stat not in get_args(Rolling.RollingStat) for stat in stats):
+        raise ValueError(f"Rolling stats must be in [{Rolling.RollingStat}]")
 
 
 def _validate_windows(windows: list[int]):
@@ -448,5 +446,5 @@ def _validate_references(references: list[str]) -> None:
     if len(references) == 0:
         raise ValueError("Ratio references must be non-empty")
 
-    if any(reference not in get_args(Ratio.RatioReferences) for reference in references):
-        raise ValueError(f"Ratio references must be in [{Ratio.RatioReferences}]")
+    if any(reference not in get_args(Ratio.RatioReference) for reference in references):
+        raise ValueError(f"Ratio references must be in [{Ratio.RatioReference}]")
