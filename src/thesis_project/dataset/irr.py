@@ -277,7 +277,7 @@ def _compute_irr(
 
     # Align daily CF to the common price timestamps.
     aligned_cf = misc.align_cf(
-        prices=prices,
+        reference=prices,
         daily_cf=cf,
     )
 
@@ -286,7 +286,7 @@ def _compute_irr(
     # ISIN is daily information. Reuse the same date-alignment convention as
     # conversion factors.
     aligned_isin = misc.align_cf(
-        prices=prices,
+        reference=prices,
         daily_cf=isin,
     )
     prices["isin"] = aligned_isin

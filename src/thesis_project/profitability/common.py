@@ -8,15 +8,13 @@ import polars as pl
 from thesis_project import config
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.profitability import settings
-from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.utils.misc import get_dates_to_exclude, naive_dates
 
 
 def load_prices(
     ticker: config.FutTicker, min_time: datetime.time, max_time: datetime.time
 ) -> pd.DataFrame:
-    dataset_config = DatasetConfig(ticker)
-    excluded = get_dates_to_exclude(dataset_config.ticker, config.DEFAULT_EXCLUDED_DATES)
+    excluded = get_dates_to_exclude(ticker, config.DEFAULT_EXCLUDED_DATES)
 
     names = {
         f"{role}_{side}_price_lvl_1"
@@ -43,8 +41,7 @@ def load_prices(
 def load_volumes(
     ticker: config.FutTicker, min_time: datetime.time, max_time: datetime.time
 ) -> pd.DataFrame:
-    dataset_config = DatasetConfig(ticker)
-    excluded = get_dates_to_exclude(dataset_config.ticker, config.DEFAULT_EXCLUDED_DATES)
+    excluded = get_dates_to_exclude(ticker, config.DEFAULT_EXCLUDED_DATES)
 
     names = {
         f"{role}_{side}_size_lvl_1"
