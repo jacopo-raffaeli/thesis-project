@@ -283,6 +283,13 @@ class Ratio(BaseTransform):
         if len(series) == 0:
             raise ValueError("The series is empty")
 
+        # Edge case
+        # 17:00:00 is grouped alone
+        # If NaN or 0 it will fail
+        # Instead we return 1
+        if len(series) == 1 and (series.isna().all() or (series == 0).all()):
+            return 1.0
+
         if series.isna().all():
             raise ValueError("The series is all NaNs")
 
