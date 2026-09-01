@@ -46,21 +46,10 @@ AssetRole = Literal["ctd", "fut"]
 LobSide = Literal["ask", "bid"]
 LobColumn = Literal["price", "size"]
 
-# Standard
-IncludeCost = Literal[
-    "On",
-    "Off",
-]
-
-IncludeVolume = Literal[
-    "On",
-    "Off",
-]
-
-RoundContract = Literal[
-    "On",
-    "Off",
-]
+# Standard settings naming convetions
+FutContractMode = Literal["frac", "round"]
+PriceMode = Literal["mid", "quoted"]
+VolumeMode = Literal["ignore", "level", "lob"]
 
 # Standard timeS for fut-ctd joint analysis
 DEFAULT_OPENING_TIME = time(9, 0, 0)
