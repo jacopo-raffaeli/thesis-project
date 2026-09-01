@@ -452,12 +452,12 @@ def preprocess_temporal_features(
 
     # Plain calendar features
     for name in config_obj.calendar_features:
-        calendar_feature_fn = registry.CALENDAR_FEATURES_REGISTRY[name]
+        calendar_feature_fn = temporal.CALENDAR_FEATURES_REGISTRY[name]
         temporal_features_df[name] = calendar_feature_fn(idx_sampled)
 
     # Encoded calendard features
     for name in config_obj.calendar_features_encoded:
-        calendar_feature_fn = registry.CALENDAR_FEATURES_ENCODED_REGISTRY[name]
+        calendar_feature_fn = temporal.CALENDAR_FEATURES_ENCODED_REGISTRY[name]
         sin, cos = calendar_feature_fn(idx_sampled)
         temporal_features_df[f"{name}_sin"] = sin
         temporal_features_df[f"{name}_cos"] = cos
@@ -470,7 +470,7 @@ def preprocess_temporal_features(
         dates = pd.read_csv(path, parse_dates=[column])[column]
 
         for transform_key in metadata["transforms"]:
-            transform = registry.EVENT_BASED_FEATURES_REGISTRY[transform_key]
+            transform = temporal.EVENT_BASED_FEATURES_REGISTRY[transform_key]
             temporal_features_df[f"{transform_key}_{name}"] = transform(idx_sampled, dates)
 
     # Daily event based features

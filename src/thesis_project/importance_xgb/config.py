@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, get_args
 
 from thesis_project import config as global_config
+from thesis_project.dataset import temporal
 from thesis_project.importance_xgb import registry
 
 
@@ -441,29 +442,29 @@ def _validate_market_features(config_obj: AnalysisConfig):
 
 def _validate_calendar_features(config_obj: AnalysisConfig):
     for calendar_feature in config_obj.calendar_features:
-        if calendar_feature not in registry.CALENDAR_FEATURES_REGISTRY.keys():
+        if calendar_feature not in temporal.CALENDAR_FEATURES_REGISTRY.keys():
             raise ValueError(
                 f"Invalid calendar feature '{calendar_feature}', "
-                f"expected one of {sorted(registry.CALENDAR_FEATURES_REGISTRY)}"
+                f"expected one of {sorted(temporal.CALENDAR_FEATURES_REGISTRY)}"
             )
 
 
 def _validate_calendar_encoded_features(config_obj: AnalysisConfig):
     for calendar_feature in config_obj.calendar_features_encoded:
-        if calendar_feature not in registry.CALENDAR_FEATURES_ENCODED_REGISTRY.keys():
+        if calendar_feature not in temporal.CALENDAR_FEATURES_ENCODED_REGISTRY.keys():
             raise ValueError(
                 f"Invalid calendar feature '{calendar_feature}', "
-                f"expected one of {sorted(registry.CALENDAR_FEATURES_REGISTRY)}"
+                f"expected one of {sorted(temporal.CALENDAR_FEATURES_REGISTRY)}"
             )
 
 
 def _validate_event_based_features(config_obj: AnalysisConfig):
     for name, metadata in config_obj.event_based_features.items():
         for transform in metadata["transforms"]:
-            if transform not in registry.EVENT_BASED_FEATURES_REGISTRY.keys():
+            if transform not in temporal.EVENT_BASED_FEATURES_REGISTRY.keys():
                 raise ValueError(
                     f"Invalid event based feature transform '{name}: {transform}', "
-                    f"expected one of {sorted(registry.EVENT_BASED_FEATURES_REGISTRY.keys())}"
+                    f"expected one of {sorted(temporal.EVENT_BASED_FEATURES_REGISTRY.keys())}"
                 )
 
 
