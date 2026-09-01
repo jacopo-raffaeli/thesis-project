@@ -59,6 +59,39 @@ def compute_second_of_minute(idx: pd.DatetimeIndex) -> pd.Series:
     return pd.Series(idx.second, index=idx, dtype=np.int8)
 
 
+CalFeatType = Literal[
+    "year",
+    "month",
+    "week_of_year",
+    "day_of_year",
+    "day_of_month",
+    "day_of_week",
+    "hour_of_day",
+    "minute_of_day",
+    "minute_of_hour",
+    "second_of_day",
+    "second_of_hour",
+    "second_of_minute",
+]
+
+
+CALENDAR_FEATURES_REGISTRY: dict[CalFeatType, Callable[[pd.DatetimeIndex], pd.Series]] = {
+    "year": compute_year,
+    "month": compute_month,
+    "week_of_year": compute_week_of_year,
+    "day_of_year": compute_day_of_year,
+    "day_of_month": compute_day_of_month,
+    "day_of_week": compute_day_of_week,
+    "hour_of_day": compute_hour_of_day,
+    "minute_of_day": compute_minute_of_day,
+    "minute_of_hour": compute_minute_of_hour,
+    "second_of_day": compute_second_of_day,
+    "second_of_hour": compute_second_of_hour,
+    "second_of_minute": compute_second_of_minute,
+}
+
+
+# Calendar features encoded
 def encode_cyclical(feature, period: int) -> Tuple[pd.Series, pd.Series]:
     angle = 2 * np.pi * (feature / period)
     return np.sin(angle), np.cos(angle)
@@ -98,6 +131,28 @@ def encode_second_of_minute(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series
     feature = compute_second_of_minute(idx)
     sin, cos = encode_cyclical(feature, 60)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
+
+
+CalFeatEncType = Literal[
+    "hour_of_day",
+    "minute_of_day",
+    "minute_of_hour",
+    "second_of_day",
+    "second_of_hour",
+    "second_of_minute",
+]
+
+
+CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
+    CalFeatEncType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
+] = {
+    "hour_of_day": encode_hour_of_day,
+    "minute_of_day": encode_minute_of_day,
+    "minute_of_hour": encode_minute_of_hour,
+    "second_of_day": encode_second_of_day,
+    "second_of_hour": encode_second_of_hour,
+    "second_of_minute": encode_second_of_minute,
+}
 
 
 # Event based features
@@ -161,6 +216,18 @@ def days_to_prev_event(idx: pd.DatetimeIndex, dates: pd.Series, signed: bool = T
     return pd.Series(dist, index=idx_out)
 
 
+EventFeatType = Literal[
+    "days_to_next",
+    "days_to_prev",
+]
+
+EVENT_BASED_FEATURES_REGISTRY: dict[EventFeatType, Callable] = {
+    "days_to_next": days_to_next_event,
+    "days_to_prev": days_to_prev_event,
+}
+
+
+# Daily events
 def time_to_daily_event(
     idx: pd.DatetimeIndex, event_time: str, event_tz: str, unit: str, signed: bool = True
 ) -> pd.Series:
@@ -210,63 +277,23 @@ def _parse_time(time_str: str) -> datetime.time:
     return datetime.time(hour=h, minute=m, second=s)
 
 
-CalFeatType = Literal[
-    "year",
-    "month",
-    "week_of_year",
-    "day_of_year",
-    "day_of_month",
-    "day_of_week",
-    "hour_of_day",
-    "minute_of_day",
-    "minute_of_hour",
-    "second_of_day",
-    "second_of_hour",
-    "second_of_minute",
-]
+def compute_calendar_features(idx: pd.DatetimeIndex, ids: list[CalFeatType]) -> pd.DataFrame:
+    features: dict[str, pd.Series] = {}
+    for id in ids:
+        func = CALENDAR_FEATURES_REGISTRY[id]
+        features[id] = func(idx)
+
+    return pd.DataFrame(features, index=idx)
 
 
-CALENDAR_FEATURES_REGISTRY: dict[CalFeatType, Callable[[pd.DatetimeIndex], pd.Series]] = {
-    "year": compute_year,
-    "month": compute_month,
-    "week_of_year": compute_week_of_year,
-    "day_of_year": compute_day_of_year,
-    "day_of_month": compute_day_of_month,
-    "day_of_week": compute_day_of_week,
-    "hour_of_day": compute_hour_of_day,
-    "minute_of_day": compute_minute_of_day,
-    "minute_of_hour": compute_minute_of_hour,
-    "second_of_day": compute_second_of_day,
-    "second_of_hour": compute_second_of_hour,
-    "second_of_minute": compute_second_of_minute,
-}
+def compute_calendar_features_encoded(
+    idx: pd.DatetimeIndex, ids: list[CalFeatEncType]
+) -> pd.DataFrame:
+    features: dict[str, pd.Series] = {}
+    for id in ids:
+        func = CALENDAR_FEATURES_ENCODED_REGISTRY[id]
+        sin_enc, cos_enc = func(idx)
+        features[f"{id}_sin"] = sin_enc
+        features[f"{id}_cos"] = cos_enc
 
-CalFeatEncType = Literal[
-    "hour_of_day",
-    "minute_of_day",
-    "minute_of_hour",
-    "second_of_day",
-    "second_of_hour",
-    "second_of_minute",
-]
-
-CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
-    CalFeatEncType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
-] = {
-    "hour_of_day": encode_hour_of_day,
-    "minute_of_day": encode_minute_of_day,
-    "minute_of_hour": encode_minute_of_hour,
-    "second_of_day": encode_second_of_day,
-    "second_of_hour": encode_second_of_hour,
-    "second_of_minute": encode_second_of_minute,
-}
-
-EventFeatType = Literal[
-    "days_to_next",
-    "days_to_prev",
-]
-
-EVENT_BASED_FEATURES_REGISTRY: dict[EventFeatType, Callable] = {
-    "days_to_next": days_to_next_event,
-    "days_to_prev": days_to_prev_event,
-}
+    return pd.DataFrame(features, index=idx)
