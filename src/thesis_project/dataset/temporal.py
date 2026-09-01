@@ -1,5 +1,5 @@
 import datetime
-from typing import Tuple
+from typing import Callable, Literal, Tuple
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -210,7 +210,23 @@ def _parse_time(time_str: str) -> datetime.time:
     return datetime.time(hour=h, minute=m, second=s)
 
 
-CALENDAR_FEATURES_REGISTRY = {
+CalFeatType = Literal[
+    "year",
+    "month",
+    "week_of_year",
+    "day_of_year",
+    "day_of_month",
+    "day_of_week",
+    "hour_of_day",
+    "minute_of_day",
+    "minute_of_hour",
+    "second_of_day",
+    "second_of_hour",
+    "second_of_minute",
+]
+
+
+CALENDAR_FEATURES_REGISTRY: dict[CalFeatType, Callable[[pd.DatetimeIndex], pd.Series]] = {
     "year": compute_year,
     "month": compute_month,
     "week_of_year": compute_week_of_year,
@@ -224,7 +240,19 @@ CALENDAR_FEATURES_REGISTRY = {
     "second_of_hour": compute_second_of_hour,
     "second_of_minute": compute_second_of_minute,
 }
-CALENDAR_FEATURES_ENCODED_REGISTRY = {
+
+CalFeatEncType = Literal[
+    "hour_of_day",
+    "minute_of_day",
+    "minute_of_hour",
+    "second_of_day",
+    "second_of_hour",
+    "second_of_minute",
+]
+
+CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
+    CalFeatEncType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
+] = {
     "hour_of_day": encode_hour_of_day,
     "minute_of_day": encode_minute_of_day,
     "minute_of_hour": encode_minute_of_hour,
@@ -232,7 +260,13 @@ CALENDAR_FEATURES_ENCODED_REGISTRY = {
     "second_of_hour": encode_second_of_hour,
     "second_of_minute": encode_second_of_minute,
 }
-EVENT_BASED_FEATURES_REGISTRY = {
+
+EventFeatType = Literal[
+    "days_to_next",
+    "days_to_prev",
+]
+
+EVENT_BASED_FEATURES_REGISTRY: dict[EventFeatType, Callable] = {
     "days_to_next": days_to_next_event,
     "days_to_prev": days_to_prev_event,
 }
