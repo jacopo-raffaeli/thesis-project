@@ -5,7 +5,8 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 
-from thesis_project.rl.dataset import Settings
+from thesis_project import config
+from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
 from thesis_project.rl.features import FEATURES
 
@@ -13,7 +14,10 @@ from thesis_project.rl.features import FEATURES
 @dataclass(frozen=True)
 class RLDataset:
     features: pd.DataFrame = field(default_factory=pd.DataFrame)
-    basis: pd.Series = field(default_factory=pd.Series)
+    ctd_mid: pd.Series = field(default_factory=pd.Series)
+    fut_mid: pd.Series = field(default_factory=pd.Series)
+    ctd_contracts: float = field(default_factory=float)
+    fut_contracts: pd.Series = field(default_factory=pd.Series)
     ctd_spread: pd.Series | None = None
     fut_spread: pd.Series | None = None
 
@@ -22,8 +26,10 @@ class RLDataset:
 
     def __post_init__(self):
         assert isinstance(self.features.index, pd.DatetimeIndex)
-        assert isinstance(self.basis.index, pd.DatetimeIndex)
-        assert self.features.index.equals(self.basis.index)
+        assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert self.features.index.equals(self.ctd_mid.index)
+        assert self.features.index.equals(self.fut_mid.index)
 
         if self.ctd_spread is not None:
             assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
@@ -33,13 +39,14 @@ class RLDataset:
             assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
             assert self.features.index.equals(self.fut_spread.index)
 
-        dates = self.features.index.floor(freq="D").tz_localize(None)
-        unique_dates = dates.unique()
-        object.__setattr__(self, "dates", list(unique_dates))
+        # dates_idx = utils.misc.naive_dates(self.features.index)
+        dates_idx = self.features.index.floor("D").tz_localize(None)
+        dates = dates_idx.unique()
+        object.__setattr__(self, "dates", list(dates))
 
         date_to_slice = {}
-        for date in unique_dates:
-            rows = np.flatnonzero(dates == date)
+        for date in dates:
+            rows = np.flatnonzero(dates_idx == date)
             date_to_slice[date] = slice(rows[0], rows[-1] + 1)
         object.__setattr__(self, "date_to_slice", date_to_slice)
 
@@ -51,14 +58,19 @@ class RLDataset:
 @dataclass(frozen=True)
 class EpDataset:
     features: pd.DataFrame = field(default_factory=pd.DataFrame)
-    basis: pd.Series = field(default_factory=pd.Series)
+    ctd_mid: pd.Series = field(default_factory=pd.Series)
+    fut_mid: pd.Series = field(default_factory=pd.Series)
+    ctd_contracts: float = field(default_factory=float)
+    fut_contracts: float = field(default_factory=float)
     ctd_spread: pd.Series | None = None
     fut_spread: pd.Series | None = None
 
     def __post_init__(self):
         assert isinstance(self.features.index, pd.DatetimeIndex)
-        assert isinstance(self.basis.index, pd.DatetimeIndex)
-        assert self.features.index.equals(self.basis.index)
+        assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert self.features.index.equals(self.ctd_mid.index)
+        assert self.features.index.equals(self.fut_mid.index)
 
         if self.ctd_spread is not None:
             assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
@@ -71,6 +83,10 @@ class EpDataset:
     @property
     def n_features(self) -> int:
         return len(self.features.columns)
+
+    @property
+    def episode_length(self) -> int:
+        return len(self.features)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +116,7 @@ class BasisTradingEnv(gym.Env):
         _LONG_POSITION: 2,  # Long
     }
 
-    def __init__(self, dataset: RLDataset, config: EnvConfig):
+    def __init__(self, dataset: RLDataset, env_config: EnvConfig):
         super().__init__()
 
         self.date: pd.Timestamp
@@ -120,7 +136,7 @@ class BasisTradingEnv(gym.Env):
         self.dataset = dataset
         self.ep_dataset: EpDataset | None = None
 
-        self.config = config
+        self.config = env_config
 
         # Define observation space
         self.observation_space = gym.spaces.Box(
@@ -147,7 +163,7 @@ class BasisTradingEnv(gym.Env):
         self.t = self.trajectory_sec
         self.ep_dataset = self._build_episode_rl_dataset()
 
-        if self.t >= len(self.ep_dataset.features):
+        if self.t >= self.ep_dataset.episode_length:
             raise ValueError("Sampled trajectory exceeds episode length")
 
         observation = self._get_observation()
@@ -231,30 +247,58 @@ class BasisTradingEnv(gym.Env):
             "closing_cost": closing_reward.cost,
         }
 
-    # Rewards
+    # Reward
+    def _compute_basis(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+        ctd_mid = (
+            (config.BTP.contract_size / 100)
+            * self.ep_dataset.ctd_contracts
+            * self.ep_dataset.ctd_mid.iloc[t]
+        )
+        fut_mid = (
+            (config.FBTP.contract_size / 100)
+            * self.ep_dataset.fut_contracts
+            * self.ep_dataset.fut_mid.iloc[t]
+        )
+        basis_mid = ctd_mid - fut_mid
+
+        return basis_mid
+
+    def _compute_spread(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+        assert isinstance(self.ep_dataset.ctd_spread, pd.Series)
+        assert isinstance(self.ep_dataset.fut_spread, pd.Series)
+
+        ctd_spread = (
+            (config.BTP.contract_size / 100)
+            * self.ep_dataset.ctd_contracts
+            * self.ep_dataset.ctd_spread.iloc[t]
+        )
+        fut_spread = (
+            (config.FBTP.contract_size / 100)
+            * self.ep_dataset.fut_contracts
+            * self.ep_dataset.fut_spread.iloc[t]
+        )
+        basis_spread = ctd_spread + fut_spread
+
+        return basis_spread
+
     def _compute_gross_reward(self, t: int, next_t: int, position: int) -> float:
         assert isinstance(self.ep_dataset, EpDataset)
-        basis = self.ep_dataset.basis
-        delta = basis.iloc[next_t] - basis.iloc[t]
+        delta = self._compute_basis(next_t) - self._compute_basis(t)
 
         return position * delta
 
     def _compute_cost(self, t: int, position: int, allocation: int) -> float:
-        assert isinstance(self.ep_dataset, EpDataset)
-        ctd_spread = self.ep_dataset.ctd_spread
-        fut_spread = self.ep_dataset.fut_spread
-        assert isinstance(ctd_spread, pd.Series)
-        assert isinstance(fut_spread, pd.Series)
-
+        spread = 0.5 * self._compute_spread(t)
         size = abs(position - allocation)
-        spread = 0.5 * (ctd_spread.iloc[t] + fut_spread.iloc[t])
 
         return size * spread
 
     def _compute_reward(self, t: int, next_t: int, position: int, allocation: int) -> StepReward:
         gross_reward = self._compute_gross_reward(t, next_t, position)
         cost = 0.0
-        if self.config.include_cost:
+        if self.config.price_mode == "quoted":
             cost = self._compute_cost(t, position, allocation)
         reward = gross_reward - cost
 
@@ -271,18 +315,27 @@ class BasisTradingEnv(gym.Env):
     def _build_episode_rl_dataset(self) -> EpDataset:
         rows = self.dataset.date_to_slice[self.date]
         features = self.dataset.features.iloc[rows]
-        basis = self.dataset.basis.iloc[rows]
+        ctd_mid = self.dataset.ctd_mid.iloc[rows]
+        fut_mid = self.dataset.fut_mid.iloc[rows]
+        ctd_contracts = self.dataset.ctd_contracts
+        fut_contracts = self.dataset.fut_contracts[self.date]
 
         ctd_spread = None
         fut_spread = None
-        if self.config.include_cost:
+        if self.config.price_mode == "quoted":
             assert isinstance(self.dataset.ctd_spread, pd.Series)
             assert isinstance(self.dataset.fut_spread, pd.Series)
             ctd_spread = self.dataset.ctd_spread.iloc[rows]
             fut_spread = self.dataset.fut_spread.iloc[rows]
 
         return EpDataset(
-            features=features, basis=basis, ctd_spread=ctd_spread, fut_spread=fut_spread
+            features=features,
+            ctd_mid=ctd_mid,
+            fut_mid=fut_mid,
+            ctd_contracts=ctd_contracts,
+            fut_contracts=fut_contracts,
+            ctd_spread=ctd_spread,
+            fut_spread=fut_spread,
         )
 
     # Terminal
@@ -428,12 +481,17 @@ if __name__ == "__main__":
 
     from thesis_project.rl.dataset import build_rl_dataset
 
-    dataset_config = Settings(
+    dataset_config = DatasetConfig(
         ticker="fbtp",
         n_jobs=4,
     )
 
-    env_config = EnvConfig(mode="random", include_cost=True, persistence_min=10)
+    env_config = EnvConfig(
+        mode="random",
+        persistence_min=10,
+        price_mode="quoted",
+        contract_mode="round",
+    )
 
     rl_dataset = build_rl_dataset(dataset_config, env_config, FEATURES)
 
