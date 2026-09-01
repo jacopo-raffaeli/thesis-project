@@ -84,13 +84,13 @@ def encode_minute_of_hour(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
 
 def encode_second_of_day(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_second_of_day(idx)
-    sin, cos = encode_cyclical(feature, 24 * 60 * 60)
+    sin, cos = encode_cyclical(feature, 24 * 60**2)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
 def encode_second_of_hour(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_second_of_hour(idx)
-    sin, cos = encode_cyclical(feature, 60 * 60)
+    sin, cos = encode_cyclical(feature, 60**2)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
