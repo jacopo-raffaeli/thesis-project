@@ -208,3 +208,31 @@ def _parse_time(time_str: str) -> datetime.time:
         raise ValueError(f"Invalid time format: {time_str}")
 
     return datetime.time(hour=h, minute=m, second=s)
+
+
+CALENDAR_FEATURES_REGISTRY = {
+    "year": compute_year,
+    "month": compute_month,
+    "week_of_year": compute_week_of_year,
+    "day_of_year": compute_day_of_year,
+    "day_of_month": compute_day_of_month,
+    "day_of_week": compute_day_of_week,
+    "hour_of_day": compute_hour_of_day,
+    "minute_of_day": compute_minute_of_day,
+    "minute_of_hour": compute_minute_of_hour,
+    "second_of_day": compute_second_of_day,
+    "second_of_hour": compute_second_of_hour,
+    "second_of_minute": compute_second_of_minute,
+}
+CALENDAR_FEATURES_ENCODED_REGISTRY = {
+    "hour_of_day": encode_hour_of_day,
+    "minute_of_day": encode_minute_of_day,
+    "minute_of_hour": encode_minute_of_hour,
+    "second_of_day": encode_second_of_day,
+    "second_of_hour": encode_second_of_hour,
+    "second_of_minute": encode_second_of_minute,
+}
+EVENT_BASED_FEATURES_REGISTRY = {
+    "days_to_next": days_to_next_event,
+    "days_to_prev": days_to_prev_event,
+}
