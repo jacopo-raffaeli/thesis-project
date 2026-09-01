@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal, get_args
 
 import numpy as np
 import pandas as pd
@@ -269,9 +269,11 @@ class Rolling(BaseTransform):
 
 @dataclass(frozen=True)
 class Ratio(BaseTransform):
-    VALID_REFERENCES = ["day", "hour"]
+    RatioReferences = Literal["day", "hour"]
 
-    references: list[str] | str = field(default_factory=list[str])
+    references: list[RatioReferences] | RatioReferences = field(
+        default_factory=list[RatioReferences]
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -446,5 +448,5 @@ def _validate_references(references: list[str]) -> None:
     if len(references) == 0:
         raise ValueError("Ratio references must be non-empty")
 
-    if any(reference not in Ratio.VALID_REFERENCES for reference in references):
-        raise ValueError(f"Ratio references must be in [{Ratio.VALID_REFERENCES}]")
+    if any(reference not in get_args(Ratio.RatioReferences) for reference in references):
+        raise ValueError(f"Ratio references must be in [{Ratio.RatioReferences}]")
