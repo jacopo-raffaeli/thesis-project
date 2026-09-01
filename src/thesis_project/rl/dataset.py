@@ -1,43 +1,14 @@
-import datetime
-from dataclasses import dataclass
-from typing import get_args
-
 import pandas as pd
 from joblib import Parallel, delayed
 
 from thesis_project import config, dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
+from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
 from thesis_project.rl.env_config import EnvConfig
 
 
-@dataclass(frozen=True)
-class Settings:
-    ticker: config.FutTicker
-    n_jobs: int
-    min_time: datetime.time = config.DEFAULT_OPENING_TIME
-    max_time: datetime.time = config.DEFAULT_CLOSING_TIME
-
-    offsets: dict[config.DateType, tuple[int, int] | None] = config.DEFAULT_EXCLUDED_DATES
-
-    def __post_init__(self):
-        if self.ticker not in get_args(config.FutTicker):
-            raise ValueError("Ticker is not valid")
-
-        if self.min_time >= self.max_time:
-            raise ValueError("min_time must be earlier than max_time")
-
-    def base_interval(self) -> tuple[datetime.time, datetime.time]:
-        return (self.min_time, self.max_time)
-
-    def preprocessing_interval(self, lookback: int) -> tuple[datetime.time, datetime.time]:
-        min_time = utils.misc.sub_seconds_to_time(self.min_time, lookback)
-        max_time = self.max_time
-
-        return (min_time, max_time)
-
-
-def build_spec(settings: Settings, spec: dataset.features.FeatureSpec) -> dict[str, pd.Series]:
+def build_spec(settings: DatasetConfig, spec: dataset.features.FeatureSpec) -> dict[str, pd.Series]:
     # Load filtered base feature
     path = BASE_FEATURES[spec.base_id].path
     window = settings.preprocessing_interval(spec.lookback)
@@ -57,13 +28,13 @@ def build_spec(settings: Settings, spec: dataset.features.FeatureSpec) -> dict[s
     return transformed
 
 
-def build_specs(settings: Settings, specs: list[dataset.features.FeatureSpec]) -> pd.DataFrame:
+def build_specs(settings: DatasetConfig, specs: list[dataset.features.FeatureSpec]) -> pd.DataFrame:
     dataset.features.validate_feature_specs(specs)
     features: dict[str, pd.Series] = {}
     results = Parallel(
         n_jobs=settings.n_jobs,
         backend="loky",
-    )(delayed(build_spec)(spec, settings) for spec in specs)
+    )(delayed(build_spec)(settings, spec) for spec in specs)
 
     for result in results:
         features.update(result)  # type: ignore
@@ -77,22 +48,40 @@ def build_specs(settings: Settings, specs: list[dataset.features.FeatureSpec]) -
 
 
 def build_rl_dataset(
-    settings: Settings, env_config: EnvConfig, specs: list[dataset.features.FeatureSpec]
+    dataset_config: DatasetConfig, env_config: EnvConfig, specs: list[dataset.features.FeatureSpec]
 ) -> RLDataset:
-    features = build_specs(settings, specs)
-
+    features = build_specs(dataset_config, specs).ffill(axis=0)
     assert isinstance(features.index, pd.DatetimeIndex)
-    basis = _load_aligned_feature(BASE_FEATURES["basis"], features.index)
 
+    # Mid prices
+    ctd_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
+    fut_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
+
+    # Contracts
+    ctd_contracts = env_config.ctd_contracts
+    cf = utils.io.load_cf(dataset_config.ticker)["CF"]
+    # cf = utils.misc.align_cf(features, cf)
+    fut_contracts = utils.misc.frac_fut_contracts(cf, ctd_contracts)
+    if env_config.contract_mode == "round":
+        fut_contracts = utils.misc.round_fut_contracts(fut_contracts)
+
+    # Spreds
     ctd_spread = None
     fut_spread = None
-    if env_config.include_cost:
-        ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index)
-        fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index)
+    if env_config.price_mode == "quoted":
+        ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index).ffill(
+            axis=0
+        )
+        fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index).ffill(
+            axis=0
+        )
 
     return RLDataset(
         features=features,
-        basis=basis,
+        ctd_mid=ctd_mid,
+        fut_mid=fut_mid,
+        ctd_contracts=ctd_contracts,
+        fut_contracts=fut_contracts,
         ctd_spread=ctd_spread,
         fut_spread=fut_spread,
     )
