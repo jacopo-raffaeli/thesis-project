@@ -8,7 +8,6 @@ import pandas as pd
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
-from thesis_project.rl.features import MARKET_FEATURES
 
 
 @dataclass(frozen=True)
@@ -480,6 +479,7 @@ if __name__ == "__main__":
     from gymnasium.utils.env_checker import check_env
 
     from thesis_project.rl.dataset import build_rl_dataset
+    from thesis_project.rl.features import CALENDAR_FEATURES, MARKET_FEATURES
 
     dataset_config = DatasetConfig(
         ticker="fbtp",
@@ -493,7 +493,9 @@ if __name__ == "__main__":
         contract_mode="round",
     )
 
-    rl_dataset = build_rl_dataset(dataset_config, env_config, MARKET_FEATURES)
+    rl_dataset = build_rl_dataset(
+        dataset_config, env_config, MARKET_FEATURES, CALENDAR_FEATURES, []
+    )
 
     env = BasisTradingEnv(rl_dataset, env_config)
     check_env(env, skip_render_check=True, skip_close_check=True)
