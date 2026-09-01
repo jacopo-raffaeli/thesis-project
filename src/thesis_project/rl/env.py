@@ -8,7 +8,7 @@ import pandas as pd
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
-from thesis_project.rl.features import FEATURES
+from thesis_project.rl.features import MARKET_FEATURES
 
 
 @dataclass(frozen=True)
@@ -493,7 +493,7 @@ if __name__ == "__main__":
         contract_mode="round",
     )
 
-    rl_dataset = build_rl_dataset(dataset_config, env_config, FEATURES)
+    rl_dataset = build_rl_dataset(dataset_config, env_config, MARKET_FEATURES)
 
     env = BasisTradingEnv(rl_dataset, env_config)
     check_env(env, skip_render_check=True, skip_close_check=True)
