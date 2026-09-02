@@ -107,6 +107,39 @@ def build_rl_dataset(
     )
 
 
+def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDataset]:
+    split = pd.Period(month, "M")
+    cutoff = split.end_time
+
+    assert isinstance(dataset.features.index, pd.DatetimeIndex)
+    index = dataset.features.index.tz_localize(None)
+
+    train_mask = index <= cutoff
+    test_mask = ~train_mask
+
+    dataset1 = RLDataset(
+        features=dataset.features[train_mask],
+        ctd_mid=dataset.ctd_mid[train_mask],
+        fut_mid=dataset.fut_mid[train_mask],
+        ctd_contracts=dataset.ctd_contracts,
+        fut_contracts=dataset.fut_contracts,
+        ctd_spread=dataset.ctd_spread[train_mask] if dataset.ctd_spread is not None else None,
+        fut_spread=dataset.fut_spread[train_mask] if dataset.fut_spread is not None else None,
+    )
+
+    dataset2 = RLDataset(
+        features=dataset.features[test_mask],
+        ctd_mid=dataset.ctd_mid[test_mask],
+        fut_mid=dataset.fut_mid[test_mask],
+        ctd_contracts=dataset.ctd_contracts,
+        fut_contracts=dataset.fut_contracts,
+        ctd_spread=dataset.ctd_spread[test_mask] if dataset.ctd_spread is not None else None,
+        fut_spread=dataset.fut_spread[test_mask] if dataset.fut_spread is not None else None,
+    )
+
+    return dataset1, dataset2
+
+
 def _load_aligned_feature(base: dataset.data.BaseFeature, idx: pd.DatetimeIndex) -> pd.Series:
     s = dataset.data.load_base_feature(base)
     s = s.loc[idx]
