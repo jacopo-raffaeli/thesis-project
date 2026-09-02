@@ -321,3 +321,27 @@ def load_filtered_parquet(
         raise TypeError("")
 
     return data
+
+
+def get_run_path(root: Path) -> Path:
+    pattern = re.compile(r"^run-(\d{3})$")
+    runs = [
+        (int(match.group(1)), path)
+        for path in root.iterdir()
+        if path.is_file() and (match := pattern.match(path.name))
+    ]
+
+    n = max((i for i, _ in runs), default=0) + 1
+    if n > 999:
+        raise ValueError
+
+    path = root / f"run-{n:03d}"
+
+    return path
+
+
+def create_run_path(root: Path):
+    path = get_run_path(root)
+    path.mkdir(parents=True, exist_ok=False)
+
+    return path
