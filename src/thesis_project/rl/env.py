@@ -147,8 +147,7 @@ class BasisTradingEnv(gym.Env):
         )
 
         # Define action space
-        self.n_actions = 3
-        self.action_space = gym.spaces.Discrete(self.n_actions)
+        self.action_space = gym.spaces.Discrete(self._N_ACTIONS)
 
     # Main
     def reset(self, *, seed: int | None = None, options=None) -> tuple[np.ndarray, dict]:
@@ -209,11 +208,11 @@ class BasisTradingEnv(gym.Env):
     def render(self):
         pass
 
-    def action_masks(self):
+    def action_masks(self) -> np.ndarray:
         if self._is_last_agent_t:
-            return self._FLAT_MASK
+            return self._FLAT_MASK.copy()
 
-        return self._FULL_MASK
+        return self._FULL_MASK.copy()
 
     # Observation
     def _get_observation(self) -> np.ndarray:
@@ -376,7 +375,7 @@ class BasisTradingEnv(gym.Env):
                 return np.array([self.curr_position], dtype=self.config.obs_dtype)
 
             case "ohe":
-                return np.eye(self.n_actions, dtype=self.config.obs_dtype)[
+                return np.eye(self._N_ACTIONS, dtype=self.config.obs_dtype)[
                     self._pos_to_act(self.curr_position)
                 ]
 
@@ -392,7 +391,7 @@ class BasisTradingEnv(gym.Env):
                 n += 1
 
             case "ohe":
-                n += self.n_actions
+                n += self._N_ACTIONS
 
             case _:
                 raise ValueError(f"Invalid position encoding '{self.config.position_encoding}'")
@@ -439,7 +438,8 @@ class BasisTradingEnv(gym.Env):
 
     @property
     def _steps_to_go(self) -> int:
-        return (self._last_agent_t - self.t) // self.config.persistence_sec
+        steps_to_go = (self._last_agent_t - self.t) // self.config.persistence_sec
+        return max(0, steps_to_go)
 
 
 if __name__ == "__main__":
