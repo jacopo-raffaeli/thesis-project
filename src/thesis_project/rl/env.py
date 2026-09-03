@@ -153,7 +153,7 @@ class BasisTradingEnv(gym.Env):
         self.truncated = False
 
         self.date = self._reset_date()
-        self.trajectory_min = self._reset_trajectory_min()
+        self.trajectory_min = self._reset_trajectory()
         self.t = self.trajectory_sec
         self.ep_dataset = self._build_episode_rl_dataset()
 
@@ -342,39 +342,39 @@ class BasisTradingEnv(gym.Env):
     def _reset_date(self) -> pd.Timestamp:
         match self.config.mode:
             case "random":
-                return self._random_date()
+                return self._reset_date_random()
 
             case "serial":
-                return self._serial_date()
+                return self._reset_date_serial()
 
             case _:
                 raise ValueError(f"Invalid evaluation mode: '{self.config.mode}'")
 
-    def _random_date(self) -> pd.Timestamp:
+    def _reset_date_random(self) -> pd.Timestamp:
         return self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
 
-    def _serial_date(self) -> pd.Timestamp:
+    def _reset_date_serial(self) -> pd.Timestamp:
         self._date_idx += 1
         if self._date_idx == len(self.dataset.dates):
             raise StopIteration("Evaluation complete")
 
         return self.dataset.dates[self._date_idx]
 
-    def _reset_trajectory_min(self) -> int:
+    def _reset_trajectory(self) -> int:
         match self.config.mode:
             case "random":
-                return self._random_trajectory()
+                return self._reset_trajectory_random()
 
             case "serial":
-                return self._serial_trajectory()
+                return self._reset_trajectory_serial()
 
             case _:
                 raise ValueError(f"Invalid evalutation mode: '{self.config.mode}'")
 
-    def _random_trajectory(self) -> int:
+    def _reset_trajectory_random(self) -> int:
         return int(self.np_random.integers(self.config.persistence_min))
 
-    def _serial_trajectory(self) -> int:
+    def _reset_trajectory_serial(self) -> int:
         assert isinstance(self.config.trajectory_min, int)
         return self.config.trajectory_min
 
