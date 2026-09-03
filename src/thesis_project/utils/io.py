@@ -1,7 +1,7 @@
 import datetime
 import re
 from pathlib import Path
-from typing import get_args
+from typing import Literal, get_args
 
 import dataframe_image as dfi
 import pandas as pd
@@ -321,6 +321,35 @@ def load_filtered_parquet(
         raise TypeError("")
 
     return data
+
+
+def load_lob(
+    *,
+    folder: Literal["raw", "processed"] = "processed",
+    ticker: config.FutTicker,
+    role: config.AssetRole,
+    date: datetime.date | str,
+    freq: str = config.LOB.freq,
+) -> pd.DataFrame:
+    if isinstance(date, str):
+        date = datetime.date.fromisoformat(date)
+
+    yyyy = str(date.year).zfill(4)
+    mm = str(date.month).zfill(2)
+    dd = str(date.day).zfill(2)
+
+    filename = config.LOB.FILENAME.format(
+        role=role,
+        freq=freq,
+        yyyy=yyyy,
+        mm=mm,
+        dd=dd,
+    )
+
+    path = config.DATA_DIR / folder / ticker / role / yyyy / mm / filename
+    lob = pd.read_parquet(path)
+
+    return lob
 
 
 def get_run_path(root: Path) -> Path:
