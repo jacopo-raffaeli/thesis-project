@@ -17,32 +17,30 @@ class RLDataset:
     fut_mid: pd.Series = field(default_factory=pd.Series)
     ctd_contracts: float = field(default_factory=float)
     fut_contracts: pd.Series = field(default_factory=pd.Series)
-    ctd_spread: pd.Series | None = None
-    fut_spread: pd.Series | None = None
+    ctd_spread: pd.Series = field(default_factory=pd.Series)
+    fut_spread: pd.Series = field(default_factory=pd.Series)
 
     dates: list[pd.Timestamp] = field(default_factory=list[pd.Timestamp])
     date_to_slice: dict[pd.Timestamp, slice] = field(default_factory=dict[pd.Timestamp, slice])
 
     def __post_init__(self):
+        # Check series consistency
         assert isinstance(self.features.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
         assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
         assert self.features.index.equals(self.ctd_mid.index)
         assert self.features.index.equals(self.fut_mid.index)
+        assert self.features.index.equals(self.ctd_spread.index)
+        assert self.features.index.equals(self.fut_spread.index)
 
-        if self.ctd_spread is not None:
-            assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
-            assert self.features.index.equals(self.ctd_spread.index)
-
-        if self.fut_spread is not None:
-            assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
-            assert self.features.index.equals(self.fut_spread.index)
-
-        # dates_idx = utils.misc.naive_dates(self.features.index)
-        dates_idx = self.features.index.floor("D").tz_localize(None)
+        # Find unique dates
+        dates_idx = self.features.index.tz_localize(None).floor("D")
         dates = dates_idx.unique()
         object.__setattr__(self, "dates", list(dates))
 
+        # Map dates to indexes
         date_to_slice = {}
         for date in dates:
             rows = np.flatnonzero(dates_idx == date)
@@ -61,23 +59,20 @@ class EpDataset:
     fut_mid: pd.Series = field(default_factory=pd.Series)
     ctd_contracts: float = field(default_factory=float)
     fut_contracts: float = field(default_factory=float)
-    ctd_spread: pd.Series | None = None
-    fut_spread: pd.Series | None = None
+    ctd_spread: pd.Series = field(default_factory=pd.Series)
+    fut_spread: pd.Series = field(default_factory=pd.Series)
 
     def __post_init__(self):
+        # Check series consistency
         assert isinstance(self.features.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
         assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
         assert self.features.index.equals(self.ctd_mid.index)
         assert self.features.index.equals(self.fut_mid.index)
-
-        if self.ctd_spread is not None:
-            assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
-            assert self.features.index.equals(self.ctd_spread.index)
-
-        if self.fut_spread is not None:
-            assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
-            assert self.features.index.equals(self.fut_spread.index)
+        assert self.features.index.equals(self.ctd_spread.index)
+        assert self.features.index.equals(self.fut_spread.index)
 
     @property
     def n_features(self) -> int:
@@ -266,8 +261,6 @@ class BasisTradingEnv(gym.Env):
 
     def _compute_spread(self, t: int) -> float:
         assert isinstance(self.ep_dataset, EpDataset)
-        assert isinstance(self.ep_dataset.ctd_spread, pd.Series)
-        assert isinstance(self.ep_dataset.fut_spread, pd.Series)
 
         ctd_spread = (
             (config.BTP.contract_size / 100)
@@ -319,14 +312,8 @@ class BasisTradingEnv(gym.Env):
         fut_mid = self.dataset.fut_mid.iloc[rows]
         ctd_contracts = self.dataset.ctd_contracts
         fut_contracts = self.dataset.fut_contracts[self.date]
-
-        ctd_spread = None
-        fut_spread = None
-        if self.config.price_mode == "quoted":
-            assert isinstance(self.dataset.ctd_spread, pd.Series)
-            assert isinstance(self.dataset.fut_spread, pd.Series)
-            ctd_spread = self.dataset.ctd_spread.iloc[rows]
-            fut_spread = self.dataset.fut_spread.iloc[rows]
+        ctd_spread = self.dataset.ctd_spread.iloc[rows]
+        fut_spread = self.dataset.fut_spread.iloc[rows]
 
         return EpDataset(
             features=features,

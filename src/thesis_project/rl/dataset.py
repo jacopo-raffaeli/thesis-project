@@ -55,6 +55,7 @@ def build_rl_dataset(
     cal_feature: list[CalFeatType],
     cal_enc_feature: list[CalFeatEncType],
 ) -> RLDataset:
+    """ """
     # Market features
     market_features = build_specs(dataset_config, specs).ffill(axis=0)
 
@@ -85,17 +86,11 @@ def build_rl_dataset(
     if env_config.contract_mode == "round":
         fut_contracts = utils.misc.round_fut_contracts(fut_contracts)
 
-    # Spreds
-    ctd_spread = None
-    fut_spread = None
-    if env_config.price_mode == "quoted":
-        ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index).ffill(
-            axis=0
-        )
-        fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index).ffill(
-            axis=0
-        )
+    # Spreads
+    ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index).ffill(axis=0)
+    fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index).ffill(axis=0)
 
+    # Build RL dataset
     return RLDataset(
         features=features,
         ctd_mid=ctd_mid,
@@ -123,8 +118,8 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
         fut_mid=dataset.fut_mid[train_mask],
         ctd_contracts=dataset.ctd_contracts,
         fut_contracts=dataset.fut_contracts,
-        ctd_spread=dataset.ctd_spread[train_mask] if dataset.ctd_spread is not None else None,
-        fut_spread=dataset.fut_spread[train_mask] if dataset.fut_spread is not None else None,
+        ctd_spread=dataset.ctd_spread[train_mask],
+        fut_spread=dataset.fut_spread[train_mask],
     )
 
     dataset2 = RLDataset(
@@ -133,8 +128,8 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
         fut_mid=dataset.fut_mid[test_mask],
         ctd_contracts=dataset.ctd_contracts,
         fut_contracts=dataset.fut_contracts,
-        ctd_spread=dataset.ctd_spread[test_mask] if dataset.ctd_spread is not None else None,
-        fut_spread=dataset.fut_spread[test_mask] if dataset.fut_spread is not None else None,
+        ctd_spread=dataset.ctd_spread[test_mask],
+        fut_spread=dataset.fut_spread[test_mask],
     )
 
     return dataset1, dataset2
