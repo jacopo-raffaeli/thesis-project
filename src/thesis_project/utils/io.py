@@ -357,7 +357,7 @@ def get_run_path(root: Path) -> Path:
     runs = [
         (int(match.group(1)), path)
         for path in root.iterdir()
-        if path.is_file() and (match := pattern.match(path.name))
+        if path.is_dir() and (match := pattern.match(path.name))
     ]
 
     n = max((i for i, _ in runs), default=0) + 1
