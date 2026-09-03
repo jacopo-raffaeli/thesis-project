@@ -7,6 +7,16 @@ from thesis_project.dataset.transforms import (
     Rolling,
 )
 
+# TODO:
+# - Find a way to group features all together (e.g. a dict)
+# - Add the necessary machinery to pass them to the datset builder
+
+# TODO:
+# - Build the standard set of features:
+# - XGB classification
+# - XGB regression
+# - XGB regression iterative
+
 # fmt: off
 MARKET_FEATURES: list[FeatureSpec] = [
     FeatureSpec(
