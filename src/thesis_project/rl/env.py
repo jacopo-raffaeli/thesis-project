@@ -51,6 +51,10 @@ class RLDataset:
     def n_features(self) -> int:
         return len(self.features.columns)
 
+    @property
+    def n_dates(self) -> int:
+        return len(self.dates)
+
 
 @dataclass(frozen=True)
 class EpDataset:
@@ -354,10 +358,7 @@ class BasisTradingEnv(gym.Env):
         return self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
 
     def _reset_date_serial(self) -> pd.Timestamp:
-        self._date_idx += 1
-        if self._date_idx == len(self.dataset.dates):
-            raise StopIteration("Evaluation complete")
-
+        self._date_idx = (self._date_idx + 1) % self.dataset.n_dates
         return self.dataset.dates[self._date_idx]
 
     def _reset_trajectory(self) -> int:
