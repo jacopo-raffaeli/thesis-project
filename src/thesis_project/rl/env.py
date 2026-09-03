@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -8,6 +9,9 @@ import pandas as pd
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 
 @dataclass(frozen=True)
@@ -443,10 +447,26 @@ class BasisTradingEnv(gym.Env):
 
 
 if __name__ == "__main__":
+    import warnings
+
     from gymnasium.utils.env_checker import check_env
 
     from thesis_project.rl.dataset import build_rl_dataset
     from thesis_project.rl.features import CALENDAR_FEATURES, MARKET_FEATURES
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"WARN: A Box observation space minimum value is -infinity.*",
+        category=UserWarning,
+        module=r"gymnasium\.utils\.env_checker",
+    )
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"WARN: A Box observation space maximum value is infinity.*",
+        category=UserWarning,
+        module=r"gymnasium\.utils\.env_checker",
+    )
 
     dataset_config = DatasetConfig(
         ticker="fbtp",
