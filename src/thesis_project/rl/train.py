@@ -139,11 +139,11 @@ def main():
             tb_log_name=filename,
         )
 
-        name = (path / filename).with_suffix(".zip")
+        name = path / f"{filename}.zip"
         model.save(name)
 
         records = evaluation(model, env_test)
-        name = (path / f"{filename}_evaluation").with_suffix(".parquet")
+        name = path / f"{filename}_evaluation.parquet"
         records.to_parquet(name)
 
         del model
