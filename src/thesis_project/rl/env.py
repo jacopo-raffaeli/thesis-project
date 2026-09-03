@@ -181,12 +181,8 @@ class BasisTradingEnv(gym.Env):
         self.cost = step_reward.cost
         self.t = self.next_t
 
-        info = {}
-        if self._is_last_mrkt_t:
-            info["liquidation"] = self._liquidation()
-
         observation = self._get_observation()
-        info.update(self._get_info())
+        info = self._get_info()
 
         return observation, self.reward, self.terminated, self.truncated, info
 
@@ -198,25 +194,13 @@ class BasisTradingEnv(gym.Env):
 
     # Observation
     def _get_observation(self) -> np.ndarray:
-        if not self.terminated:
-            observation = self._get_regular_observation()
-        else:
-            observation = self._get_terminal_observation()
-
-        return observation
-
-    def _get_regular_observation(self) -> np.ndarray:
         assert isinstance(self.ep_dataset, EpDataset)
         features = self.ep_dataset.features.iloc[self.t].to_numpy(dtype=self.config.obs_dtype)
         position = self._encoded_position
-        observation = np.concatenate([features, position]).astype(
-            dtype=self.config.obs_dtype, copy=False
-        )
+        obs = [features, position]
+        obs = np.concatenate(obs).astype(dtype=self.config.obs_dtype, copy=False)
 
-        return observation
-
-    def _get_terminal_observation(self) -> np.ndarray:
-        return np.zeros(self.obs_space_size, dtype=self.config.obs_dtype)
+        return obs
 
     # Info
     def _get_info(self) -> dict[str, Any]:
@@ -232,18 +216,6 @@ class BasisTradingEnv(gym.Env):
             "basis_mid": self._compute_basis(self.t),
             "basis_spread": self._compute_spread(self.t),
             "terminal": self.terminated,
-        }
-
-    def _get_terminal_info(self, closing_reward: StepReward) -> dict[str, Any]:
-        return {
-            "terminal_allocation": self.curr_position,
-            "terminal_position": self._FLAT_POSITION,
-            "agent_reward": self.reward,
-            "agent_gross_reward": self.gross_reward,
-            "agent_cost": self.cost,
-            "closing_reward": closing_reward.reward,
-            "closing_gross_reward": closing_reward.gross_reward,
-            "closing_cost": closing_reward.cost,
         }
 
     # Reward
@@ -329,20 +301,14 @@ class BasisTradingEnv(gym.Env):
             fut_spread=fut_spread,
         )
 
-    # Terminal
-    def _liquidation(self) -> dict[str, Any]:
-        closing_reward = self._compute_reward(
-            self.t, self.mrkt_close_t, self._FLAT_POSITION, self.curr_position
-        )
-        closing_info = self._get_terminal_info(closing_reward)
-        self.reward += closing_reward.reward
-        self.gross_reward += closing_reward.gross_reward
-        self.cost += closing_reward.cost
-        self.terminated = True
+    # Reset date
+    def _reset_date_random(self) -> pd.Timestamp:
+        return self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
 
-        return closing_info
+    def _reset_date_serial(self) -> pd.Timestamp:
+        self._date_idx = (self._date_idx + 1) % self.dataset.n_dates
+        return self.dataset.dates[self._date_idx]
 
-    # Reset
     def _reset_date(self) -> pd.Timestamp:
         match self.config.mode:
             case "random":
@@ -354,12 +320,13 @@ class BasisTradingEnv(gym.Env):
             case _:
                 raise ValueError(f"Invalid evaluation mode: '{self.config.mode}'")
 
-    def _reset_date_random(self) -> pd.Timestamp:
-        return self.np_random.choice(np.array(self.dataset.dates, dtype="datetime64[ns]"))
+    # Reset trajectory
+    def _reset_trajectory_random(self) -> int:
+        return int(self.np_random.integers(self.config.persistence_min))
 
-    def _reset_date_serial(self) -> pd.Timestamp:
-        self._date_idx = (self._date_idx + 1) % self.dataset.n_dates
-        return self.dataset.dates[self._date_idx]
+    def _reset_trajectory_serial(self) -> int:
+        assert isinstance(self.config.trajectory_min, int)
+        return self.config.trajectory_min
 
     def _reset_trajectory(self) -> int:
         match self.config.mode:
@@ -371,13 +338,6 @@ class BasisTradingEnv(gym.Env):
 
             case _:
                 raise ValueError(f"Invalid evalutation mode: '{self.config.mode}'")
-
-    def _reset_trajectory_random(self) -> int:
-        return int(self.np_random.integers(self.config.persistence_min))
-
-    def _reset_trajectory_serial(self) -> int:
-        assert isinstance(self.config.trajectory_min, int)
-        return self.config.trajectory_min
 
     @property
     def _encoded_position(self):
