@@ -320,6 +320,12 @@ class BasisTradingEnv(gym.Env):
             case _:
                 raise ValueError(f"Invalid evaluation mode: '{self.config.mode}'")
 
+    def init_serial_date(self):
+        if self.config.mode != "serial":
+            raise ValueError("This method can be called only in serial mode")
+
+        self._date_idx = -1
+
     # Reset trajectory
     def _reset_trajectory_random(self) -> int:
         return int(self.np_random.integers(self.config.persistence_min))
