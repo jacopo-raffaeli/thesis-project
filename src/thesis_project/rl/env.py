@@ -96,6 +96,7 @@ class StepReward:
 
 class BasisTradingEnv(gym.Env):
     # positions
+    _N_ACTIONS = 3
     _SHORT_POSITION = -1
     _FLAT_POSITION = 0
     _LONG_POSITION = +1
@@ -113,6 +114,10 @@ class BasisTradingEnv(gym.Env):
         _FLAT_POSITION: 1,  # Flat
         _LONG_POSITION: 2,  # Long
     }
+
+    # actions masking
+    _FULL_MASK = np.array([True, True, True], dtype=bool)
+    _FLAT_MASK = np.array([False, True, False], dtype=bool)
 
     def __init__(self, dataset: RLDataset, env_config: EnvConfig):
         super().__init__()
@@ -148,6 +153,8 @@ class BasisTradingEnv(gym.Env):
     # Main
     def reset(self, *, seed: int | None = None, options=None) -> tuple[np.ndarray, dict]:
         super().reset(seed=seed)
+
+        # Reset arguments
         self.prev_position = 0
         self.curr_position = 0
         self.reward = 0
@@ -156,6 +163,7 @@ class BasisTradingEnv(gym.Env):
         self.terminated = False
         self.truncated = False
 
+        # Reset date and trajectory
         self.date = self._reset_date()
         self.trajectory_min = self._reset_trajectory()
         self.t = self.trajectory_sec
@@ -164,23 +172,32 @@ class BasisTradingEnv(gym.Env):
         if self.t >= self.ep_dataset.episode_length:
             raise ValueError("Sampled trajectory exceeds episode length")
 
+        # Get data
         observation = self._get_observation()
         info = self._get_info()
 
         return observation, info
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
+        # Update positions
         self.prev_position = self.curr_position
         self.curr_position = self._act_to_pos(action)
+
+        # Compute reward
         step_reward = self._compute_reward(
             self.t, self.next_t, self.curr_position, self.prev_position
         )
 
+        # Update reward
         self.reward = step_reward.reward
         self.gross_reward = step_reward.gross_reward
         self.cost = step_reward.cost
-        self.t = self.next_t
 
+        # Update index
+        self.t = self.next_t
+        self.terminated = self._is_last_mrkt_t
+
+        # Get data
         observation = self._get_observation()
         info = self._get_info()
 
@@ -191,6 +208,12 @@ class BasisTradingEnv(gym.Env):
 
     def render(self):
         pass
+
+    def action_masks(self):
+        if self._is_last_agent_t:
+            return self._FLAT_MASK
+
+        return self._FULL_MASK
 
     # Observation
     def _get_observation(self) -> np.ndarray:
@@ -207,7 +230,7 @@ class BasisTradingEnv(gym.Env):
         return {
             "timestamp": self.timestamp,
             "step": self.t,
-            "steps_to_go": self.steps_to_go,
+            "steps_to_go": self._steps_to_go,
             "allocation": self.prev_position,
             "position": self.curr_position,
             "reward": self.reward,
@@ -345,6 +368,7 @@ class BasisTradingEnv(gym.Env):
             case _:
                 raise ValueError(f"Invalid evalutation mode: '{self.config.mode}'")
 
+    # Actions encoding utilities
     @property
     def _encoded_position(self):
         match self.config.position_encoding:
@@ -375,40 +399,10 @@ class BasisTradingEnv(gym.Env):
 
         return n
 
-    @property
-    def trajectory_sec(self) -> int:
-        return self.trajectory_min * 60
-
+    # General purpose utilities
     @property
     def next_t(self) -> int:
-        return self.t + self.config.persistence_sec
-
-    @property
-    def offset_to_close_min(self) -> int:
-        return self.config.persistence_min - self.trajectory_min
-
-    @property
-    def offset_to_close_sec(self) -> int:
-        return self.offset_to_close_min * 60
-
-    @property
-    def mrkt_close_t(self) -> int:
-        assert isinstance(self.ep_dataset, EpDataset)
-        return self.episode_length - 1
-
-    @property
-    def last_mrkt_t(self) -> int:
-        assert isinstance(self.ep_dataset, EpDataset)
-        return self.mrkt_close_t - self.offset_to_close_sec
-
-    @property
-    def last_agent_t(self) -> int:
-        assert isinstance(self.ep_dataset, EpDataset)
-        return self.last_mrkt_t - self.config.persistence_sec
-
-    @property
-    def _is_last_mrkt_t(self) -> bool:
-        return self.t == self.last_mrkt_t
+        return min(self.t + self.config.persistence_sec, self._last_mrkt_t)
 
     @property
     def timestamp(self) -> pd.Timestamp:
@@ -416,18 +410,36 @@ class BasisTradingEnv(gym.Env):
         return self.ep_dataset.features.index[self.t]
 
     @property
-    def next_timestamp(self) -> pd.Timestamp:
-        assert isinstance(self.ep_dataset, EpDataset)
-        return self.ep_dataset.features.index[self.next_t]
+    def trajectory_sec(self) -> int:
+        return self.trajectory_min * 60
 
     @property
     def episode_length(self) -> int:
         assert isinstance(self.ep_dataset, EpDataset)
         return len(self.ep_dataset.features)
 
+    # Terminal index
     @property
-    def steps_to_go(self) -> int:
-        return self.last_agent_t - self.t
+    def _last_mrkt_t(self) -> int:
+        return self.episode_length - 1
+
+    @property
+    def _last_agent_t(self) -> int:
+        n_steps = (self._last_mrkt_t - self.trajectory_sec - 1) // self.config.persistence_sec
+
+        return self.trajectory_sec + n_steps * self.config.persistence_sec
+
+    @property
+    def _is_last_mrkt_t(self) -> bool:
+        return self.t == self._last_mrkt_t
+
+    @property
+    def _is_last_agent_t(self) -> bool:
+        return self.t == self._last_agent_t
+
+    @property
+    def _steps_to_go(self) -> int:
+        return (self._last_agent_t - self.t) // self.config.persistence_sec
 
 
 if __name__ == "__main__":
