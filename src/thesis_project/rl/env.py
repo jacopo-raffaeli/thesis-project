@@ -222,15 +222,16 @@ class BasisTradingEnv(gym.Env):
     # Info
     def _get_info(self) -> dict[str, Any]:
         return {
+            "timestamp": self.timestamp,
             "step": self.t,
-            "time": self.timestamp,
-            "date": self.date,
             "steps_to_go": self.steps_to_go,
             "allocation": self.prev_position,
             "position": self.curr_position,
             "reward": self.reward,
             "gross_reward": self.gross_reward,
             "cost": self.cost,
+            "basis_mid": self._compute_basis(self.t),
+            "basis_spread": self._compute_spread(self.t),
             "terminal": self.terminated,
         }
 
@@ -456,12 +457,12 @@ class BasisTradingEnv(gym.Env):
         return self.t == self.last_mrkt_t
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> pd.Timestamp:
         assert isinstance(self.ep_dataset, EpDataset)
         return self.ep_dataset.features.index[self.t]
 
     @property
-    def next_timestamp(self):
+    def next_timestamp(self) -> pd.Timestamp:
         assert isinstance(self.ep_dataset, EpDataset)
         return self.ep_dataset.features.index[self.next_t]
 
