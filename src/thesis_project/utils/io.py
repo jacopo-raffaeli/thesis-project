@@ -334,7 +334,7 @@ def load_filtered_parquet(
 
     if dates_to_exclude is not None:
         condition = ~pl.col(idx).dt.date().is_in(dates_to_exclude)
-        scan = scan.filter()
+        scan = scan.filter(condition)
 
     if time_window is not None:
         min_time, max_time = time_window
