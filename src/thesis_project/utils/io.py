@@ -303,7 +303,9 @@ def list_lob_paths(
 
 def load_filtered_parquet(
     path: Path,
+    *,
     time_window: tuple[datetime.time, datetime.time] | None = None,
+    dates_to_include: list[datetime.date] | None = None,
     dates_to_exclude: list[datetime.date] | None = None,
 ) -> pd.Series:
     """"""
@@ -318,17 +320,26 @@ def load_filtered_parquet(
     if path.suffix != ".parquet":
         raise ValueError(f"Expected suffix '.parquet', got {path.suffix!r}")
 
+    if (dates_to_exclude is not None) and (dates_to_include is not None):
+        raise ValueError("Either use 'dates_to_include' or 'dates_to_exclude', not both.")
+
     scan = pl.scan_parquet(path)
 
     if idx not in scan.collect_schema().names():
         raise ValueError(f"Expected {idx} column not found")
 
+    if dates_to_include is not None:
+        condition = pl.col(idx).dt.date().is_in(dates_to_include)
+        scan = scan.filter(condition)
+
     if dates_to_exclude is not None:
-        scan = scan.filter(~pl.col(idx).dt.date().is_in(dates_to_exclude))
+        condition = ~pl.col(idx).dt.date().is_in(dates_to_exclude)
+        scan = scan.filter()
 
     if time_window is not None:
         min_time, max_time = time_window
-        scan = scan.filter(pl.col(idx).dt.time().is_between(min_time, max_time))
+        condition = pl.col(idx).dt.time().is_between(min_time, max_time)
+        scan = scan.filter(condition)
 
     data = scan.collect().to_pandas().set_index(idx).sort_index()
 
