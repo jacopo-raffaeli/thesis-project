@@ -16,6 +16,11 @@ def evaluate_episode(
     records = []
     obs, info = env.reset()
 
+    record = info.copy()
+    if episode is not None:
+        record["episode"] = episode
+    records.append(record)
+
     while True:
         action, _ = predictor.predict(
             obs,
