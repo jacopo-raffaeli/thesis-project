@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import gymnasium as gym
+import numpy as np
 import pandas as pd
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.maskable.utils import get_action_masks
@@ -16,11 +17,16 @@ from thesis_project import config, rl, utils
 logger = logging.getLogger(__name__)
 
 
-BATCH_SIZES = [32, 64, 128]
+BATCH_SIZES = [64, 128, 256, 512]
 CLIP_RANGES = [0.1, 0.2, 0.3]
 
-SEED = 42
-TOTAL_TIMESTEPS = 1_000_000
+N_SEED = 5
+TOTAL_TIMESTEPS = 500_000
+
+
+def generate_seeds(n: int, low: int = 0, high: int = 9999) -> list[int]:
+    rng = np.random.default_rng(np.random.randint(low, high))
+    return rng.integers(low, high, size=n).tolist()
 
 
 def dump_configs(path: Path, **configs: Any) -> None:
@@ -37,7 +43,7 @@ def dump_configs(path: Path, **configs: Any) -> None:
     )
 
 
-def make_train_env(
+def make_random_env(
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
 ) -> gym.Env:
@@ -50,7 +56,7 @@ def make_train_env(
     return Monitor(env)
 
 
-def make_test_env(
+def make_serial_env(
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
 ) -> gym.Env:
@@ -95,14 +101,12 @@ def evaluate_model(
     model: MaskablePPO,
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
-    *,
-    n_eval_episodes: int,
 ) -> pd.DataFrame:
-    env = make_test_env(dataset, env_config)
+    env = make_serial_env(dataset, env_config)
 
     records = []
 
-    for episode in range(n_eval_episodes):
+    for episode in range(dataset.n_dates):
         obs, info = env.reset()
 
         while True:
@@ -134,14 +138,14 @@ def main():
         n_jobs=4,
     )
 
-    env_config_train = rl.env.EnvConfig(
+    env_config_random = rl.env.EnvConfig(
         mode="random",
         price_mode="mid",
         contract_mode="round",
         persistence_min=10,
     )
 
-    env_config_test = rl.env.EnvConfig(
+    env_config_serial = rl.env.EnvConfig(
         mode="serial",
         price_mode="mid",
         contract_mode="round",
@@ -157,14 +161,14 @@ def main():
         - {"n-jobs:":<15} {dataset_config.n_jobs}
 
     - Env:
-        - {"Price:":<15} {env_config_train.price_mode}
-        - {"Contract:":<15} {env_config_train.contract_mode}
-        - {"Persistence:":<15} {env_config_train.persistence_min} min
+        - {"Price:":<15} {env_config_random.price_mode}
+        - {"Contract:":<15} {env_config_random.contract_mode}
+        - {"Persistence:":<15} {env_config_random.persistence_min} min
     """)
 
     dataset = rl.dataset.build_rl_dataset(
         dataset_config,
-        env_config_train,
+        env_config_random,
         specs=rl.features.MARKET_FEATURES,
         cal_feature=rl.features.CALENDAR_FEATURES,
         cal_enc_feature=rl.features.CALENDAR_FEATURES_ENCODED,
@@ -186,57 +190,65 @@ def main():
 
     del dataset
 
-    env_train = make_train_env(
+    env_train = make_random_env(
         dataset_train,
-        env_config_train,
+        env_config_random,
     )
 
     root = config.RES_EXP_DIR / "fbtp" / "rl"
     path = utils.io.create_run_path(root)
+    seeds = generate_seeds(N_SEED)
 
     dump_configs(
         path / "config.json",
         dataset=dataset_config,
-        env_train=env_config_train,
-        env_test=env_config_test,
+        env_train=env_config_random,
+        env_test=env_config_serial,
         batch_sizes=BATCH_SIZES,
         clip_ranges=CLIP_RANGES,
-        seed=SEED,
+        seeds=seeds,
         total_timesteps=TOTAL_TIMESTEPS,
     )
-
-    n_eval_episodes = dataset_test.n_dates
 
     for batch_size, clip_range in product(
         BATCH_SIZES,
         CLIP_RANGES,
     ):
-        filename = f"bs_{batch_size}_cr_{clip_range}"
+        for seed in seeds:
+            filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
 
-        model = train_model(
-            env_train,
-            batch_size=batch_size,
-            clip_range=clip_range,
-            seed=SEED,
-            total_timesteps=TOTAL_TIMESTEPS,
-            tensorboard_log=str(path / "tensorboard"),
-            tb_log_name=filename,
-        )
+            # Train model
+            model = train_model(
+                env_train,
+                batch_size=batch_size,
+                clip_range=clip_range,
+                seed=seed,
+                total_timesteps=TOTAL_TIMESTEPS,
+                tensorboard_log=str(path / "tensorboard"),
+                tb_log_name=filename,
+            )
+            name = f"{filename}.zip"
+            model.save(path / name)
 
-        name = f"{filename}.zip"
-        model.save(path / name)
+            # Evaluate the model on train set
+            records = evaluate_model(
+                model,
+                dataset_train,
+                env_config_serial,
+            )
+            name = f"{filename}_train.parquet"
+            records.to_parquet(path / name)
 
-        records = evaluate_model(
-            model,
-            dataset_test,
-            env_config_test,
-            n_eval_episodes=n_eval_episodes,
-        )
+            # Evaluate the model on test set
+            records = evaluate_model(
+                model,
+                dataset_test,
+                env_config_serial,
+            )
+            name = f"{filename}_test.parquet"
+            records.to_parquet(path / name)
 
-        name = f"{filename}_evaluation.parquet"
-        records.to_parquet(path / name)
-
-        del model
+            del model
 
     env_train.close()
 
