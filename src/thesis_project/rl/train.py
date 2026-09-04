@@ -83,14 +83,14 @@ def train_model(
 
 
 def train_evaluate(
-    dataset_train,
-    dataset_test,
-    env_config_random,
-    env_config_serial,
-    path,
-    batch_size,
-    clip_range,
-    seed,
+    dataset_train: rl.env.RLDataset,
+    dataset_test: rl.env.RLDataset,
+    env_config_random: rl.env.EnvConfig,
+    env_config_serial: rl.env.EnvConfig,
+    path: Path,
+    batch_size: int,
+    clip_range: float,
+    seed: int,
 ):
     filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
 
@@ -121,7 +121,6 @@ def train_evaluate(
         env_config_serial,
     )
 
-    assert isinstance(env_train_serial, rl.env.BasisTradingEnv)
     records = evaluate_model(
         model,
         env_train_serial,
@@ -134,7 +133,6 @@ def train_evaluate(
         env_config_serial,
     )
 
-    assert isinstance(env_test_serial, rl.env.BasisTradingEnv)
     records = evaluate_model(
         model,
         env_test_serial,

@@ -4,7 +4,6 @@ import gymnasium as gym
 import pandas as pd
 from sb3_contrib.common.maskable.utils import get_action_masks
 
-from thesis_project import rl
 from thesis_project.rl.policies import Predictor
 
 
@@ -43,15 +42,18 @@ def evaluate_episode(
 
 def evaluate_model(
     predictor: Predictor,
-    env: rl.env.BasisTradingEnv,
+    env: gym.Env,
 ) -> pd.DataFrame:
-    if env.config.mode != "serial":
+    config = env.get_wrapper_attr("config")
+    dataset = env.get_wrapper_attr("dataset")
+
+    if config.mode != "serial":
         raise ValueError(
             "Model evaluation is not intended for environments configured in random mode"
         )
 
     records = []
-    for episode in range(env.dataset.n_dates):
+    for episode in range(dataset.n_dates):
         records.extend(evaluate_episode(predictor, env, episode + 1))
 
     env.close()
