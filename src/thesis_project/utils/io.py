@@ -1,7 +1,7 @@
 import datetime
 import re
 from pathlib import Path
-from typing import Iterable, Literal, get_args
+from typing import Literal, get_args
 
 import dataframe_image as dfi
 import pandas as pd
@@ -305,8 +305,8 @@ def load_filtered_parquet(
     path: Path,
     *,
     time_window: tuple[datetime.time, datetime.time] | None = None,
-    dates_to_include: Iterable[datetime.date] | None = None,
-    dates_to_exclude: Iterable[datetime.date] | None = None,
+    dates_to_include: list[datetime.date] | None = None,
+    dates_to_exclude: list[datetime.date] | None = None,
 ) -> pd.Series:
     """"""
     idx = config.LOB.index_name
