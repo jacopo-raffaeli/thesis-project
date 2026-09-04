@@ -42,20 +42,7 @@ def dump_configs(path: Path, **configs: Any) -> None:
     )
 
 
-def make_random_env(
-    dataset: rl.env.RLDataset,
-    env_config: rl.env.EnvConfig,
-) -> gym.Env:
-    env = gym.make(
-        "BasisTradingEnv-v0",
-        dataset=dataset,
-        env_config=env_config,
-    )
-
-    return Monitor(env)
-
-
-def make_serial_env(
+def make_env(
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
 ) -> gym.Env:
@@ -154,7 +141,7 @@ def main():
 
     del dataset
 
-    env_train = make_random_env(
+    env_train = make_env(
         dataset_train,
         env_config_random,
     )
@@ -195,20 +182,32 @@ def main():
             model.save(path / name)
 
             # Evaluate the model on train set
-            records = evaluate_model(
-                model,
-                dataset_train,
+            env_test = make_env(
+                dataset_test,
                 env_config_serial,
             )
+
+            assert isinstance(env_test, rl.env.BasisTradingEnv)
+            records = evaluate_model(
+                model,
+                env_test,
+            )
+
             name = f"{filename}_train.parquet"
             records.to_parquet(path / name)
 
             # Evaluate the model on test set
-            records = evaluate_model(
-                model,
+            env_test = make_env(
                 dataset_test,
                 env_config_serial,
             )
+
+            assert isinstance(env_test, rl.env.BasisTradingEnv)
+            records = evaluate_model(
+                model,
+                env_test,
+            )
+
             name = f"{filename}_test.parquet"
             records.to_parquet(path / name)
 
