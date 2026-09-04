@@ -284,17 +284,19 @@ class BasisTradingEnv(gym.Env):
 
         return position * delta
 
-    def _compute_cost(self, t: int, position: int, allocation: int) -> float:
+    def _compute_cost(self, t: int, curr_position: int, prev_position: int) -> float:
         spread = 0.5 * self._compute_spread(t)
-        size = abs(position - allocation)
+        size = abs(curr_position - prev_position)
 
         return size * spread
 
-    def _compute_reward(self, t: int, next_t: int, position: int, allocation: int) -> StepReward:
-        gross_reward = self._compute_gross_reward(t, next_t, position)
+    def _compute_reward(
+        self, t: int, next_t: int, curr_position: int, prev_position: int
+    ) -> StepReward:
+        gross_reward = self._compute_gross_reward(t, next_t, curr_position)
         cost = 0.0
         if self.config.price_mode == "quoted":
-            cost = self._compute_cost(t, position, allocation)
+            cost = self._compute_cost(t, curr_position, prev_position)
         reward = gross_reward - cost
 
         return StepReward(reward, gross_reward, cost)
