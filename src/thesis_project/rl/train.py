@@ -7,6 +7,7 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+from joblib import Parallel, delayed
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.monitor import Monitor
 
@@ -62,8 +63,8 @@ def train_model(
     clip_range: float,
     seed: int,
     total_timesteps: int,
-    tensorboard_log: str,
-    tb_log_name: str,
+    tensorboard_log: str | None = None,
+    tb_log_name: str = "MaskablePPO",
 ) -> MaskablePPO:
     model = MaskablePPO(
         policy="MlpPolicy",
@@ -165,55 +166,67 @@ def main():
         BATCH_SIZES,
         CLIP_RANGES,
     ):
-        for seed in seeds:
-            filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
-
-            # Train model
-            model = train_model(
-                env_train,
-                batch_size=batch_size,
-                clip_range=clip_range,
-                seed=seed,
-                total_timesteps=TOTAL_TIMESTEPS,
-                tensorboard_log=str(path / "tensorboard"),
-                tb_log_name=filename,
+        Parallel(
+            n_jobs=len(seeds),
+            backend="loky",
+        )(
+            delayed(new_func)(
+                env_config_serial, dataset_test, env_train, path, batch_size, clip_range, seed
             )
-            name = f"{filename}.zip"
-            model.save(path / name)
-
-            # Evaluate the model on train set
-            env_test = make_env(
-                dataset_test,
-                env_config_serial,
-            )
-
-            assert isinstance(env_test, rl.env.BasisTradingEnv)
-            records = evaluate_model(
-                model,
-                env_test,
-            )
-
-            name = f"{filename}_train.parquet"
-            records.to_parquet(path / name)
-
-            # Evaluate the model on test set
-            env_test = make_env(
-                dataset_test,
-                env_config_serial,
-            )
-
-            assert isinstance(env_test, rl.env.BasisTradingEnv)
-            records = evaluate_model(
-                model,
-                env_test,
-            )
-
-            name = f"{filename}_test.parquet"
-            records.to_parquet(path / name)
-
-            del model
+            for seed in seeds
+        )
 
     env_train.close()
+
+
+def new_func(env_config_serial, dataset_test, env_train, path, batch_size, clip_range, seed):
+    filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
+
+    # Train model
+    model = train_model(
+        env_train,
+        batch_size=batch_size,
+        clip_range=clip_range,
+        seed=seed,
+        total_timesteps=TOTAL_TIMESTEPS,
+        tensorboard_log=str(path / f"tensorboard_{seed}"),
+        tb_log_name=filename,
+    )
+
+    name = f"{filename}.zip"
+    model.save(path / name)
+
+    # Evaluate the model on train set
+    env_test = make_env(
+        dataset_test,
+        env_config_serial,
+    )
+
+    assert isinstance(env_test, rl.env.BasisTradingEnv)
+    records = evaluate_model(
+        model,
+        env_test,
+    )
+
+    name = f"{filename}_train.parquet"
+    records.to_parquet(path / name)
+
+    # Evaluate the model on test set
+    env_test = make_env(
+        dataset_test,
+        env_config_serial,
+    )
+
+    assert isinstance(env_test, rl.env.BasisTradingEnv)
+    records = evaluate_model(
+        model,
+        env_test,
+    )
+
+    name = f"{filename}_test.parquet"
+    records.to_parquet(path / name)
+
+    del model
 
 
 if __name__ == "__main__":
