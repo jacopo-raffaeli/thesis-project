@@ -92,27 +92,6 @@ def load_ctd_switch_dates(
     return dates
 
 
-def load_fut_rollover_dates(
-    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
-) -> list[datetime.date]:
-    """
-    Load future rollover dates \n
-    Such dates are the last in which a certain future contract is traded
-
-    ## Args:
-    * ticker: FutTicker
-    * filename: csv filename
-
-    ## Returns:
-    * dates: DatetimeIndex
-    """
-    path = config.DATA_RAW_DIR / ticker / filename
-    dates = pd.read_csv(path, parse_dates=["Last Trading Date"])["Last Trading Date"]
-    dates = dates.dropna().dt.date.sort_values().to_list()
-
-    return dates
-
-
 def load_criticalities(
     ticker: config.FutTicker, filename: str = "criticalities.csv"
 ) -> list[datetime.date]:
@@ -153,28 +132,6 @@ def load_extra(ticker: config.FutTicker, filename: str = "extra.csv") -> list[da
     return dates
 
 
-def load_fut_delivery_dates(
-    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
-) -> list[datetime.date]:
-    """
-    Load future delivery dates
-    \nSuch dates are the ones in which the short part deliver the underlying to
-    the long one, usually a couple of day after the respective rollover date
-
-    ## Args:
-    * ticker: FutTicker
-    * filename: csv filename
-
-    ## Returns:
-    * dates: DatetimeIndex
-    """
-    path = config.DATA_RAW_DIR / ticker / filename
-    dates = pd.read_csv(path, parse_dates=["Delivery Date"])["Delivery Date"]
-    dates = dates.dropna().dt.date.sort_values().to_list()
-
-    return dates
-
-
 def load_ctd_metadata(
     ticker: config.FutTicker,
     filename: str = "ctd_metadata.csv",
@@ -195,6 +152,69 @@ def load_ctd_metadata(
         path,
         parse_dates=["First Coupon Date", "Maturity Date"],
     )
+
+
+def load_fut_metadata(
+    ticker: config.FutTicker,
+    filename: str = "fut_metadata.csv",
+) -> pd.DataFrame:
+    """
+    Load futures metadata.
+
+    ## Args:
+    * ticker: FutTicker
+    * filename: CSV filename
+
+    ## Returns:
+    * DataFrame containing futures metadata
+    """
+    path = config.DATA_RAW_DIR / ticker / filename
+
+    return pd.read_csv(
+        path,
+        parse_dates=["Last Trading Date", "Delivery Date"],
+    )
+
+
+def load_fut_rollover_dates(
+    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
+) -> list[datetime.date]:
+    """
+    Load future rollover dates \n
+    Such dates are the last in which a certain future contract is traded
+
+    ## Args:
+    * ticker: FutTicker
+    * filename: csv filename
+
+    ## Returns:
+    * dates: DatetimeIndex
+    """
+    dates = load_fut_metadata(ticker)["Last Trading Date"]
+    dates = dates.dropna().dt.date.sort_values().to_list()
+
+    return dates
+
+
+def load_fut_delivery_dates(
+    ticker: config.FutTicker, filename: str = "fut_metadata.csv"
+) -> list[datetime.date]:
+    """
+    Load future delivery dates
+    \nSuch dates are the ones in which the short part deliver the underlying to
+    the long one, usually a couple of day after the respective rollover date
+
+    ## Args:
+    * ticker: FutTicker
+    * filename: csv filename
+
+    ## Returns:
+    * dates: DatetimeIndex
+    """
+    dates = load_fut_metadata(ticker)["Delivery Date"]
+    dates = dates.dropna().dt.date.sort_values().to_list()
+
+    return dates
 
 
 def list_lob_paths_role(
