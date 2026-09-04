@@ -84,6 +84,67 @@ def train_model(
     return model
 
 
+def train_evaluate(
+    dataset_train,
+    dataset_test,
+    env_config_random,
+    env_config_serial,
+    path,
+    batch_size,
+    clip_range,
+    seed,
+):
+    filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
+
+    env_train_random = make_env(
+        dataset_train,
+        env_config_random,
+    )
+
+    # Train model
+    model = train_model(
+        env_train_random,
+        batch_size=batch_size,
+        clip_range=clip_range,
+        seed=seed,
+        total_timesteps=TOTAL_TIMESTEPS,
+        tensorboard_log=str(path / "tensorboard"),
+        tb_log_name=filename,
+    )
+    env_train_random.close()
+
+    # Save trained model
+    model.save(path / f"{filename}.zip")
+
+    # Evaluate the model on train set
+    env_train_serial = make_env(
+        dataset_train,
+        env_config_serial,
+    )
+
+    assert isinstance(env_train_serial, rl.env.BasisTradingEnv)
+    records = evaluate_model(
+        model,
+        env_train_serial,
+    )
+    records.to_parquet(path / f"{filename}_train.parquet")
+
+    # Evaluate the model on test set
+    env_test_serial = make_env(
+        dataset_test,
+        env_config_serial,
+    )
+
+    assert isinstance(env_test_serial, rl.env.BasisTradingEnv)
+    records = evaluate_model(
+        model,
+        env_test_serial,
+    )
+    records.to_parquet(path / f"{filename}_test.parquet")
+
+    del model
+
+
 def main():
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
@@ -142,11 +203,6 @@ def main():
 
     del dataset
 
-    env_train = make_env(
-        dataset_train,
-        env_config_random,
-    )
-
     root = config.RES_EXP_DIR / "fbtp" / "rl"
     path = utils.io.create_run_path(root)
     seeds = generate_seeds(N_SEED)
@@ -170,63 +226,18 @@ def main():
             n_jobs=len(seeds),
             backend="loky",
         )(
-            delayed(new_func)(
-                env_config_serial, dataset_test, env_train, path, batch_size, clip_range, seed
+            delayed(train_evaluate)(
+                dataset_train,
+                dataset_test,
+                env_config_random,
+                env_config_serial,
+                path,
+                batch_size,
+                clip_range,
+                seed,
             )
             for seed in seeds
         )
-
-    env_train.close()
-
-
-def new_func(env_config_serial, dataset_test, env_train, path, batch_size, clip_range, seed):
-    filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
-
-    # Train model
-    model = train_model(
-        env_train,
-        batch_size=batch_size,
-        clip_range=clip_range,
-        seed=seed,
-        total_timesteps=TOTAL_TIMESTEPS,
-        tensorboard_log=str(path / f"tensorboard_{seed}"),
-        tb_log_name=filename,
-    )
-
-    name = f"{filename}.zip"
-    model.save(path / name)
-
-    # Evaluate the model on train set
-    env_test = make_env(
-        dataset_test,
-        env_config_serial,
-    )
-
-    assert isinstance(env_test, rl.env.BasisTradingEnv)
-    records = evaluate_model(
-        model,
-        env_test,
-    )
-
-    name = f"{filename}_train.parquet"
-    records.to_parquet(path / name)
-
-    # Evaluate the model on test set
-    env_test = make_env(
-        dataset_test,
-        env_config_serial,
-    )
-
-    assert isinstance(env_test, rl.env.BasisTradingEnv)
-    records = evaluate_model(
-        model,
-        env_test,
-    )
-
-    name = f"{filename}_test.parquet"
-    records.to_parquet(path / name)
-
-    del model
 
 
 if __name__ == "__main__":

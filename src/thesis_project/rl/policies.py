@@ -56,6 +56,9 @@ class FixedShortPolicy(FixedActionPolicy):
 
 
 class RandomPolicy:
+    def __init__(self, seed: int):
+        self.rng = np.random.default_rng(seed)
+
     def predict(
         self,
         observation: Any,
@@ -67,4 +70,5 @@ class RandomPolicy:
             raise ValueError("RandomPolicy requires action_masks.")
 
         valid_actions = np.flatnonzero(action_masks)
-        return int(np.random.choice(valid_actions)), None
+
+        return int(self.rng.choice(valid_actions)), None
