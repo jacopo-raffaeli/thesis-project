@@ -47,11 +47,13 @@ def make_env(
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
 ) -> gym.Env:
-    return gym.make(
+    env = gym.make(
         "BasisTradingEnv-v0",
         dataset=dataset,
         env_config=env_config,
     )
+
+    return Monitor(env)
 
 
 def train_model(
@@ -98,7 +100,6 @@ def train_evaluate(
         dataset_train,
         env_config_random,
     )
-    env_train_random = Monitor(env_train_random)
 
     # Train model
     model = train_model(
@@ -207,8 +208,8 @@ def main():
     dump_configs(
         path / "config.json",
         dataset=dataset_config,
-        env_train=env_config_random,
-        env_test=env_config_serial,
+        env_random=env_config_random,
+        env_serial=env_config_serial,
         batch_sizes=BATCH_SIZES,
         clip_ranges=CLIP_RANGES,
         seeds=seeds,
