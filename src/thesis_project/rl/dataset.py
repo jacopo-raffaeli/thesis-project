@@ -14,7 +14,7 @@ def build_spec(settings: DatasetConfig, spec: dataset.features.FeatureSpec) -> d
     path = BASE_FEATURES[spec.base_id].path
     window = settings.preprocessing_interval(spec.lookback)
     excluded = utils.misc.get_dates_to_exclude(settings.ticker, config.DEFAULT_EXCLUDED_DATES)
-    s = utils.io.load_filtered_parquet(path, window, excluded)
+    s = utils.io.load_filtered_parquet(path, time_window=window, dates_to_exclude=excluded)
     utils.checks.check_s(s)
 
     # Group by day
