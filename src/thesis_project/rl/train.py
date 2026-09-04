@@ -21,7 +21,7 @@ BATCH_SIZES = [64, 128, 256, 512]
 CLIP_RANGES = [0.1, 0.2, 0.3]
 
 N_SEED = 5
-TOTAL_TIMESTEPS = 500_000
+TOTAL_TIMESTEPS = 1_000_000
 
 
 def generate_seeds(n: int, low: int = 0, high: int = 9999) -> list[int]:
