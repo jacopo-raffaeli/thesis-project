@@ -47,13 +47,11 @@ def make_env(
     dataset: rl.env.RLDataset,
     env_config: rl.env.EnvConfig,
 ) -> gym.Env:
-    env = gym.make(
+    return gym.make(
         "BasisTradingEnv-v0",
         dataset=dataset,
         env_config=env_config,
     )
-
-    return Monitor(env)
 
 
 def train_model(
@@ -100,6 +98,7 @@ def train_evaluate(
         dataset_train,
         env_config_random,
     )
+    env_train_random = Monitor(env_train_random)
 
     # Train model
     model = train_model(
