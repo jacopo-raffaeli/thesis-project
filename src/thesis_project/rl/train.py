@@ -151,14 +151,14 @@ def main():
 
     env_config_random = rl.env.EnvConfig(
         mode="random",
-        price_mode="mid",
+        price_mode="quoted",
         contract_mode="round",
         persistence_min=10,
     )
 
     env_config_serial = rl.env.EnvConfig(
         mode="serial",
-        price_mode="mid",
+        price_mode="quoted",
         contract_mode="round",
         persistence_min=10,
         trajectory_min=0,
