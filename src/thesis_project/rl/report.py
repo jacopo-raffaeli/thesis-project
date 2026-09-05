@@ -694,7 +694,6 @@ def report(
 
     label = metadata.get("set")
     persistence_min = metadata.get("persistence_min", 10)
-    date_tick_step = metadata.get("date_tick_step", 10)
 
     records = {
         seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()
@@ -735,18 +734,12 @@ def report(
         label=label,
     )
 
-    # plot_action_series(
-    #     records,
-    #     label=label,
-    # )
-
     print()
     print()
     print("Action Heatmap:")
     plot_action_heatmaps(
         records,
         persistence_min=persistence_min,
-        date_tick_step=date_tick_step,
         label=label,
     )
 
@@ -756,6 +749,5 @@ def report(
     plot_reward_heatmaps(
         records,
         persistence_min=persistence_min,
-        date_tick_step=date_tick_step,
         label=label,
     )
