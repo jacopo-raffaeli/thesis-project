@@ -74,8 +74,6 @@ def _compute_accrued_interest(
 
     Accrued interest is computed as the fraction of the coupon period elapsed
     at ``val_date`` multiplied by the coupon amount for the period.
-
-    The convention is retained from the original implementation.
     """
     if pd.isna(prev_coupon_date) or pd.isna(next_coupon_date):
         return 0.0
@@ -261,8 +259,7 @@ def _compute_irr(
             f"Expected ctd_metadata to be a DataFrame, " f"got {type(ctd_metadata).__name__!r}"
         )
 
-    # Align the two price series first. The IRR is only defined where both
-    # instruments have an observation.
+    # Align the two price series first.
     prices = pd.concat(
         [
             fut_price.rename("fut"),
@@ -386,7 +383,7 @@ def _compute_irr_from_prices(
         ctd_price=ctd_price,
         cf=cf,
         isin=isin,
-        delivery_dates=delivery_dates,
+        delivery_dates=pd.DatetimeIndex(delivery_dates),
         ctd_metadata=ctd_metadata,
     )
 
