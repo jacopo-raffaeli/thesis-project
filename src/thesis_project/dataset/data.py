@@ -62,6 +62,18 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         for level in range(1, config.LOB.n_levels + 1)
     },
 
+    # Cross asset
+    "basis": BaseFeature(
+        base_id="basis",
+        filename="basis",
+        directory=FBTP_DIR / "basis",
+    ),
+    "irr": BaseFeature(
+        base_id="irr",
+        filename="irr",
+        directory=FBTP_DIR / "irr",
+    ),
+
     # Mid prices
     **{
         f"{role}_mid_price": BaseFeature(
@@ -128,7 +140,7 @@ BASE_FEATURES: dict[str, BaseFeature] = {
 
     # Slope
     **{
-        f"{role}_{side}_slope__{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}": BaseFeature(
+        f"{role}_{side}_slope_{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}": BaseFeature(
             base_id=f"{role}_{side}_slope_{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}",
             filename=f"{role}_{side}_slope_{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}",
             directory=FBTP_DIR / "slope",
@@ -138,18 +150,6 @@ BASE_FEATURES: dict[str, BaseFeature] = {
         for max_level in [1, 2, 3]
         for slope_type in get_args(lob_microstructure.SlopeType)
     },
-
-    # Cross asset
-    "basis": BaseFeature(
-        base_id="basis",
-        filename="basis",
-        directory=FBTP_DIR / "basis",
-    ),
-    "irr": BaseFeature(
-        base_id="irr",
-        filename="irr",
-        directory=FBTP_DIR / "irr",
-    ),
 }
 # fmt: on
 
