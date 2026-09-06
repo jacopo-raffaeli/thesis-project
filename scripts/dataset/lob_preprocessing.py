@@ -36,7 +36,7 @@ def main():
 
     utils.logging.setup_logging(level=args.log_level)
 
-    dataset.lob.preprocess_all_lobs(ticker=args.ticker)
+    dataset.lob_preprocessing.preprocess_all_lobs(ticker=args.ticker)
 
 
 if __name__ == "__main__":

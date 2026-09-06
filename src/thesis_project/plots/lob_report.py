@@ -19,14 +19,14 @@ def _is_perc(key: str) -> bool:
 
 
 def _collect_lob_data(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
 ) -> list[int] | list[float]:
     return [report.integrity["nans"]["lob"][key] for _, report in collection.reports.items()]
 
 
 def _collect_level_data(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     level: int,
 ) -> list[int] | list[float]:
@@ -42,7 +42,7 @@ def _collect_level_data(
 
 
 def _collect_side_data(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     level: int,
     side: config.LobSide,
@@ -59,7 +59,7 @@ def _collect_side_data(
 
 
 def _collect_column_data(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     level: int,
     side: config.LobSide,
@@ -172,7 +172,7 @@ def _plot_nans_hist_grid(
 
 
 def nans_hist_lob(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
 ):
     data = _collect_lob_data(collection, key)
@@ -192,7 +192,7 @@ def nans_hist_lob(
 
 
 def nans_hist_levels(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     *,
     ncols: int = 2,
@@ -227,7 +227,7 @@ def nans_hist_levels(
 
 
 def nans_hist_sides(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     level: int,
     *,
@@ -265,7 +265,7 @@ def nans_hist_sides(
 
 
 def nans_hist_side_columns(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
     level: int,
     *,
@@ -305,7 +305,7 @@ def nans_hist_side_columns(
 
 
 def nans_hist_per_role(
-    collection: dataset.lob.LobReportCollector,
+    collection: dataset.lob_preprocessing.LobReportCollector,
     key: str,
 ):
     # Whole LOB
@@ -338,7 +338,7 @@ def nans_hist_per_role(
 
 
 def nans_hist_per_ticker(
-    collections: dict[config.AssetRole, dataset.lob.LobReportCollector],
+    collections: dict[config.AssetRole, dataset.lob_preprocessing.LobReportCollector],
     key: str,
 ):
     if key not in N_NAN_TO_TITLE:

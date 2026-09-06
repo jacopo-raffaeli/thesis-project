@@ -6,7 +6,7 @@ from typing import Literal, get_args
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.dataset.lob import LobReportCollector, load_lob_reports
+from thesis_project.dataset.lob_preprocessing import LobReportCollector, load_lob_reports
 
 logger = logging.getLogger(__name__)
 

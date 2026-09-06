@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from natsort import natsorted
 
 from thesis_project.dataset.data import BASE_FEATURES
-from thesis_project.dataset.transforms import (
+from thesis_project.dataset.features_transforms import (
     BaseTransform,
 )
 

@@ -1,21 +1,11 @@
-from thesis_project.dataset.features import FeatureSpec
-from thesis_project.dataset.temporal import CalFeatEncType, CalFeatType
-from thesis_project.dataset.transforms import (
+from thesis_project.dataset.features_market import FeatureSpec
+from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
+from thesis_project.dataset.features_transforms import (
     Delta,
     Identity,
     Ratio,
     Rolling,
 )
-
-# TODO:
-# - Find a way to group features all together (e.g. a dict)
-# - Add the necessary machinery to pass them to the datset builder
-
-# TODO:
-# - Build the standard set of features:
-# - XGB classification
-# - XGB regression
-# - XGB regression iterative
 
 # fmt: off
 MARKET_FEATURES: list[FeatureSpec] = [

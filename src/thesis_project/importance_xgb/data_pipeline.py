@@ -8,7 +8,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 
 from thesis_project import config as global_config
-from thesis_project.dataset import temporal
+from thesis_project.dataset import features_temporal
 from thesis_project.importance_xgb import (
     config,
     data_paths,
@@ -452,12 +452,12 @@ def preprocess_temporal_features(
 
     # Plain calendar features
     for name in config_obj.calendar_features:
-        calendar_feature_fn = temporal.CALENDAR_FEATURES_REGISTRY[name]
+        calendar_feature_fn = features_temporal.CALENDAR_FEATURES_REGISTRY[name]
         temporal_features_df[name] = calendar_feature_fn(idx_sampled)
 
     # Encoded calendard features
     for name in config_obj.calendar_features_encoded:
-        calendar_feature_fn = temporal.CALENDAR_FEATURES_ENCODED_REGISTRY[name]
+        calendar_feature_fn = features_temporal.CALENDAR_FEATURES_ENCODED_REGISTRY[name]
         sin, cos = calendar_feature_fn(idx_sampled)
         temporal_features_df[f"{name}_sin"] = sin
         temporal_features_df[f"{name}_cos"] = cos
@@ -470,13 +470,13 @@ def preprocess_temporal_features(
         dates = pd.read_csv(path, parse_dates=[column])[column]
 
         for transform_key in metadata["transforms"]:
-            transform = temporal.EVENT_BASED_FEATURES_REGISTRY[transform_key]
+            transform = features_temporal.EVENT_BASED_FEATURES_REGISTRY[transform_key]
             temporal_features_df[f"{transform_key}_{name}"] = transform(idx_sampled, dates)
 
     # Daily event based features
     for name, metadata in config_obj.daily_event_based_features.items():
         for unit in metadata.get("units", []):
-            temporal_features_df[f"{name}_{unit}"] = temporal.time_to_daily_event(
+            temporal_features_df[f"{name}_{unit}"] = features_temporal.time_to_daily_event(
                 idx_sampled,
                 metadata["event_time"],
                 metadata["event_tz"],

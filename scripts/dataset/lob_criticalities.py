@@ -2,7 +2,7 @@ import argparse
 from typing import get_args
 
 from thesis_project import config, utils
-from thesis_project.dataset.criticalities import DEFAULT_CHECKS, Settings, find_criticalities
+from thesis_project.dataset.lob_criticalities import DEFAULT_CHECKS, Settings, find_criticalities
 
 # TODO: Define default settings for fbts
 

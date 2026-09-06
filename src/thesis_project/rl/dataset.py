@@ -3,13 +3,15 @@ from joblib import Parallel, delayed
 
 from thesis_project import config, dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
-from thesis_project.dataset.temporal import CalFeatEncType, CalFeatType
+from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
 from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
 from thesis_project.rl.env_config import EnvConfig
 
 
-def build_spec(settings: DatasetConfig, spec: dataset.features.FeatureSpec) -> dict[str, pd.Series]:
+def build_spec(
+    settings: DatasetConfig, spec: dataset.features_market.FeatureSpec
+) -> dict[str, pd.Series]:
     # Load filtered base feature
     path = BASE_FEATURES[spec.base_id].path
     window = settings.preprocessing_interval(spec.lookback)
@@ -29,8 +31,10 @@ def build_spec(settings: DatasetConfig, spec: dataset.features.FeatureSpec) -> d
     return transformed
 
 
-def build_specs(settings: DatasetConfig, specs: list[dataset.features.FeatureSpec]) -> pd.DataFrame:
-    dataset.features.validate_feature_specs(specs)
+def build_specs(
+    settings: DatasetConfig, specs: list[dataset.features_market.FeatureSpec]
+) -> pd.DataFrame:
+    dataset.features_market.validate_feature_specs(specs)
     features: dict[str, pd.Series] = {}
     results = Parallel(
         n_jobs=settings.n_jobs,
@@ -51,7 +55,7 @@ def build_specs(settings: DatasetConfig, specs: list[dataset.features.FeatureSpe
 def build_rl_dataset(
     dataset_config: DatasetConfig,
     env_config: EnvConfig,
-    specs: list[dataset.features.FeatureSpec],
+    specs: list[dataset.features_market.FeatureSpec],
     cal_feature: list[CalFeatType],
     cal_enc_feature: list[CalFeatEncType],
 ) -> RLDataset:
@@ -61,10 +65,10 @@ def build_rl_dataset(
 
     # Calendar features
     assert isinstance(market_features.index, pd.DatetimeIndex)
-    calendar_features = dataset.temporal.compute_calendar_features(
+    calendar_features = dataset.features_temporal.compute_calendar_features(
         market_features.index, cal_feature
     )
-    calendar_features_encoded = dataset.temporal.compute_calendar_features_encoded(
+    calendar_features_encoded = dataset.features_temporal.compute_calendar_features_encoded(
         market_features.index, cal_enc_feature
     )
 

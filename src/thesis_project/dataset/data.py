@@ -5,7 +5,7 @@ from typing import get_args
 import pandas as pd
 
 from thesis_project import config, utils
-from thesis_project.dataset import microstructure
+from thesis_project.dataset import lob_microstructure
 
 FBTP_DIR = config.DATA_PRO_DIR / "fbtp" / "microstructure"
 FBTS_DIR = config.DATA_PRO_DIR / "fbts" / "microstructure"
@@ -128,15 +128,15 @@ BASE_FEATURES: dict[str, BaseFeature] = {
 
     # Slope
     **{
-        f"{role}_{side}_slope__{max_level}_{microstructure.SLOPE_DICT[slope_type]}": BaseFeature(
-            base_id=f"{role}_{side}_slope_{max_level}_{microstructure.SLOPE_DICT[slope_type]}",
-            filename=f"{role}_{side}_slope_{max_level}_{microstructure.SLOPE_DICT[slope_type]}",
+        f"{role}_{side}_slope__{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}": BaseFeature(
+            base_id=f"{role}_{side}_slope_{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}",
+            filename=f"{role}_{side}_slope_{max_level}_{lob_microstructure.SLOPE_DICT[slope_type]}",
             directory=FBTP_DIR / "slope",
         )
         for role in get_args(config.AssetRole)
         for side in get_args(config.LobSide)
         for max_level in [1, 2, 3]
-        for slope_type in get_args(microstructure.SlopeType)
+        for slope_type in get_args(lob_microstructure.SlopeType)
     },
 
     # Cross asset
