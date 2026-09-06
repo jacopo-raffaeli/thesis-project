@@ -1,5 +1,5 @@
 import datetime
-from typing import Callable, Literal, Tuple
+from typing import Callable, Literal, Tuple, get_args
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -91,6 +91,18 @@ CALENDAR_FEATURES_REGISTRY: dict[CalFeatType, Callable[[pd.DatetimeIndex], pd.Se
 }
 
 
+def validate_calendar_features(features: list[CalFeatType]):
+    seen = set()
+    for feature in features:
+        if feature not in get_args(CalFeatType):
+            raise ValueError(feature)
+
+        if feature in seen:
+            raise ValueError(f"Duplicate calendar feature {feature!r}")
+
+        seen.add(feature)
+
+
 # Calendar features encoded
 def encode_cyclical(feature, period: int) -> Tuple[pd.Series, pd.Series]:
     angle = 2 * np.pi * (feature / period)
@@ -153,6 +165,18 @@ CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
     "second_of_hour": encode_second_of_hour,
     "second_of_minute": encode_second_of_minute,
 }
+
+
+def validate_calendar_encoded_features(features: list[CalFeatEncType]):
+    seen = set()
+    for feature in features:
+        if feature not in get_args(CalFeatEncType):
+            raise ValueError(feature)
+
+        if feature in seen:
+            raise ValueError(f"Duplicate calendar encoded feature {feature!r}")
+
+        seen.add(feature)
 
 
 # Event based features
@@ -245,7 +269,7 @@ def time_to_daily_event(
     if unit not in units:
         raise ValueError(f"Invalid time unit: '{unit}', available time units are {units}")
 
-    event_time_parsed = _parse_time(event_time)
+    event_time_parsed = datetime.time.fromisoformat(event_time)
 
     idx_event_tz = idx.tz_convert(ZoneInfo(event_tz))
     event_ts = idx_event_tz.normalize() + pd.Timedelta(
@@ -261,20 +285,6 @@ def time_to_daily_event(
         time_to_event = np.abs(time_to_event)
 
     return pd.Series(time_to_event, index=idx)
-
-
-def _parse_time(time_str: str) -> datetime.time:
-    parts = [int(x) for x in time_str.split(":")]
-
-    if len(parts) == 2:
-        h, m = parts
-        s = 0
-    elif len(parts) == 3:
-        h, m, s = parts
-    else:
-        raise ValueError(f"Invalid time format: {time_str}")
-
-    return datetime.time(hour=h, minute=m, second=s)
 
 
 def compute_calendar_features(idx: pd.DatetimeIndex, ids: list[CalFeatType]) -> pd.DataFrame:
