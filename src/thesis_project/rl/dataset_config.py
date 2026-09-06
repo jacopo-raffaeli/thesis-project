@@ -9,12 +9,15 @@ from thesis_project import config, utils
 class DatasetConfig:
     ticker: config.FutTicker
     n_jobs: int
+    contract_mode: config.ContractMode
+
     min_time: datetime.time = config.DEFAULT_OPENING_TIME
     max_time: datetime.time = config.DEFAULT_CLOSING_TIME
-
     offsets: dict[config.DateType, tuple[int, int] | None] = field(
         default_factory=lambda: config.DEFAULT_EXCLUDED_DATES
     )
+
+    ctd_contracts: float = 1.0
 
     def __post_init__(self):
         if self.ticker not in get_args(config.FutTicker):

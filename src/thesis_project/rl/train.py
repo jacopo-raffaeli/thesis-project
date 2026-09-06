@@ -144,22 +144,17 @@ def train_evaluate(
 
 
 def main():
-    dataset_config = rl.dataset.DatasetConfig(
-        ticker="fbtp",
-        n_jobs=4,
-    )
+    dataset_config = rl.dataset.DatasetConfig(ticker="fbtp", n_jobs=4, contract_mode="round")
 
     env_config_random = rl.env.EnvConfig(
-        mode="random",
+        reset_mode="random",
         price_mode="quoted",
-        contract_mode="round",
         persistence_min=10,
     )
 
     env_config_serial = rl.env.EnvConfig(
-        mode="serial",
+        reset_mode="serial",
         price_mode="quoted",
-        contract_mode="round",
         persistence_min=10,
         trajectory_min=0,
     )
@@ -173,13 +168,12 @@ def main():
 
     - Env:
         - {"Price:":<15} {env_config_random.price_mode}
-        - {"Contract:":<15} {env_config_random.contract_mode}
+        - {"Contract:":<15} {dataset_config.contract_mode}
         - {"Persistence:":<15} {env_config_random.persistence_min} min
     """)
 
     dataset = rl.dataset.build_rl_dataset(
         dataset_config,
-        env_config_random,
         specs=rl.features.MARKET_FEATURES,
         cal_feature=rl.features.CALENDAR_FEATURES,
         cal_enc_feature=rl.features.CALENDAR_FEATURES_ENCODED,

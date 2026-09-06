@@ -8,9 +8,8 @@ from thesis_project import config
 
 @dataclass(frozen=True)
 class EnvConfig:
-    mode: Literal["random", "serial"]
+    reset_mode: Literal["random", "serial"]
     price_mode: config.PriceMode
-    contract_mode: config.ContractMode
     persistence_min: int
 
     seed: int = 42
@@ -23,10 +22,10 @@ class EnvConfig:
         if not 1 <= self.persistence_min <= 60:
             raise ValueError(f"Invalid persistence value: '{self.persistence_min}'")
 
-        if self.mode == "random" and self.trajectory_min is not None:
+        if self.reset_mode == "random" and self.trajectory_min is not None:
             raise ValueError("In random mode trajectory offset must not be specified")
 
-        if self.mode == "serial":
+        if self.reset_mode == "serial":
             if self.trajectory_min is None:
                 raise ValueError("In serial mode trajectory offset must be specified")
 

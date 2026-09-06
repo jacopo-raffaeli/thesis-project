@@ -338,7 +338,7 @@ class BasisTradingEnv(gym.Env):
         return self.dataset.dates[self._date_idx]
 
     def _reset_date(self) -> pd.Timestamp:
-        match self.config.mode:
+        match self.config.reset_mode:
             case "random":
                 return self._reset_date_random()
 
@@ -346,10 +346,10 @@ class BasisTradingEnv(gym.Env):
                 return self._reset_date_serial()
 
             case _:
-                raise ValueError(f"Invalid evaluation mode: '{self.config.mode}'")
+                raise ValueError(f"Invalid evaluation mode: '{self.config.reset_mode}'")
 
     def init_serial_date(self):
-        if self.config.mode != "serial":
+        if self.config.reset_mode != "serial":
             raise ValueError("This method can be called only in serial mode")
 
         self._date_idx = -1
@@ -363,7 +363,7 @@ class BasisTradingEnv(gym.Env):
         return self.config.trajectory_min
 
     def _reset_trajectory(self) -> int:
-        match self.config.mode:
+        match self.config.reset_mode:
             case "random":
                 return self._reset_trajectory_random()
 
@@ -371,7 +371,7 @@ class BasisTradingEnv(gym.Env):
                 return self._reset_trajectory_serial()
 
             case _:
-                raise ValueError(f"Invalid evalutation mode: '{self.config.mode}'")
+                raise ValueError(f"Invalid evalutation mode: '{self.config.reset_mode}'")
 
     # Actions encoding utilities
     @property
@@ -470,21 +470,15 @@ if __name__ == "__main__":
         module=r"gymnasium\.utils\.env_checker",
     )
 
-    dataset_config = DatasetConfig(
-        ticker="fbtp",
-        n_jobs=4,
-    )
+    dataset_config = DatasetConfig(ticker="fbtp", n_jobs=4, contract_mode="round")
 
     env_config = EnvConfig(
-        mode="random",
+        reset_mode="random",
         persistence_min=10,
         price_mode="quoted",
-        contract_mode="round",
     )
 
-    rl_dataset = build_rl_dataset(
-        dataset_config, env_config, MARKET_FEATURES, CALENDAR_FEATURES, []
-    )
+    rl_dataset = build_rl_dataset(dataset_config, MARKET_FEATURES, CALENDAR_FEATURES, [])
 
     env = BasisTradingEnv(rl_dataset, env_config)
     check_env(env, skip_render_check=True, skip_close_check=True)

@@ -6,7 +6,6 @@ from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
 from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
-from thesis_project.rl.env_config import EnvConfig
 
 
 def build_spec(
@@ -54,7 +53,6 @@ def build_specs(
 
 def build_rl_dataset(
     dataset_config: DatasetConfig,
-    env_config: EnvConfig,
     specs: list[dataset.features_market.FeatureSpec],
     cal_feature: list[CalFeatType],
     cal_enc_feature: list[CalFeatEncType],
@@ -84,10 +82,10 @@ def build_rl_dataset(
     fut_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
 
     # Contracts
-    ctd_contracts = env_config.ctd_contracts
+    ctd_contracts = dataset_config.ctd_contracts
     cf = utils.io.load_cf(dataset_config.ticker)["CF"]
     fut_contracts = utils.misc.frac_fut_contracts(cf, ctd_contracts)
-    if env_config.contract_mode == "round":
+    if dataset_config.contract_mode == "round":
         fut_contracts = utils.misc.round_fut_contracts(fut_contracts)
 
     # Spreads
