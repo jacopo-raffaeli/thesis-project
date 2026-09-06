@@ -1,10 +1,11 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, get_args
 
 from natsort import natsorted
 
 from thesis_project.dataset.data import BASE_FEATURES
+from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
 from thesis_project.dataset.features_transforms import (
     TRANSFORM_PARSERS,
     BaseTransform,
@@ -234,10 +235,27 @@ def validate_reverse_engineering(names: list[str], specs: list[FeatureSpec]):
 
 def build_feature_specs(
     names: list[str],
-) -> list[FeatureSpec]:
+):
     """
-    Reverse-engineer a collection of output feature names into FeatureSpec.
+    Reverse-engineer a collection of output feature names.
     """
+    calendar = set()
+    calendar_enc = set()
+
+    # Filter out calendar features first
+    for name in names:
+        if name in get_args(CalFeatType):
+            calendar.add(name)
+            names.remove(name)
+
+        if name.replace("_sin", "") in get_args(CalFeatEncType):
+            calendar_enc.add(name.replace("_sin", ""))
+            names.remove(name)
+
+        if name.replace("_cos", "") in get_args(CalFeatEncType):
+            calendar_enc.add(name.replace("_cos", ""))
+            names.remove(name)
+
     grouped: dict[
         str,
         list[BaseTransform],
@@ -259,11 +277,11 @@ def build_feature_specs(
     validate_reverse_engineering(names, specs)
     validate_feature_specs(specs)
 
-    return specs
+    return specs, calendar, calendar_enc
 
 
 if __name__ == "__main__":
-    input = [
+    names = [
         # ------------------------------------------------------------------
         # Identity
         # ------------------------------------------------------------------
@@ -342,8 +360,9 @@ if __name__ == "__main__":
         # ------------------------------------------------------------------
         # Same base + several independent transforms
         # ------------------------------------------------------------------
-        "basis_roll_mean_60s",
-        "basis_roll_mean_60s_lag_300s",
+        "hour_of_day",
+        "hour_of_day_sin",
+        "hour_of_day_cos",
     ]
 
     print("Specs correctly reconstructed!")
