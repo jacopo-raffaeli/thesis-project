@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, get_args
+from typing import Any, Callable, Literal, cast, get_args
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,7 @@ class BaseTransform(ABC):
         self, series: pd.Series, grouped: SeriesGroupBy, base_id: str
     ) -> dict[str, pd.Series]:
         """
-        Lag trasnformed outputs
+        Lag transformed outputs
         """
         assert isinstance(self.lags, list)
 
@@ -448,3 +448,131 @@ def _validate_references(references: list[str]) -> None:
 
     if any(reference not in get_args(Ratio.RatioReference) for reference in references):
         raise ValueError(f"Ratio references must be in [{Ratio.RatioReference}]")
+
+
+# Transform parsers
+def _parse_int(
+    value: str,
+    suffix: str,
+) -> int:
+    if not value.endswith(suffix):
+        raise ValueError(f"Expected suffix '{suffix}', got '{value}'")
+
+    try:
+        return int(value.removesuffix(suffix))
+    except ValueError as exc:
+        raise ValueError(f"Invalid integer in '{value}'") from exc
+
+
+def parse_lag_suffix(
+    name: str,
+) -> tuple[str, list[int]]:
+    """
+    Split <transform_name>_lag_<n>s into <transform_name>, [lags]
+    """
+    parts = name.split("_")
+    lags = []
+
+    while len(parts) >= 2 and parts[-2] == "lag":
+        lag = _parse_int(
+            parts[-1],
+            "s",
+        )
+
+        lags.append(lag)
+        parts = parts[:-2]
+
+    lags.reverse()
+
+    if lags:
+        _validate_lags(lags)
+
+    return "_".join(parts), lags
+
+
+def parse_identity(name: str, base_id: str) -> Identity:
+    suffix = name.removeprefix(base_id)
+
+    if suffix == "":
+        lags = []
+    else:
+        if not suffix.startswith("_"):
+            raise ValueError(f"Invalid Identity feature name: '{name}'")
+
+        _, lags = parse_lag_suffix(suffix[1:])
+
+    return Identity(
+        lags=lags if bool(lags) else None,
+        keep_original=False if bool(lags) else True,
+    )
+
+
+def parse_delta(name: str, base_id: str) -> Delta:
+    suffix = name.removeprefix(f"{base_id}_")
+    transform_name, lags = parse_lag_suffix(suffix)
+
+    parts = transform_name.split("_")
+
+    if len(parts) != 2 or parts[0] != "delta":
+        raise ValueError(f"Invalid Delta feature name: '{name}'")
+
+    delta = _parse_int(parts[1], "s")
+    _validate_deltas([delta])
+
+    return Delta(
+        deltas=[delta],
+        lags=lags if bool(lags) else None,
+        keep_original=False if bool(lags) else True,
+    )
+
+
+def parse_rolling(name: str, base_id: str) -> Rolling:
+    suffix = name.removeprefix(f"{base_id}_")
+    transform_name, lags = parse_lag_suffix(suffix)
+
+    parts = transform_name.split("_")
+
+    if len(parts) != 3 or parts[0] != "roll":
+        raise ValueError(f"Invalid Rolling feature name: '{name}'")
+
+    stat = parts[1]
+    window = _parse_int(parts[2], "s")
+
+    _validate_stats([stat])
+    _validate_windows([window])
+
+    return Rolling(
+        stats=[cast(Rolling.RollingStat, stat)],
+        windows=[window],
+        lags=lags if bool(lags) else None,
+        keep_original=False if bool(lags) else True,
+    )
+
+
+def parse_ratio(name: str, base_id: str) -> Ratio:
+    suffix = name.removeprefix(f"{base_id}_")
+    transform_name, lags = parse_lag_suffix(suffix)
+
+    parts = transform_name.split("_")
+
+    if len(parts) != 2 or parts[1] != "ratio":
+        raise ValueError(f"Invalid Ratio feature name: '{name}'")
+
+    reference = parts[0]
+
+    _validate_references([reference])
+
+    return Ratio(
+        references=[cast(Ratio.RatioReference, reference)],
+        lags=lags if bool(lags) else None,
+        keep_original=False if bool(lags) else True,
+    )
+
+
+# The key is the marker appearing immediately after the base ID.
+TRANSFORM_PARSERS = {
+    "delta": parse_delta,
+    "roll": parse_rolling,
+    "day": parse_ratio,
+    "hour": parse_ratio,
+}
