@@ -16,7 +16,6 @@ class EnvConfig:
     obs_dtype: type = np.float32
     position_encoding: Literal["int", "ohe"] = "int"
     trajectory_min: int | None = None
-    ctd_contracts: float = 1.0
 
     def __post_init__(self):
         if not 1 <= self.persistence_min <= 60:
