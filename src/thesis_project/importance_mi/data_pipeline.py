@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 
 from thesis_project import config as global_config
-from thesis_project.importance_mi.config import AnalysisConfig
+from thesis_project.importance_mi.settings import AnalysisConfig
 from thesis_project.importance_mi.transforms import (
     DeltaTransform,
     RatioTransform,

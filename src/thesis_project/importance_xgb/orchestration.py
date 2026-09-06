@@ -15,10 +15,10 @@ from xgboost import XGBClassifier, XGBRegressor
 
 from thesis_project import config as global_config
 from thesis_project.importance_xgb import (
-    config,
     data_paths,
     data_pipeline,
     importance,
+    settings,
     tuning,
     utils,
 )
@@ -26,7 +26,7 @@ from thesis_project.importance_xgb import (
 logger = logging.getLogger(__name__)
 
 
-def run_analysis(config_obj: config.AnalysisConfig):
+def run_analysis(config_obj: settings.AnalysisConfig):
     if config_obj.analysis == "importance_cls":
         run_analysis_importance(config_obj)
 
@@ -39,7 +39,7 @@ def run_analysis(config_obj: config.AnalysisConfig):
     return 0
 
 
-def run_analysis_importance(config_obj: config.AnalysisConfig):
+def run_analysis_importance(config_obj: settings.AnalysisConfig):
     # Get experiment number and output path
     n_run = utils.generate_run_number(config_obj)
     output_path = utils.generate_run_path(config_obj)
@@ -206,7 +206,7 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     logger.info("Optuna study ended")
     logger.info("Optuna study is available at '%s'", "optuna.db")
 
-    fixed_params = config.get_xgb_fixed_params(config_obj)
+    fixed_params = settings.get_xgb_fixed_params(config_obj)
     best_params = {
         **fixed_params,
         **study.best_params,
@@ -239,7 +239,7 @@ def run_analysis_importance(config_obj: config.AnalysisConfig):
     return 0
 
 
-def run_analysis_selection(config_obj: config.AnalysisConfig):
+def run_analysis_selection(config_obj: settings.AnalysisConfig):
     # Get experiment number and output path
     n_run = utils.generate_run_number(config_obj)
     output_path = utils.generate_run_path(config_obj)
@@ -306,7 +306,7 @@ def run_analysis_selection(config_obj: config.AnalysisConfig):
     )
     X_test_shap = X_test.loc[idx]
 
-    fixed_params = config.get_xgb_fixed_params(config_obj)
+    fixed_params = settings.get_xgb_fixed_params(config_obj)
 
     # Save target
     filename = "y_test.parquet"
@@ -348,7 +348,7 @@ def run_analysis_selection(config_obj: config.AnalysisConfig):
 
 
 def _prepare_data(
-    config_obj: config.AnalysisConfig, paths: data_paths.DataPathsConfig
+    config_obj: settings.AnalysisConfig, paths: data_paths.DataPathsConfig
 ) -> dict[str, dict[str, pd.DataFrame]]:
     # Load target
     (target_name, target_path) = paths.target
@@ -391,7 +391,7 @@ def _prepare_data(
 
 
 def _train_best_model(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     X_train: pd.DataFrame,
     y_train: pd.DataFrame,
     X_test: pd.DataFrame,
@@ -447,7 +447,7 @@ def _train_best_model(
 
 
 def _feature_selection_loop(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     X_train: pd.DataFrame,
     y_train: pd.DataFrame,
     X_val: pd.DataFrame,
@@ -660,7 +660,7 @@ def _feature_selection_loop(
         # logger.info("SHAP importance saved to '%s'", filename)
 
 
-def _save_config(config_obj: config.AnalysisConfig, path: Path, filename: str):
+def _save_config(config_obj: settings.AnalysisConfig, path: Path, filename: str):
     with open(path / filename, "w") as f:
         yaml.safe_dump(asdict(config_obj), f, sort_keys=False)
 

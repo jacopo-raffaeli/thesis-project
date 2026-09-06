@@ -10,16 +10,16 @@ from joblib import Parallel, delayed
 from thesis_project import config as global_config
 from thesis_project.dataset import features_temporal
 from thesis_project.importance_xgb import (
-    config,
     data_paths,
     registry,
     sampling,
+    settings,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def get_sampling_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
+def get_sampling_window(config_obj: settings.AnalysisConfig) -> Tuple[str, str]:
     """
     Get valid sampling window
 
@@ -38,7 +38,7 @@ def get_sampling_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
     return (min_time, max_time)
 
 
-def get_feature_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
+def get_feature_window(config_obj: settings.AnalysisConfig) -> Tuple[str, str]:
     """
     Get valid preprocessing window for features
 
@@ -60,7 +60,7 @@ def get_feature_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
     return (min_time, max_time)
 
 
-def get_target_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
+def get_target_window(config_obj: settings.AnalysisConfig) -> Tuple[str, str]:
     """
     Get valid preprocessing window for target
 
@@ -80,7 +80,7 @@ def get_target_window(config_obj: config.AnalysisConfig) -> Tuple[str, str]:
     return (min_time, max_time)
 
 
-def get_lookback_buffer(transforms: config.TransformSpec | List[config.TransformSpec]) -> int:
+def get_lookback_buffer(transforms: settings.TransformSpec | List[settings.TransformSpec]) -> int:
     """
     Get the lookback necessary for a certain set of transforms
 
@@ -91,7 +91,7 @@ def get_lookback_buffer(transforms: config.TransformSpec | List[config.Transform
     - int representing the lookback in seconds
     """
 
-    if isinstance(transforms, config.TransformSpec):
+    if isinstance(transforms, settings.TransformSpec):
         transforms = [transforms]
 
     max_lag = 0
@@ -250,9 +250,9 @@ def load_data(name: str, path: Path) -> pd.DataFrame:
 
 
 def build_transforms(
-    transform_specs: List[config.TransformSpec] | config.TransformSpec, feature_name: str
-) -> List[Tuple[Any, config.TransformSpec]]:
-    if isinstance(transform_specs, config.TransformSpec):
+    transform_specs: List[settings.TransformSpec] | settings.TransformSpec, feature_name: str
+) -> List[Tuple[Any, settings.TransformSpec]]:
+    if isinstance(transform_specs, settings.TransformSpec):
         transform_specs = [transform_specs]
 
     transforms = []
@@ -282,7 +282,7 @@ def apply_lags(df: pd.DataFrame, lags: list[int]) -> pd.DataFrame:
 
 
 def preprocess_timestamps(
-    config_obj: config.AnalysisConfig, idx: pd.DatetimeIndex
+    config_obj: settings.AnalysisConfig, idx: pd.DatetimeIndex
 ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
     """
     Preprocess timestamp series. Filter days and time, sample subset.
@@ -316,7 +316,7 @@ def preprocess_timestamps(
 
 
 def preprocess_target(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     target_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
@@ -361,7 +361,7 @@ def preprocess_target(
 
 
 def preprocess_market_feature(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     feat_name: str,
     feat_path: Path,
     idx_sampled: pd.DatetimeIndex,
@@ -415,7 +415,7 @@ def preprocess_market_feature(
 
 
 def preprocess_market_features(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     idx_sampled: pd.DatetimeIndex,
     dates_sampled: pd.DatetimeIndex,
 ) -> pd.DataFrame:
@@ -444,7 +444,7 @@ def preprocess_market_features(
 
 
 def preprocess_temporal_features(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     idx_sampled: pd.DatetimeIndex,
     dates_sampled: pd.DatetimeIndex,
 ) -> pd.DataFrame:
@@ -487,7 +487,7 @@ def preprocess_temporal_features(
 
 
 def preprocess_features(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     idx_sampled: pd.DatetimeIndex,
     dates_sampled: pd.DatetimeIndex,
 ) -> pd.DataFrame:
@@ -523,7 +523,7 @@ def preprocess_features(
 
 
 def match_X_y(
-    config_obj: config.AnalysisConfig, X: pd.DataFrame, y: pd.DataFrame
+    config_obj: settings.AnalysisConfig, X: pd.DataFrame, y: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if not X.index.equals(y.index):
         raise ValueError("Indexes of features and target dataframes do not match")
@@ -539,7 +539,7 @@ def match_X_y(
 
 
 def split_data(
-    config_obj: config.AnalysisConfig, X: pd.DataFrame, y: pd.DataFrame
+    config_obj: settings.AnalysisConfig, X: pd.DataFrame, y: pd.DataFrame
 ) -> Dict[str, Dict[str, pd.DataFrame]]:
     idx = y.index
     assert isinstance(idx, pd.DatetimeIndex)

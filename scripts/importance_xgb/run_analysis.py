@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from thesis_project.importance_xgb import config, orchestration, utils
+from thesis_project.importance_xgb import orchestration, settings, utils
 
 
 # fmt: off
@@ -81,7 +81,7 @@ def main():
 
     try:
         overrides = {k: v for k, v in vars(args).items() if v is not None and k != "log_level"}
-        config_obj = config.create_config(**overrides)
+        config_obj = settings.create_config(**overrides)
         orchestration.run_analysis(config_obj)
 
         return 0

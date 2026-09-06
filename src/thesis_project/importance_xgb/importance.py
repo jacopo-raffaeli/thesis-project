@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 import shap
 
-from thesis_project.importance_xgb import config, registry
+from thesis_project.importance_xgb import registry, settings
 
 
-def importance_shap(config_obj: config.AnalysisConfig, model, data):
+def importance_shap(config_obj: settings.AnalysisConfig, model, data):
     explainer = shap.Explainer(model, data, seed=config_obj.seed)
     explanation = explainer(data)
 

@@ -17,7 +17,7 @@ from sklearn.metrics import (
 from xgboost import XGBClassifier, XGBRegressor
 
 from thesis_project.importance_xgb import (
-    config,
+    settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 def objective(
     trial: optuna.Trial,
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     seeds,
     X: pd.DataFrame,
     y: pd.DataFrame,
     splits: list[tuple[np.ndarray, np.ndarray]],
 ):
-    fixed_params = config.get_xgb_fixed_params(config_obj)
+    fixed_params = settings.get_xgb_fixed_params(config_obj)
     params = {
         # Fixed parameters
         **fixed_params,
@@ -90,7 +90,7 @@ def objective(
 
 
 def train(
-    config_obj: config.AnalysisConfig,
+    config_obj: settings.AnalysisConfig,
     X,
     y,
     params,

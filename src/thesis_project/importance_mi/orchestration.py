@@ -14,11 +14,11 @@ from tqdm import tqdm
 
 from thesis_project import config as global_config
 
-from .config import AnalysisConfig
 from .data_paths import DataPathsConfig, get_data_paths
 from .data_pipeline import prepare_analysis_data
 from .metrics import compute_metrics
 from .sampling import sample_data
+from .settings import AnalysisConfig
 
 logger = logging.getLogger(__name__)
 

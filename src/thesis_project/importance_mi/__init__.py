@@ -1,4 +1,3 @@
-from .config import AnalysisConfig, create_config
 from .data_paths import DataPathsConfig, get_data_paths
 from .data_pipeline import (
     filter_dates,
@@ -10,6 +9,7 @@ from .data_pipeline import (
 from .metrics import compute_metrics
 from .orchestration import run_analysis
 from .sampling import sample_data
+from .settings import AnalysisConfig, create_config
 from .utils import get_logger, setup_logging
 
 __all__ = [

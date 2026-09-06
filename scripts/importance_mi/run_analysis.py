@@ -78,7 +78,7 @@ def main():
             sys.exit(1)
 
     # Build config overrides from CLI arguments (only what user provided)
-    from thesis_project.importance_mi.config import create_config
+    from thesis_project.importance_mi.settings import create_config
 
     config_overrides = {
         "ticker": args.ticker,

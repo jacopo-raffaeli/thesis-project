@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from thesis_project import config as global_config
-from thesis_project.importance_xgb import config, data_paths
+from thesis_project.importance_xgb import data_paths, settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,14 @@ def get_logger() -> logging.Logger:
     return logging.getLogger("thesis_project.importance_xgb")
 
 
-def generate_output_path(config_obj: config.AnalysisConfig) -> Path:
+def generate_output_path(config_obj: settings.AnalysisConfig) -> Path:
     output_path = global_config.DATA_INT_DIR / config_obj.ticker / config_obj.base_dir / "runs"
     output_path.mkdir(parents=True, exist_ok=True)
 
     return output_path
 
 
-def generate_run_path(config_obj: config.AnalysisConfig) -> Path:
+def generate_run_path(config_obj: settings.AnalysisConfig) -> Path:
     output_path = generate_output_path(config_obj)
     run_number = generate_run_number(config_obj)
     run_path = output_path / f"run_{run_number:03d}"
@@ -54,7 +54,7 @@ def generate_run_path(config_obj: config.AnalysisConfig) -> Path:
     return run_path
 
 
-def generate_run_number(config_obj: config.AnalysisConfig) -> int:
+def generate_run_number(config_obj: settings.AnalysisConfig) -> int:
     output_path = generate_output_path(config_obj)
 
     existing_runs = []
@@ -70,7 +70,7 @@ def generate_run_number(config_obj: config.AnalysisConfig) -> int:
 
 
 def save_config_snapshot(
-    config: config.AnalysisConfig,
+    config: settings.AnalysisConfig,
     data_paths: data_paths.DataPathsConfig,
     run_dir: Path,
 ) -> None:
