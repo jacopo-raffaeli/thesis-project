@@ -109,31 +109,31 @@ def encode_cyclical(feature, period: int) -> Tuple[pd.Series, pd.Series]:
     return np.sin(angle), np.cos(angle)
 
 
-def encode_hour_of_day(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
+def hour_of_day_encoded(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_hour_of_day(idx)
     sin, cos = encode_cyclical(feature, 24)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
-def encode_minute_of_day(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
+def minute_of_day_encoded(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_minute_of_day(idx)
     sin, cos = encode_cyclical(feature, 24 * 60)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
-def encode_minute_of_hour(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
+def minute_of_hour_encoded(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_minute_of_hour(idx)
     sin, cos = encode_cyclical(feature, 60)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
-def encode_second_of_day(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
+def second_of_day_encoded(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_second_of_day(idx)
     sin, cos = encode_cyclical(feature, 24 * 60**2)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
-def encode_second_of_hour(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
+def second_of_hour_encoded(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series]:
     feature = compute_second_of_hour(idx)
     sin, cos = encode_cyclical(feature, 60**2)
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
@@ -158,11 +158,11 @@ CalFeatEncType = Literal[
 CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
     CalFeatEncType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
 ] = {
-    "hour_of_day": encode_hour_of_day,
-    "minute_of_day": encode_minute_of_day,
-    "minute_of_hour": encode_minute_of_hour,
-    "second_of_day": encode_second_of_day,
-    "second_of_hour": encode_second_of_hour,
+    "hour_of_day": hour_of_day_encoded,
+    "minute_of_day": minute_of_day_encoded,
+    "minute_of_hour": minute_of_hour_encoded,
+    "second_of_day": second_of_day_encoded,
+    "second_of_hour": second_of_hour_encoded,
     "second_of_minute": encode_second_of_minute,
 }
 
