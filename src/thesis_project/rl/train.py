@@ -162,14 +162,23 @@ def main():
     logger.debug(f"""
     RL analysis:
 
-    - Dataset:
-        - {"ticker:":<15} {dataset_config.ticker}
-        - {"n-jobs:":<15} {dataset_config.n_jobs}
-
-    - Env:
+    - Settings:
+        - {"Ticker:":<15} {dataset_config.ticker}
         - {"Price:":<15} {env_config_random.price_mode}
         - {"Contract:":<15} {dataset_config.contract_mode}
+
+    - Dataset:
+        - {"Features:":<15} {dataset_config.n_features}
+            - {"Market features:":<15} {dataset_config.n_market_features}
+            - {"Calendar features:":<15} {dataset_config.n_calendar_features}
+            - {"Calendar features (encoded):":<15} {dataset_config.n_calendar_enc_features}
+
+        - {"Jobs:":<15} {dataset_config.n_jobs}
+
+    - Env:
+        - {"Reset Mode:":<15} {env_config_random.reset_mode} min
         - {"Persistence:":<15} {env_config_random.persistence_min} min
+        - {"Position Encoding:":<15} {env_config_random.position_encoding} min
     """)
 
     dataset = rl.dataset.build_rl_dataset(
@@ -178,15 +187,6 @@ def main():
         cal_feature=rl.features.CALENDAR_FEATURES,
         cal_enc_feature=rl.features.CALENDAR_FEATURES_ENCODED,
     )
-
-    logger.debug(f"""
-    Dataset:
-
-    - {"Number of features:":<15} {len(dataset.features.columns)}
-        - {"Number of market features:":<15} {len(rl.features.MARKET_FEATURES)}
-        - {"Number of calendar features:":<15} {len(rl.features.CALENDAR_FEATURES)}
-        - {"Number of calendar encoded features:":<15} {len(rl.features.CALENDAR_FEATURES_ENCODED)}
-    """)
 
     dataset_train, dataset_test = rl.dataset.split_rl_dataset(
         dataset,
