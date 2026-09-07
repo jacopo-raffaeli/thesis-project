@@ -473,9 +473,9 @@ if __name__ == "__main__":
     dataset_config = DatasetConfig(ticker="fbtp", n_jobs=4, contract_mode="round")
 
     env_config = EnvConfig(
+        price_mode="quoted",
         reset_mode="random",
         persistence_min=10,
-        price_mode="quoted",
     )
 
     rl_dataset = build_rl_dataset(dataset_config, MARKET_FEATURES, CALENDAR_FEATURES, [])
