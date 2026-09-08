@@ -176,9 +176,9 @@ def main():
         - {"Jobs:":<15} {dataset_config.n_jobs}
 
     - Env:
-        - {"Reset Mode:":<15} {env_config_random.reset_mode} min
+        - {"Reset Mode:":<15} {env_config_random.reset_mode}
         - {"Persistence:":<15} {env_config_random.persistence_min} min
-        - {"Position Encoding:":<15} {env_config_random.position_encoding} min
+        - {"Position Encoding:":<15} {env_config_random.position_encoding}
     """)
 
     dataset = rl.dataset.build_rl_dataset(
