@@ -312,6 +312,7 @@ def plot_daily_pnl(
     ax.axhline(
         0,
         linewidth=0.8,
+        color="black",
     )
 
     ax.set_xlabel("Trading day")
