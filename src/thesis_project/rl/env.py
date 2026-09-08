@@ -454,7 +454,7 @@ if __name__ == "__main__":
     from gymnasium.utils.env_checker import check_env
 
     from thesis_project.rl.dataset import build_rl_dataset
-    from thesis_project.rl.features import CALENDAR_FEATURES, MARKET_FEATURES
+    from thesis_project.rl.features import CALENDAR_FEATURES, MARKET_FEATURES_XGB_CLS
 
     warnings.filterwarnings(
         "ignore",
@@ -478,7 +478,7 @@ if __name__ == "__main__":
         persistence_min=10,
     )
 
-    rl_dataset = build_rl_dataset(dataset_config, MARKET_FEATURES, CALENDAR_FEATURES, [])
+    rl_dataset = build_rl_dataset(dataset_config, MARKET_FEATURES_XGB_CLS, CALENDAR_FEATURES, [])
 
     env = BasisTradingEnv(rl_dataset, env_config)
     check_env(env, skip_render_check=True, skip_close_check=True)

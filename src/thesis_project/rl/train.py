@@ -183,7 +183,7 @@ def main():
 
     dataset = rl.dataset.build_rl_dataset(
         dataset_config,
-        specs=rl.features.MARKET_FEATURES,
+        specs=rl.features.MARKET_FEATURES_XGB_CLS,
         cal_feature=rl.features.CALENDAR_FEATURES,
         cal_enc_feature=rl.features.CALENDAR_FEATURES_ENCODED,
     )
