@@ -9,6 +9,7 @@ import pandas as pd
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
+from thesis_project.rl.features import CALENDAR_FEATURES_ENCODED
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -470,7 +471,14 @@ if __name__ == "__main__":
         module=r"gymnasium\.utils\.env_checker",
     )
 
-    dataset_config = DatasetConfig(ticker="fbtp", n_jobs=4, contract_mode="round")
+    dataset_config = DatasetConfig(
+        ticker="fbtp",
+        n_jobs=4,
+        contract_mode="round",
+        market=MARKET_FEATURES_XGB_CLS,
+        calendar=CALENDAR_FEATURES,
+        calendar_enc=CALENDAR_FEATURES_ENCODED,
+    )
 
     env_config = EnvConfig(
         price_mode="quoted",
@@ -478,7 +486,7 @@ if __name__ == "__main__":
         persistence_min=10,
     )
 
-    rl_dataset = build_rl_dataset(dataset_config, MARKET_FEATURES_XGB_CLS, CALENDAR_FEATURES, [])
+    rl_dataset = build_rl_dataset(dataset_config)
 
     env = BasisTradingEnv(rl_dataset, env_config)
     check_env(env, skip_render_check=True, skip_close_check=True)

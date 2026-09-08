@@ -3,7 +3,6 @@ from joblib import Parallel, delayed
 
 from thesis_project import config, dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
-from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
 from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
 
@@ -31,20 +30,19 @@ def build_spec(
 
 
 def build_specs(
-    settings: DatasetConfig, specs: list[dataset.features_market.FeatureSpec]
+    dataset_config: DatasetConfig,
 ) -> pd.DataFrame:
-    dataset.features_market.validate_feature_specs(specs)
     features: dict[str, pd.Series] = {}
     results = Parallel(
-        n_jobs=settings.n_jobs,
+        n_jobs=dataset_config.n_jobs,
         backend="loky",
-    )(delayed(build_spec)(settings, spec) for spec in specs)
+    )(delayed(build_spec)(dataset_config, spec) for spec in dataset_config.market)
 
     for result in results:
         features.update(result)  # type: ignore
 
     df = pd.DataFrame(features)
-    min_time, max_time = settings.base_interval()
+    min_time, max_time = dataset_config.base_interval()
     df = df.between_time(min_time, max_time)
     utils.checks.check_df(df)
 
@@ -53,21 +51,18 @@ def build_specs(
 
 def build_rl_dataset(
     dataset_config: DatasetConfig,
-    specs: list[dataset.features_market.FeatureSpec],
-    cal_feature: list[CalFeatType],
-    cal_enc_feature: list[CalFeatEncType],
 ) -> RLDataset:
     """ """
     # Market features
-    market_features = build_specs(dataset_config, specs).ffill(axis=0)
+    market_features = build_specs(dataset_config).ffill(axis=0)
 
     # Calendar features
     assert isinstance(market_features.index, pd.DatetimeIndex)
     calendar_features = dataset.features_temporal.compute_calendar_features(
-        market_features.index, cal_feature
+        market_features.index, dataset_config.calendar
     )
     calendar_features_encoded = dataset.features_temporal.compute_calendar_features_encoded(
-        market_features.index, cal_enc_feature
+        market_features.index, dataset_config.calendar_enc
     )
 
     # Compose features dataset

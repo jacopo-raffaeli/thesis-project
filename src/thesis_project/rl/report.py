@@ -186,7 +186,10 @@ def plot_pnl(
     *,
     label: str | None = None,
 ) -> None:
-    data = pd.concat(
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    net = pd.concat(
         [records[seed]["cum_reward"].rename(seed) for seed in records],
         axis=1,
     )
@@ -196,7 +199,7 @@ def plot_pnl(
         axis=1,
     )
 
-    net_mean = data.mean(axis=1)
+    net_mean = net.mean(axis=1)
     gross_mean = gross.mean(axis=1)
 
     config.default_plt()
@@ -214,7 +217,7 @@ def plot_pnl(
     )
 
     if len(records) > 1:
-        net_std = data.std(axis=1)
+        net_std = net.std(axis=1)
         gross_std = gross.std(axis=1)
 
         ax.fill_between(
@@ -249,6 +252,7 @@ def plot_pnl_distribution(
     *,
     label: str | None = None,
 ) -> None:
+    config.default_plt()
     daily = pd.concat(
         [daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
@@ -279,6 +283,9 @@ def plot_daily_pnl(
     *,
     label: str | None = None,
 ) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
     daily = pd.concat(
         [daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
@@ -323,6 +330,9 @@ def plot_drawdown(
     *,
     label: str | None = None,
 ) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
     data = pd.concat(
         [records[seed]["drawdown"].rename(seed) for seed in records],
         axis=1,
@@ -372,6 +382,7 @@ def plot_action_series(
     label: str | None = None,
 ) -> None:
     config.default_plt()
+    records = _set_index(records, "timestamp")
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
@@ -405,6 +416,7 @@ def _plot_heatmap(
     date_tick_step: int,
     title: str,
 ) -> None:
+    config.default_plt()
     data = data.copy()
 
     data["timestamp"] = pd.to_datetime(data["timestamp"])
@@ -551,6 +563,7 @@ def plot_action_heatmaps(
     date_tick_step: int = 10,
     label: str | None = None,
 ) -> None:
+    config.default_plt()
     for seed, data in records.items():
         title = f"Trading Heatmap - Seed {seed}"
 
@@ -573,6 +586,7 @@ def plot_reward_heatmaps(
     date_tick_step: int = 10,
     label: str | None = None,
 ) -> None:
+    config.default_plt()
     for seed, data in records.items():
         title = f"Reward Heatmap - Seed {seed}"
 
@@ -751,3 +765,7 @@ def report(
         persistence_min=persistence_min,
         label=label,
     )
+
+
+def _set_index(records: Records, column: str) -> Records:
+    return {seed: record.set_index(column) for seed, record in records.items()}

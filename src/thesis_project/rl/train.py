@@ -144,7 +144,14 @@ def train_evaluate(
 
 
 def main():
-    dataset_config = rl.dataset.DatasetConfig(ticker="fbtp", n_jobs=4, contract_mode="round")
+    dataset_config = rl.dataset.DatasetConfig(
+        ticker="fbtp",
+        n_jobs=4,
+        contract_mode="round",
+        market=rl.features.MARKET_FEATURES_XGB_CLS,
+        calendar=rl.features.CALENDAR_FEATURES,
+        calendar_enc=rl.features.CALENDAR_FEATURES_ENCODED,
+    )
 
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
@@ -183,9 +190,6 @@ def main():
 
     dataset = rl.dataset.build_rl_dataset(
         dataset_config,
-        specs=rl.features.MARKET_FEATURES_XGB_CLS,
-        cal_feature=rl.features.CALENDAR_FEATURES,
-        cal_enc_feature=rl.features.CALENDAR_FEATURES_ENCODED,
     )
 
     dataset_train, dataset_test = rl.dataset.split_rl_dataset(
