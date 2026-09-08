@@ -47,7 +47,7 @@ def evaluate_model(
     config = env.get_wrapper_attr("config")
     dataset = env.get_wrapper_attr("dataset")
 
-    if config.mode != "serial":
+    if config.reset_mode != "serial":
         raise ValueError(
             "Model evaluation is not intended for environments configured in random mode"
         )
