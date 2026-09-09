@@ -99,6 +99,9 @@ def daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
 def run_metrics(
     records: pd.DataFrame,
 ) -> dict[str, float]:
+    _TRADING_DAYS = 252
+    _ANNUALIZATION = np.sqrt(_TRADING_DAYS)
+
     daily = daily_pnl(records)
 
     daily_returns = daily["net_pnl"]
@@ -138,8 +141,12 @@ def run_metrics(
         "cost_per_day": daily["cost"].mean(),
         "daily_pnl_mean": daily_mean,
         "daily_pnl_std": daily_std,
-        "sharpe": (daily_mean / daily_std if daily_std != 0 else np.nan),
-        "sortino": ((daily_mean - sortino_target) / downside_std if downside_std != 0 else np.nan),
+        "sharpe": (daily_mean / daily_std * _ANNUALIZATION if daily_std != 0 else np.nan),
+        "sortino": (
+            (daily_mean - sortino_target) / downside_std * _ANNUALIZATION
+            if downside_std != 0
+            else np.nan
+        ),
         "max_drawdown": daily_drawdown.min(),
         "worst_day": daily_returns.min(),
         "best_day": daily_returns.max(),
@@ -311,7 +318,7 @@ def plot_daily_pnl(
 
     ax.axhline(
         0,
-        linewidth=0.8,
+        linewidth=0.5,
         color="black",
     )
 
@@ -516,6 +523,24 @@ def _plot_heatmap(
         shading="flat",
     )
 
+    ax.vlines(
+        edges,
+        0,
+        len(values),
+        linewidth=0.2,
+        alpha=0.4,
+        color="black",
+    )
+
+    # ax.hlines(
+    #     np.arange(len(values) + 1),
+    #     edges[0],
+    #     edges[-1],
+    #     linewidth=0.2,
+    #     alpha=0.4,
+    #     color="black",
+    # )
+
     ticks = np.arange(
         np.ceil(times[0] / 60) * 60,
         close_min + 1,
@@ -617,17 +642,16 @@ def print_summary(
         "n_steps": metrics[next(iter(metrics))]["n_steps"],
     }
 
-    print("\nSummary:")
-
     if metadata:
+        print("\nSettings:")
         for key, value in metadata.items():
             print(f"- {key + ':':<{n}} {value}")
 
-    print(f"- {'Seeds:':<{n}} " f"{n_seeds:,}")
-
-    print("\nEvaluation:")
-    print(f"- {'Trading days:':<{n}} " f"{evaluation['n_days']:.0f}")
-    print(f"- {'Steps per day:':<{n}} " f"{evaluation['steps_per_day']:.0f}")
+    print("\nSummary:")
+    if n_seeds > 1:
+        print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
+    print(f"- {'Trading days:':<{n}} " f"{evaluation['n_days']:,.0f}")
+    print(f"- {'Steps per day:':<{n}} " f"{evaluation['steps_per_day']:,.0f}")
     print(f"- {'Total steps:':<{n}} " f"{evaluation['n_steps']:,.0f}")
 
     print("\nPnL:")
@@ -673,14 +697,14 @@ def _format_metric(
     mean = metrics.loc[name, "mean"]
 
     if metrics.attrs["n_seeds"] == 1:
-        return f"{mean:.2f}"
+        return f"{mean:,.2f}"
 
     std = metrics.loc[name, "std"]
 
     if pd.isna(std):
-        return f"{mean:.2f}"
+        return f"{mean:,.2f}"
 
-    return f"{mean:.2f} ± {std:.2f}"
+    return f"{mean:,.2f} ± {std:,.2f}"
 
 
 def _format_percentage(
