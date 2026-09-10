@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +14,8 @@ Records = dict[int, pd.DataFrame]
 
 _FIGSIZE_DEFAULT = (12, 6)
 _FIGSIZE_HEATMAP = (14, 8)
+
+PnLType = Literal["net", "gross", "both"]
 
 
 def load_records(
@@ -188,11 +190,7 @@ def aggregate_metrics(
     )
 
 
-def plot_pnl(
-    records: Records,
-    *,
-    label: str | None = None,
-) -> None:
+def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "both") -> None:
     config.default_plt()
     records = _set_index(records, "timestamp")
 
@@ -213,33 +211,70 @@ def plot_pnl(
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
-    ax.plot(
-        gross_mean,
-        label="Gross",
-    )
+    if which == "net":
+        ax.plot(
+            net_mean,
+            label="Net",
+        )
 
-    ax.plot(
-        net_mean,
-        label="Net",
-    )
+    if which == "gross":
+        ax.plot(
+            gross_mean,
+            label="Gross",
+        )
+
+    if which == "both":
+        ax.plot(
+            gross_mean,
+            label="Gross",
+        )
+
+        ax.plot(
+            net_mean,
+            label="Net",
+        )
 
     if len(records) > 1:
         net_std = net.std(axis=1)
         gross_std = gross.std(axis=1)
 
-        ax.fill_between(
-            gross_mean.index,
-            gross_mean - gross_std,
-            gross_mean + gross_std,
-            alpha=0.2,
-        )
+        if which == "net":
+            ax.fill_between(
+                gross_mean.index,
+                gross_mean - gross_std,
+                gross_mean + gross_std,
+                alpha=0.2,
+            )
 
-        ax.fill_between(
-            net_mean.index,
-            net_mean - net_std,
-            net_mean + net_std,
-            alpha=0.2,
-        )
+        if which == "gross":
+            ax.fill_between(
+                gross_mean.index,
+                gross_mean - gross_std,
+                gross_mean + gross_std,
+                alpha=0.2,
+            )
+
+        if which == "both":
+            ax.fill_between(
+                gross_mean.index,
+                gross_mean - gross_std,
+                gross_mean + gross_std,
+                alpha=0.2,
+            )
+
+            ax.fill_between(
+                net_mean.index,
+                net_mean - net_std,
+                net_mean + net_std,
+                alpha=0.2,
+            )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
 
     ax.set_xlabel("Time")
     ax.set_ylabel("€")
@@ -320,6 +355,7 @@ def plot_daily_pnl(
         0,
         linewidth=0.5,
         color="black",
+        linestyle="--",
     )
 
     ax.set_xlabel("Trading day")
@@ -733,6 +769,7 @@ def report(
 
     label = metadata.get("set")
     persistence_min = metadata.get("persistence_min", 10)
+    which: PnLType = metadata.get("which", "both")
 
     records = {
         seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()
@@ -756,6 +793,7 @@ def report(
     plot_pnl(
         records,
         label=label,
+        which=which,
     )
 
     plot_pnl_distribution(
