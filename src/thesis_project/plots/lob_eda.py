@@ -6,6 +6,21 @@ import matplotlib.pyplot as plt
 from thesis_project import config, utils
 from thesis_project.dataset.data import BASE_FEATURES
 
+# TODO:
+# Define a proper label for y-axis when price/100 is showed
+
+# TODO:
+# Evaluate if and what pieces of code are worth to be resued in the script
+
+# TODO:
+# Define a 'generic' signature for the functions:
+# - When to plot a single role or both (ctd, fut)
+# - An easy way to pass typical auxiliar parameters like:
+#   - resample freq
+#   - time window
+#   - dates
+
+
 # ==============================================================================
 # Prices
 # ==============================================================================
@@ -99,7 +114,7 @@ def plot_spread(
         time_window=window,
         dates_to_include=dates,
     )
-    data = data.resample("5min").last()
+    data = data.resample("30min").last()
 
     ax.plot(data, label=name.replace("_", " ").title(), linewidth=0.7, color="black")
 
@@ -107,20 +122,35 @@ def plot_spread(
 
     ax.set_ylabel("Price")
 
+    # start = data.min()
+    # stop = data.max()
+    # step = config.ASSET_BY_TICKER_ROLE[ticker, role].price_tick_perc
+    # yticks = np.arange(start, stop, step).round(2)
+    # ax.set_yticks(yticks)
+
     ax.set_title(f"{ticker.upper()} {role.upper()} Spread")
 
     ax.spines[["top", "right"]].set_visible(False)
 
-    plt.legend(loc="lower right")
+    plt.legend(loc="best")
     plt.tight_layout()
     plt.show()
 
 
 if __name__ == "__main__":
-    TICKER: config.FutTicker = "fbtp"
+    # LOB config
+    ticker: config.FutTicker = "fbtp"
     levels = (1, 2)
-    window = (datetime.time(9, 0, 0), datetime.time(17, 0, 0))
-    dates = [datetime.date(2023, 4, 3)]
 
-    plot_spread(TICKER, "ctd", window=window, dates=dates)
-    plot_spread(TICKER, "fut", window=window, dates=dates)
+    # Time settings
+    min_time = datetime.time(9, 0, 0)
+    max_time = datetime.time(17, 0, 0)
+    window = (min_time, max_time)
+
+    # Dates settings
+    min_date = datetime.date(2022, 8, 1)
+    max_date = datetime.date(2023, 8, 1)
+    dates = [min_date + datetime.timedelta(days=i) for i in range((max_date - min_date).days + 1)]
+
+    plot_spread(ticker, "ctd", window=window, dates=dates)
+    plot_spread(ticker, "fut", window=window, dates=dates)
