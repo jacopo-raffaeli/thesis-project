@@ -1,7 +1,9 @@
 import datetime
+import json
 import re
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 import dataframe_image as dfi
 import pandas as pd
@@ -405,3 +407,17 @@ def create_run_path(root: Path):
     path.mkdir(parents=True, exist_ok=False)
 
     return path
+
+
+def dump_configs(path: Path, **configs: Any) -> None:
+    data = {
+        name: asdict(value)  # type: ignore
+        if is_dataclass(value)
+        else value
+        for name, value in configs.items()
+    }
+
+    path.write_text(
+        json.dumps(data, indent=4, default=str),
+        encoding="utf-8",
+    )

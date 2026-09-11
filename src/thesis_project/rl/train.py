@@ -1,20 +1,27 @@
-import json
 import logging
-from dataclasses import asdict, is_dataclass
 from itertools import product
 from pathlib import Path
-from typing import Any
 
 import gymnasium as gym
-import numpy as np
 from joblib import Parallel, delayed
 from sb3_contrib import MaskablePPO
 from stable_baselines3.common.monitor import Monitor
 
 from thesis_project import config, rl, utils
 from thesis_project.rl.evaluation import evaluate_model
+from thesis_project.utils.io import dump_configs
+from thesis_project.utils.misc import generate_seeds
 
 logger = logging.getLogger(__name__)
+
+# TODO:
+# - Study VecNormalize usage
+# - Address how to avoid normalizing everything
+#   - We can do this if the observation space is of Dict type
+#   - In such case it is enough to specify the keys of the dict to normalize
+# - Address how to use the test normalization in testing
+# - Check that the data collected in input are not normalized
+#   - The actual env is completely agnostic of VecNormalize so this is not a problem
 
 
 BATCH_SIZES = [64, 128, 256, 512]
@@ -22,25 +29,6 @@ CLIP_RANGES = [0.1, 0.2, 0.3]
 
 N_SEED = 5
 TOTAL_TIMESTEPS = 1_000_000
-
-
-def generate_seeds(n: int, low: int = 0, high: int = 9999) -> list[int]:
-    rng = np.random.default_rng(np.random.randint(low, high))
-    return rng.integers(low, high, size=n).tolist()
-
-
-def dump_configs(path: Path, **configs: Any) -> None:
-    data = {
-        name: asdict(value)  # type: ignore
-        if is_dataclass(value)
-        else value
-        for name, value in configs.items()
-    }
-
-    path.write_text(
-        json.dumps(data, indent=4, default=str),
-        encoding="utf-8",
-    )
 
 
 def make_env(

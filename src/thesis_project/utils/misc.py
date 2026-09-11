@@ -1,6 +1,7 @@
 import datetime
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 
 from thesis_project import config
@@ -132,3 +133,8 @@ def naive_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     if index.tz is None:
         return index.normalize()
     return index.tz_localize(None).normalize()
+
+
+def generate_seeds(n: int, seed: int | None = None, low: int = 0, high: int = 9999) -> list[int]:
+    rng = np.random.default_rng(seed)
+    return rng.integers(low, high, size=n).tolist()
