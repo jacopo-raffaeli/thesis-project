@@ -122,10 +122,7 @@ def train_evaluate(
 def main() -> None:
     experiment_config = ExperimentConfig(
         split_month="2023-01",
-        total_timesteps=10_000,
-        n_seeds=1,
-        batch_sizes=(64,),
-        clip_ranges=(0.2,),
+        normalize_market_obs=False,
     )
 
     dataset_config = rl.dataset.DatasetConfig(
@@ -138,13 +135,13 @@ def main() -> None:
 
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
-        price_mode="quoted",
+        price_mode="mid",
         persistence_min=10,
     )
 
     env_config_serial = rl.env.EnvConfig(
         reset_mode="serial",
-        price_mode="quoted",
+        price_mode="mid",
         persistence_min=10,
         trajectory_min=0,
     )
@@ -153,24 +150,24 @@ def main() -> None:
     RL analysis:
 
     - Experiment:
-        - {"Split month:":<20} {experiment_config.split_month}
-        - {"Timesteps:":<20} {experiment_config.total_timesteps:,}
-        - {"Seeds:":<20} {experiment_config.n_seeds}
-        - {"Normalize market:":<20} {experiment_config.normalize_market_obs}
+        {"- Split month:":<20} {experiment_config.split_month}
+        {"- Timesteps:":<20} {experiment_config.total_timesteps:,}
+        {"- Seeds:":<20} {experiment_config.n_seeds}
+        {"- Normalize market:":<20} {experiment_config.normalize_market_obs}
 
     - Dataset:
-        - {"Ticker:":<20} {dataset_config.ticker}
-        - {"Features:":<20} {dataset_config.n_features}
-            - {"Market:":<20} {dataset_config.n_market_features}
-            - {"Calendar:":<20} {dataset_config.n_calendar_features}
-            - {"Calendar enc:":<20} {dataset_config.n_calendar_enc_features}
-        - {"Contract mode:":<20} {dataset_config.contract_mode}
-        - {"Market jobs:":<20} {dataset_config.n_jobs_market}
+        {"- Ticker:":<20} {dataset_config.ticker}
+        {"- Features:":<20} {dataset_config.n_features}
+        {"  - Market:":<20} {dataset_config.n_market_features}
+        {"  - Calendar:":<20} {dataset_config.n_calendar_features}
+        {"  - Calendar enc:":<20} {dataset_config.n_calendar_enc_features}
+        {"- Contract mode:":<20} {dataset_config.contract_mode}
+        {"- Market jobs:":<20} {dataset_config.n_jobs_market}
 
     - Environment:
-        - {"Price mode:":<20} {env_config_random.price_mode}
-        - {"Persistence:":<20} {env_config_random.persistence_min} min
-        - {"Position encoding:":<20} {env_config_random.position_encoding}
+        {"- Price mode:":<20} {env_config_random.price_mode}
+        {"- Persistence:":<20} {env_config_random.persistence_min} min
+        {"- Position encoding:":<20} {env_config_random.position_encoding}
     """)
 
     dataset = rl.dataset.build_rl_dataset(dataset_config)
