@@ -61,6 +61,8 @@ def build_rl_dataset(
     calendar_features = dataset.features_temporal.compute_calendar_features(
         market_features.index, dataset_config.calendar
     )
+
+    # Calendar encoded features
     calendar_features_encoded = dataset.features_temporal.compute_calendar_features_encoded(
         market_features.index, dataset_config.calendar_enc
     )
@@ -74,7 +76,7 @@ def build_rl_dataset(
     # Mid prices
     assert isinstance(features.index, pd.DatetimeIndex)
     ctd_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
-    fut_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
+    fut_mid = _load_aligned_feature(BASE_FEATURES["fut_mid_price"], features.index).ffill(axis=0)
 
     # Contracts
     ctd_contracts = dataset_config.ctd_contracts
@@ -109,7 +111,7 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
     train_mask = index <= cutoff
     test_mask = ~train_mask
 
-    dataset1 = RLDataset(
+    train = RLDataset(
         features=dataset.features[train_mask],
         ctd_mid=dataset.ctd_mid[train_mask],
         fut_mid=dataset.fut_mid[train_mask],
@@ -119,7 +121,7 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
         fut_spread=dataset.fut_spread[train_mask],
     )
 
-    dataset2 = RLDataset(
+    test = RLDataset(
         features=dataset.features[test_mask],
         ctd_mid=dataset.ctd_mid[test_mask],
         fut_mid=dataset.fut_mid[test_mask],
@@ -129,7 +131,7 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
         fut_spread=dataset.fut_spread[test_mask],
     )
 
-    return dataset1, dataset2
+    return train, test
 
 
 def _load_aligned_feature(base: dataset.data.BaseFeature, idx: pd.DatetimeIndex) -> pd.Series:
