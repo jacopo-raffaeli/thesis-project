@@ -188,31 +188,35 @@ class BasisTradingEnv(gym.Env):
 
         self.config = env_config
 
-        # Define observation space
+        # Define observation spaces
+        spaces = {
+            "market": gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(dataset.n_market_features,),
+                dtype=env_config.obs_dtype,
+            ),
+            "position": self._position_space,
+        }
+
+        if dataset.n_calendar_features > 0:
+            spaces["temporal"] = gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(dataset.n_calendar_features,),
+                dtype=env_config.obs_dtype,
+            )
+
+        if dataset.n_calendar_enc_features > 0:
+            spaces["temporal_enc"] = gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(dataset.n_calendar_enc_features,),
+                dtype=env_config.obs_dtype,
+            )
+
         # Using a dict allow to easily normalize only certain families of features
-        self.observation_space = gym.spaces.Dict(
-            {
-                "market": gym.spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(self.dataset.n_market_features,),
-                    dtype=self.config.obs_dtype,
-                ),
-                "position": self._position_space,
-                "calendar": gym.spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(self.dataset.n_calendar_features,),
-                    dtype=self.config.obs_dtype,
-                ),
-                "calendar_enc": gym.spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(self.dataset.n_calendar_enc_features,),
-                    dtype=self.config.obs_dtype,
-                ),
-            }
-        )
+        self.observation_space = gym.spaces.Dict(spaces)
 
         # Define action space
         self.action_space = gym.spaces.Discrete(self._N_ACTIONS)
@@ -286,20 +290,24 @@ class BasisTradingEnv(gym.Env):
     def _get_observation(self) -> dict[str, np.ndarray]:
         assert isinstance(self.ep_dataset, EpDataset)
 
-        return {
-            "market": self.ep_dataset.market_features.iloc[self.t].to_numpy(
+        observation = {
+            "market": self.dataset.market_features.iloc[self.t].to_numpy(
                 dtype=self.config.obs_dtype
             ),
             "position": self._encoded_position,
-            "calendar": self.ep_dataset.calendar_features.iloc[self.t].to_numpy(
-                dtype=self.config.obs_dtype
-            ),
-            "calendar_enc": (
-                self.ep_dataset.calendar_enc_features.iloc[self.t].to_numpy(
-                    dtype=self.config.obs_dtype
-                )
-            ),
         }
+
+        if self.dataset.n_calendar_features > 0:
+            observation["temporal"] = self.dataset.calendar_features.iloc[self.t].to_numpy(
+                dtype=self.config.obs_dtype
+            )
+
+        if self.dataset.n_calendar_enc_features > 0:
+            observation["temporal_enc"] = self.dataset.calendar_enc_features.iloc[self.t].to_numpy(
+                dtype=self.config.obs_dtype
+            )
+
+        return observation
 
     # Info
     def _get_info(self) -> dict[str, Any]:

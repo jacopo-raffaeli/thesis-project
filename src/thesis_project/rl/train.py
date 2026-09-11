@@ -122,6 +122,10 @@ def train_evaluate(
 def main() -> None:
     experiment_config = ExperimentConfig(
         split_month="2023-01",
+        total_timesteps=10_000,
+        n_seeds=1,
+        batch_sizes=(64,),
+        clip_ranges=(0.2,),
     )
 
     dataset_config = rl.dataset.DatasetConfig(
@@ -150,7 +154,7 @@ def main() -> None:
 
     - Experiment:
         - {"Split month:":<20} {experiment_config.split_month}
-        - {"Timesteps:":<20} {experiment_config.total_timesteps}
+        - {"Timesteps:":<20} {experiment_config.total_timesteps:,}
         - {"Seeds:":<20} {experiment_config.n_seeds}
         - {"Normalize market:":<20} {experiment_config.normalize_market_obs}
 

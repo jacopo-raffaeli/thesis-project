@@ -79,14 +79,6 @@ def evaluate_episode_sb3(
 
     obs = env.reset()
 
-    # DummyVecEnv stores the reset info separately.
-    info = env.reset_infos[0]
-
-    record = info.copy()
-    if episode is not None:
-        record["episode"] = episode
-    records.append(record)
-
     while True:
         action, _ = predictor.predict(
             obs,
@@ -96,12 +88,14 @@ def evaluate_episode_sb3(
 
         obs, _, dones, infos = env.step(action)
 
-        info = infos[0]
+        info = infos[0].copy()
+        info.pop("TimeLimit.truncated", None)
+        info.pop("terminal_observation", None)
 
-        record = info.copy()
         if episode is not None:
-            record["episode"] = episode
-        records.append(record)
+            info["episode"] = episode
+
+        records.append(info)
 
         if dones[0]:
             break
