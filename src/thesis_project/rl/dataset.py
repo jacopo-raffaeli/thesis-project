@@ -1,10 +1,13 @@
 import pandas as pd
 from joblib import Parallel, delayed
 
-from thesis_project import config, dataset, utils
+from thesis_project import dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.rl.dataset_config import DatasetConfig
 from thesis_project.rl.env import RLDataset
+
+# TODO:
+# - Improve the RLDataset splitting method
 
 
 def build_spec(
@@ -13,7 +16,7 @@ def build_spec(
     # Load filtered base feature
     path = BASE_FEATURES[spec.base_id].path
     window = settings.preprocessing_interval(spec.lookback)
-    excluded = utils.misc.get_dates_to_exclude(settings.ticker, config.DEFAULT_EXCLUDED_DATES)
+    excluded = utils.misc.get_dates_to_exclude(settings.ticker, settings.offsets)
     s = utils.io.load_filtered_parquet(path, time_window=window, dates_to_exclude=excluded)
     utils.checks.check_s(s)
 
@@ -34,9 +37,9 @@ def build_specs(
 ) -> pd.DataFrame:
     features: dict[str, pd.Series] = {}
     results = Parallel(
-        n_jobs=dataset_config.n_jobs,
+        n_jobs=dataset_config.n_jobs_market,
         backend="loky",
-    )(delayed(build_spec)(dataset_config, spec) for spec in dataset_config.market)
+    )(delayed(build_spec)(dataset_config, spec) for spec in dataset_config.market_specs)
 
     for result in results:
         features.update(result)  # type: ignore
@@ -55,28 +58,22 @@ def build_rl_dataset(
     """ """
     # Market features
     market_features = build_specs(dataset_config).ffill(axis=0)
+    index = market_features.index
+    assert isinstance(index, pd.DatetimeIndex)
 
     # Calendar features
-    assert isinstance(market_features.index, pd.DatetimeIndex)
     calendar_features = dataset.features_temporal.compute_calendar_features(
-        market_features.index, dataset_config.calendar
+        index, dataset_config.calendar_specs
     )
 
     # Calendar encoded features
-    calendar_features_encoded = dataset.features_temporal.compute_calendar_features_encoded(
-        market_features.index, dataset_config.calendar_enc
-    )
-
-    # Compose features dataset
-    features = pd.concat(
-        [market_features, calendar_features, calendar_features_encoded],
-        axis=1,
+    calendar_enc_features = dataset.features_temporal.compute_calendar_features_enc(
+        index, dataset_config.calendar_enc_specs
     )
 
     # Mid prices
-    assert isinstance(features.index, pd.DatetimeIndex)
-    ctd_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], features.index).ffill(axis=0)
-    fut_mid = _load_aligned_feature(BASE_FEATURES["fut_mid_price"], features.index).ffill(axis=0)
+    ctd_mid = _load_aligned_feature(BASE_FEATURES["ctd_mid_price"], index).ffill(axis=0)
+    fut_mid = _load_aligned_feature(BASE_FEATURES["fut_mid_price"], index).ffill(axis=0)
 
     # Contracts
     ctd_contracts = dataset_config.ctd_contracts
@@ -86,12 +83,14 @@ def build_rl_dataset(
         fut_contracts = utils.misc.round_fut_contracts(fut_contracts)
 
     # Spreads
-    ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], features.index).ffill(axis=0)
-    fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], features.index).ffill(axis=0)
+    ctd_spread = _load_aligned_feature(BASE_FEATURES["ctd_spread"], index).ffill(axis=0)
+    fut_spread = _load_aligned_feature(BASE_FEATURES["fut_spread"], index).ffill(axis=0)
 
     # Build RL dataset
     return RLDataset(
-        features=features,
+        market_features=market_features,
+        calendar_features=calendar_features,
+        calendar_enc_features=calendar_enc_features,
         ctd_mid=ctd_mid,
         fut_mid=fut_mid,
         ctd_contracts=ctd_contracts,
@@ -102,17 +101,21 @@ def build_rl_dataset(
 
 
 def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDataset]:
+    # Split on the month
     split = pd.Period(month, "M")
     cutoff = split.end_time
 
-    assert isinstance(dataset.features.index, pd.DatetimeIndex)
-    index = dataset.features.index.tz_localize(None)
+    assert isinstance(dataset.market_features.index, pd.DatetimeIndex)
+    index = dataset.market_features.index.tz_localize(None)
 
     train_mask = index <= cutoff
     test_mask = ~train_mask
 
+    # Training set
     train = RLDataset(
-        features=dataset.features[train_mask],
+        market_features=dataset.market_features[train_mask],
+        calendar_features=dataset.calendar_features[train_mask],
+        calendar_enc_features=dataset.calendar_enc_features[train_mask],
         ctd_mid=dataset.ctd_mid[train_mask],
         fut_mid=dataset.fut_mid[train_mask],
         ctd_contracts=dataset.ctd_contracts,
@@ -121,8 +124,11 @@ def split_rl_dataset(dataset: RLDataset, month: str) -> tuple[RLDataset, RLDatas
         fut_spread=dataset.fut_spread[train_mask],
     )
 
+    # Test set
     test = RLDataset(
-        features=dataset.features[test_mask],
+        market_features=dataset.market_features[test_mask],
+        calendar_features=dataset.calendar_features[test_mask],
+        calendar_enc_features=dataset.calendar_enc_features[test_mask],
         ctd_mid=dataset.ctd_mid[test_mask],
         fut_mid=dataset.fut_mid[test_mask],
         ctd_contracts=dataset.ctd_contracts,

@@ -1,5 +1,5 @@
 from thesis_project.dataset.features_market import FeatureSpec
-from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
+from thesis_project.dataset.features_temporal import CalEncFeatType, CalFeatType
 from thesis_project.dataset.features_transforms import (
     Delta,
     Identity,
@@ -26,7 +26,7 @@ MARKET_FEATURES_XGB_CLS: list[FeatureSpec] = [
                 windows=[1800],
             ),
             Ratio(
-                references=["hour", "day" ],
+                references=["hour", "day"],
             ),
         ],
     ),
@@ -177,9 +177,44 @@ CALENDAR_FEATURES: list[CalFeatType] = [
     # "second_of_day",
 ]
 
-CALENDAR_FEATURES_ENCODED: list[CalFeatEncType] = [
+CALENDAR_ENC_FEATURES: list[CalEncFeatType] = [
     "hour_of_day",
     "minute_of_hour",
     "second_of_minute",
 ]
+
+MARKET_FEATURE_SETS: dict[str, list[FeatureSpec]] = {
+    "xgb_cls": MARKET_FEATURES_XGB_CLS,
+    "xgb_reg": MARKET_FEATURES_XGB_REG,
+    "xgb_reg_it": MARKET_FEATURES_XGB_REG_IT,
+}
+
+CALENDAR_FEATURE_SETS: dict[str, list[CalFeatType]] = {
+    "default": CALENDAR_FEATURES,
+}
+
+CALENDAR_ENC_FEATURE_SETS: dict[str, list[CalEncFeatType]] = {
+    "default": CALENDAR_ENC_FEATURES,
+}
 # fmt: on
+
+
+def get_market_feature_set(name: str) -> list[FeatureSpec]:
+    try:
+        return MARKET_FEATURE_SETS[name]
+    except KeyError:
+        raise ValueError(f"Unknown market feature set: {name!r}") from None
+
+
+def get_calendar_feature_set(name: str) -> list[CalFeatType]:
+    try:
+        return CALENDAR_FEATURE_SETS[name]
+    except KeyError:
+        raise ValueError(f"Unknown calendar feature set: {name!r}") from None
+
+
+def get_calendar_enc_feature_set(name: str) -> list[CalEncFeatType]:
+    try:
+        return CALENDAR_ENC_FEATURE_SETS[name]
+    except KeyError:
+        raise ValueError(f"Unknown calendar encoded feature set: {name!r}") from None

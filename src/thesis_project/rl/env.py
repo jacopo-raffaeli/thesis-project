@@ -9,7 +9,6 @@ import pandas as pd
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import EnvConfig
-from thesis_project.rl.features import CALENDAR_FEATURES_ENCODED
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -17,7 +16,12 @@ os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
 @dataclass(frozen=True)
 class RLDataset:
-    features: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # Features
+    market_features: pd.DataFrame
+    calendar_features: pd.DataFrame
+    calendar_enc_features: pd.DataFrame
+
+    # Market
     ctd_mid: pd.Series = field(default_factory=pd.Series)
     fut_mid: pd.Series = field(default_factory=pd.Series)
     ctd_contracts: float = field(default_factory=float)
@@ -25,23 +29,28 @@ class RLDataset:
     ctd_spread: pd.Series = field(default_factory=pd.Series)
     fut_spread: pd.Series = field(default_factory=pd.Series)
 
+    # Temporal
     dates: list[pd.Timestamp] = field(default_factory=list[pd.Timestamp])
     date_to_slice: dict[pd.Timestamp, slice] = field(default_factory=dict[pd.Timestamp, slice])
 
     def __post_init__(self):
         # Check series consistency
-        assert isinstance(self.features.index, pd.DatetimeIndex)
+        assert isinstance(self.market_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_enc_features.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
         assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
         assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
-        assert self.features.index.equals(self.ctd_mid.index)
-        assert self.features.index.equals(self.fut_mid.index)
-        assert self.features.index.equals(self.ctd_spread.index)
-        assert self.features.index.equals(self.fut_spread.index)
+        assert self.market_features.index.equals(self.calendar_features.index)
+        assert self.market_features.index.equals(self.calendar_enc_features.index)
+        assert self.market_features.index.equals(self.ctd_mid.index)
+        assert self.market_features.index.equals(self.fut_mid.index)
+        assert self.market_features.index.equals(self.ctd_spread.index)
+        assert self.market_features.index.equals(self.fut_spread.index)
 
         # Find unique dates
-        dates_idx = self.features.index.tz_localize(None).floor("D")
+        dates_idx = self.market_features.index.tz_localize(None).floor("D")
         dates = dates_idx.unique()
         object.__setattr__(self, "dates", list(dates))
 
@@ -53,8 +62,20 @@ class RLDataset:
         object.__setattr__(self, "date_to_slice", date_to_slice)
 
     @property
+    def n_market_features(self) -> int:
+        return len(self.market_features.columns)
+
+    @property
+    def n_calendar_features(self) -> int:
+        return len(self.calendar_features.columns)
+
+    @property
+    def n_calendar_enc_features(self) -> int:
+        return len(self.calendar_enc_features.columns)
+
+    @property
     def n_features(self) -> int:
-        return len(self.features.columns)
+        return self.n_market_features + self.n_calendar_features + self.n_calendar_enc_features
 
     @property
     def n_dates(self) -> int:
@@ -63,7 +84,12 @@ class RLDataset:
 
 @dataclass(frozen=True)
 class EpDataset:
-    features: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # Features
+    market_features: pd.DataFrame
+    calendar_features: pd.DataFrame
+    calendar_enc_features: pd.DataFrame
+
+    # Market
     ctd_mid: pd.Series = field(default_factory=pd.Series)
     fut_mid: pd.Series = field(default_factory=pd.Series)
     ctd_contracts: float = field(default_factory=float)
@@ -73,23 +99,39 @@ class EpDataset:
 
     def __post_init__(self):
         # Check series consistency
-        assert isinstance(self.features.index, pd.DatetimeIndex)
+        assert isinstance(self.market_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_enc_features.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
         assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
         assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
-        assert self.features.index.equals(self.ctd_mid.index)
-        assert self.features.index.equals(self.fut_mid.index)
-        assert self.features.index.equals(self.ctd_spread.index)
-        assert self.features.index.equals(self.fut_spread.index)
+        assert self.market_features.index.equals(self.calendar_features.index)
+        assert self.market_features.index.equals(self.calendar_enc_features.index)
+        assert self.market_features.index.equals(self.ctd_mid.index)
+        assert self.market_features.index.equals(self.fut_mid.index)
+        assert self.market_features.index.equals(self.ctd_spread.index)
+        assert self.market_features.index.equals(self.fut_spread.index)
+
+    @property
+    def n_market_features(self) -> int:
+        return len(self.market_features.columns)
+
+    @property
+    def n_calendar_features(self) -> int:
+        return len(self.calendar_features.columns)
+
+    @property
+    def n_calendar_enc_features(self) -> int:
+        return len(self.calendar_enc_features.columns)
 
     @property
     def n_features(self) -> int:
-        return len(self.features.columns)
+        return self.n_market_features + self.n_calendar_features + self.n_calendar_enc_features
 
     @property
     def episode_length(self) -> int:
-        return len(self.features)
+        return len(self.market_features)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,15 +189,36 @@ class BasisTradingEnv(gym.Env):
         self.config = env_config
 
         # Define observation space
-        self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.obs_space_size,), dtype=self.config.obs_dtype
+        # Using a dict allow to easily normalize only certain families of features
+        self.observation_space = gym.spaces.Dict(
+            {
+                "market": gym.spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self.dataset.n_market_features,),
+                    dtype=self.config.obs_dtype,
+                ),
+                "position": self._position_space,
+                "calendar": gym.spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self.dataset.n_calendar_features,),
+                    dtype=self.config.obs_dtype,
+                ),
+                "calendar_enc": gym.spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(self.dataset.n_calendar_enc_features,),
+                    dtype=self.config.obs_dtype,
+                ),
+            }
         )
 
         # Define action space
         self.action_space = gym.spaces.Discrete(self._N_ACTIONS)
 
     # Main
-    def reset(self, *, seed: int | None = None, options=None) -> tuple[np.ndarray, dict]:
+    def reset(self, *, seed: int | None = None, options=None):
         super().reset(seed=seed)
 
         # Reset arguments
@@ -182,7 +245,7 @@ class BasisTradingEnv(gym.Env):
 
         return observation, info
 
-    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: int):
         # Update positions
         self.prev_position = self.curr_position
         self.curr_position = self._act_to_pos(action)
@@ -220,14 +283,23 @@ class BasisTradingEnv(gym.Env):
         return self._FULL_MASK.copy()
 
     # Observation
-    def _get_observation(self) -> np.ndarray:
+    def _get_observation(self) -> dict[str, np.ndarray]:
         assert isinstance(self.ep_dataset, EpDataset)
-        features = self.ep_dataset.features.iloc[self.t].to_numpy(dtype=self.config.obs_dtype)
-        position = self._encoded_position
-        obs = [features, position]
-        obs = np.concatenate(obs).astype(dtype=self.config.obs_dtype, copy=False)
 
-        return obs
+        return {
+            "market": self.ep_dataset.market_features.iloc[self.t].to_numpy(
+                dtype=self.config.obs_dtype
+            ),
+            "position": self._encoded_position,
+            "calendar": self.ep_dataset.calendar_features.iloc[self.t].to_numpy(
+                dtype=self.config.obs_dtype
+            ),
+            "calendar_enc": (
+                self.ep_dataset.calendar_enc_features.iloc[self.t].to_numpy(
+                    dtype=self.config.obs_dtype
+                )
+            ),
+        }
 
     # Info
     def _get_info(self) -> dict[str, Any]:
@@ -312,7 +384,9 @@ class BasisTradingEnv(gym.Env):
     # Episode
     def _build_episode_rl_dataset(self) -> EpDataset:
         rows = self.dataset.date_to_slice[self.date]
-        features = self.dataset.features.iloc[rows]
+        market_features = self.dataset.market_features.iloc[rows]
+        calendar_features = self.dataset.calendar_features.iloc[rows]
+        calendar_enc_features = self.dataset.calendar_enc_features.iloc[rows]
         ctd_mid = self.dataset.ctd_mid.iloc[rows]
         fut_mid = self.dataset.fut_mid.iloc[rows]
         ctd_contracts = self.dataset.ctd_contracts
@@ -321,7 +395,9 @@ class BasisTradingEnv(gym.Env):
         fut_spread = self.dataset.fut_spread.iloc[rows]
 
         return EpDataset(
-            features=features,
+            market_features=market_features,
+            calendar_features=calendar_features,
+            calendar_enc_features=calendar_enc_features,
             ctd_mid=ctd_mid,
             fut_mid=fut_mid,
             ctd_contracts=ctd_contracts,
@@ -390,20 +466,26 @@ class BasisTradingEnv(gym.Env):
                 raise ValueError(f"Invalid position encoding '{self.config.position_encoding}'")
 
     @property
-    def obs_space_size(self) -> int:
-        n = self.dataset.n_features
-
+    def _position_space(self) -> gym.Space:
         match self.config.position_encoding:
             case "int":
-                n += 1
+                return gym.spaces.Box(
+                    low=-1.0,
+                    high=1.0,
+                    shape=(1,),
+                    dtype=self.config.obs_dtype,
+                )
 
             case "ohe":
-                n += self._N_ACTIONS
+                return gym.spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(self._N_ACTIONS,),
+                    dtype=self.config.obs_dtype,
+                )
 
             case _:
                 raise ValueError(f"Invalid position encoding '{self.config.position_encoding}'")
-
-        return n
 
     # General purpose utilities
     @property
@@ -413,7 +495,7 @@ class BasisTradingEnv(gym.Env):
     @property
     def timestamp(self) -> pd.Timestamp:
         assert isinstance(self.ep_dataset, EpDataset)
-        return self.ep_dataset.features.index[self.t]
+        return self.ep_dataset.market_features.index[self.t]
 
     @property
     def trajectory_sec(self) -> int:
@@ -422,7 +504,7 @@ class BasisTradingEnv(gym.Env):
     @property
     def episode_length(self) -> int:
         assert isinstance(self.ep_dataset, EpDataset)
-        return len(self.ep_dataset.features)
+        return len(self.ep_dataset.market_features)
 
     # Terminal index
     @property
@@ -455,7 +537,6 @@ if __name__ == "__main__":
     from gymnasium.utils.env_checker import check_env
 
     from thesis_project.rl.dataset import build_rl_dataset
-    from thesis_project.rl.features import CALENDAR_FEATURES, MARKET_FEATURES_XGB_CLS
 
     warnings.filterwarnings(
         "ignore",
@@ -473,11 +554,11 @@ if __name__ == "__main__":
 
     dataset_config = DatasetConfig(
         ticker="fbtp",
-        n_jobs=4,
+        n_jobs_market=4,
         contract_mode="round",
-        market=MARKET_FEATURES_XGB_CLS,
-        calendar=CALENDAR_FEATURES,
-        calendar_enc=CALENDAR_FEATURES_ENCODED,
+        market_set="xgb_cls",
+        calendar_set="default",
+        calendar_enc_set="default",
     )
 
     env_config = EnvConfig(

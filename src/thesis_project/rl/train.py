@@ -2,50 +2,24 @@ import logging
 from itertools import product
 from pathlib import Path
 
-import gymnasium as gym
 from joblib import Parallel, delayed
 from sb3_contrib import MaskablePPO
-from stable_baselines3.common.monitor import Monitor
 
 from thesis_project import config, rl, utils
-from thesis_project.rl.evaluation import evaluate_model
+from thesis_project.rl.env_factory import (
+    make_evaluation_env,
+    make_training_env,
+)
+from thesis_project.rl.evaluation import evaluate_model_sb3
+from thesis_project.rl.experiment_config import ExperimentConfig
 from thesis_project.utils.io import dump_configs
 from thesis_project.utils.misc import generate_seeds
 
 logger = logging.getLogger(__name__)
 
-# TODO:
-# - Study VecNormalize usage
-# - Address how to avoid normalizing everything
-#   - We can do this if the observation space is of Dict type
-#   - In such case it is enough to specify the keys of the dict to normalize
-# - Address how to use the test normalization in testing
-# - Check that the data collected in input are not normalized
-#   - The actual env is completely agnostic of VecNormalize so this is not a problem
-
-
-BATCH_SIZES = [64, 128, 256, 512]
-CLIP_RANGES = [0.1, 0.2, 0.3]
-
-N_SEED = 5
-TOTAL_TIMESTEPS = 1_000_000
-
-
-def make_env(
-    dataset: rl.env.RLDataset,
-    env_config: rl.env.EnvConfig,
-) -> gym.Env:
-    env = gym.make(
-        "BasisTradingEnv-v0",
-        dataset=dataset,
-        env_config=env_config,
-    )
-
-    return Monitor(env)
-
 
 def train_model(
-    env: gym.Env,
+    env,
     *,
     batch_size: int,
     clip_range: float,
@@ -55,7 +29,7 @@ def train_model(
     tb_log_name: str = "MaskablePPO",
 ) -> MaskablePPO:
     model = MaskablePPO(
-        policy="MlpPolicy",
+        policy="MultiInputPolicy",
         env=env,
         seed=seed,
         batch_size=batch_size,
@@ -77,68 +51,85 @@ def train_evaluate(
     dataset_test: rl.env.RLDataset,
     env_config_random: rl.env.EnvConfig,
     env_config_serial: rl.env.EnvConfig,
+    experiment: ExperimentConfig,
     path: Path,
     batch_size: int,
     clip_range: float,
     seed: int,
-):
+) -> None:
     filename = f"bs_{batch_size}_cr_{clip_range}_{seed}"
 
-    env_train_random = make_env(
+    # Training
+    env_train = make_training_env(
         dataset_train,
         env_config_random,
+        normalize=experiment.normalize_market_obs,
     )
 
-    # Train model
     model = train_model(
-        env_train_random,
+        env_train,
         batch_size=batch_size,
         clip_range=clip_range,
         seed=seed,
-        total_timesteps=TOTAL_TIMESTEPS,
+        total_timesteps=experiment.total_timesteps,
         tensorboard_log=str(path / "tensorboard"),
         tb_log_name=filename,
     )
-    env_train_random.close()
 
-    # Save trained model
-    model.save(path / f"{filename}.zip")
+    # Save model
+    model_path = path / f"{filename}.zip"
+    model.save(model_path)
 
-    # Evaluate the model on train set
-    env_train_serial = make_env(
+    # Save EnvNormalize stats if enabled
+    path_vec_norm = None
+    if experiment.normalize_market_obs:
+        path_vec_norm = path / f"{filename}_vecnormalize.pkl"
+        env_train.save(str(path_vec_norm))  # type: ignore
+
+    env_train.close()
+
+    # Train evaluation
+    env_train_eval = make_evaluation_env(
         dataset_train,
         env_config_serial,
+        normalize=experiment.normalize_market_obs,
+        path=path_vec_norm,
     )
 
-    records = evaluate_model(
+    records = evaluate_model_sb3(
         model,
-        env_train_serial,
+        env_train_eval,
     )
     records.to_parquet(path / f"{filename}_train.parquet")
 
-    # Evaluate the model on test set
-    env_test_serial = make_env(
+    # Test evaluation
+    env_test_eval = make_evaluation_env(
         dataset_test,
         env_config_serial,
+        normalize=experiment.normalize_market_obs,
+        path=path_vec_norm,
     )
 
-    records = evaluate_model(
+    records = evaluate_model_sb3(
         model,
-        env_test_serial,
+        env_test_eval,
     )
     records.to_parquet(path / f"{filename}_test.parquet")
 
     del model
 
 
-def main():
+def main() -> None:
+    experiment_config = ExperimentConfig(
+        split_month="2023-01",
+    )
+
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
-        n_jobs=4,
         contract_mode="round",
-        market=rl.features.MARKET_FEATURES_XGB_CLS,
-        calendar=rl.features.CALENDAR_FEATURES,
-        calendar_enc=rl.features.CALENDAR_FEATURES_ENCODED,
+        market_set="xgb_cls",
+        calendar_set="default",
+        calendar_enc_set="default",
     )
 
     env_config_random = rl.env.EnvConfig(
@@ -157,54 +148,55 @@ def main():
     logger.debug(f"""
     RL analysis:
 
-    - Settings:
-        - {"Ticker:":<15} {dataset_config.ticker}
-        - {"Price:":<15} {env_config_random.price_mode}
-        - {"Contract:":<15} {dataset_config.contract_mode}
+    - Experiment:
+        - {"Split month:":<20} {experiment_config.split_month}
+        - {"Timesteps:":<20} {experiment_config.total_timesteps}
+        - {"Seeds:":<20} {experiment_config.n_seeds}
+        - {"Normalize market:":<20} {experiment_config.normalize_market_obs}
 
     - Dataset:
-        - {"Features:":<15} {dataset_config.n_features}
-            - {"Market features:":<15} {dataset_config.n_market_features}
-            - {"Calendar features:":<15} {dataset_config.n_calendar_features}
-            - {"Calendar features (encoded):":<15} {dataset_config.n_calendar_enc_features}
+        - {"Ticker:":<20} {dataset_config.ticker}
+        - {"Features:":<20} {dataset_config.n_features}
+            - {"Market:":<20} {dataset_config.n_market_features}
+            - {"Calendar:":<20} {dataset_config.n_calendar_features}
+            - {"Calendar enc:":<20} {dataset_config.n_calendar_enc_features}
+        - {"Contract mode:":<20} {dataset_config.contract_mode}
+        - {"Market jobs:":<20} {dataset_config.n_jobs_market}
 
-        - {"Jobs:":<15} {dataset_config.n_jobs}
-
-    - Env:
-        - {"Reset Mode:":<15} {env_config_random.reset_mode}
-        - {"Persistence:":<15} {env_config_random.persistence_min} min
-        - {"Position Encoding:":<15} {env_config_random.position_encoding}
+    - Environment:
+        - {"Price mode:":<20} {env_config_random.price_mode}
+        - {"Persistence:":<20} {env_config_random.persistence_min} min
+        - {"Position encoding:":<20} {env_config_random.position_encoding}
     """)
 
-    dataset = rl.dataset.build_rl_dataset(
-        dataset_config,
-    )
+    dataset = rl.dataset.build_rl_dataset(dataset_config)
 
     dataset_train, dataset_test = rl.dataset.split_rl_dataset(
         dataset,
-        "2023-01",
+        experiment_config.split_month,
     )
 
     del dataset
 
-    root = config.RES_EXP_DIR / "fbtp" / "rl"
+    root = config.RES_EXP_DIR / dataset_config.ticker / "rl"
     path = utils.io.create_run_path(root)
-    seeds = generate_seeds(N_SEED)
+
+    seeds = generate_seeds(
+        experiment_config.n_seeds,
+        seed=experiment_config.seed,
+    )
 
     dump_configs(
         path / "config.json",
+        experiment=experiment_config,
         dataset=dataset_config,
         env_random=env_config_random,
         env_serial=env_config_serial,
-        batch_sizes=BATCH_SIZES,
-        clip_ranges=CLIP_RANGES,
         seeds=seeds,
-        total_timesteps=TOTAL_TIMESTEPS,
     )
 
     for batch_size, clip_range in product(
-        BATCH_SIZES,
-        CLIP_RANGES,
+        experiment_config.batch_sizes, experiment_config.clip_ranges
     ):
         Parallel(
             n_jobs=len(seeds),
@@ -215,6 +207,7 @@ def main():
                 dataset_test,
                 env_config_random,
                 env_config_serial,
+                experiment_config,
                 path,
                 batch_size,
                 clip_range,

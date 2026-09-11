@@ -5,46 +5,57 @@ from typing import get_args
 from thesis_project import config, utils
 from thesis_project.dataset.features_market import FeatureSpec, validate_feature_specs
 from thesis_project.dataset.features_temporal import (
-    CalFeatEncType,
+    CalEncFeatType,
     CalFeatType,
     validate_calendar_encoded_features,
     validate_calendar_features,
 )
+from thesis_project.rl import features
 
 
 @dataclass(frozen=True)
 class DatasetConfig:
     ticker: config.FutTicker
-    n_jobs: int
     contract_mode: config.ContractMode
+    n_jobs_market: int | None = None
 
     min_time: datetime.time = config.DEFAULT_OPENING_TIME
     max_time: datetime.time = config.DEFAULT_CLOSING_TIME
     offsets: dict[config.DateType, tuple[int, int] | None] = field(
-        default_factory=lambda: config.DEFAULT_EXCLUDED_DATES
+        default_factory=lambda: config.DEFAULT_EXCLUDED_DATES.copy()
     )
 
     ctd_contracts: float = 1.0
 
-    market: list[FeatureSpec] = field(default_factory=list)
-    calendar: list[CalFeatType] = field(default_factory=list)
-    calendar_enc: list[CalFeatEncType] = field(default_factory=list)
+    market_set: str = "xgb_cls"
+    calendar_set: str = "default"
+    calendar_enc_set: str = "default"
 
     def __post_init__(self):
         if self.ticker not in get_args(config.FutTicker):
-            raise ValueError("Ticker is not valid")
+            raise ValueError(self.ticker)
+
+        if self.ctd_contracts <= 0:
+            raise ValueError("ctd_contracts must be > 0")
 
         if self.min_time >= self.max_time:
             raise ValueError("min_time must be earlier than max_time")
 
-        if self.market:
-            validate_feature_specs(self.market)
+        if self.market_specs:
+            validate_feature_specs(self.market_specs)
 
-        if self.calendar:
-            validate_calendar_features(self.calendar)
+        if self.calendar_specs:
+            validate_calendar_features(self.calendar_specs)
 
-        if self.calendar_enc:
-            validate_calendar_encoded_features(self.calendar_enc)
+        if self.calendar_enc_specs:
+            validate_calendar_encoded_features(self.calendar_enc_specs)
+
+        if self.n_jobs_market is None:
+            object.__setattr__(
+                self,
+                "n_jobs_market",
+                len(self.market_specs),
+            )
 
     def base_interval(self) -> tuple[datetime.time, datetime.time]:
         return (self.min_time, self.max_time)
@@ -56,20 +67,32 @@ class DatasetConfig:
         return (min_time, max_time)
 
     @property
+    def market_specs(self) -> list[FeatureSpec]:
+        return features.get_market_feature_set(self.market_set)
+
+    @property
+    def calendar_specs(self) -> list[CalFeatType]:
+        return features.get_calendar_feature_set(self.calendar_set)
+
+    @property
+    def calendar_enc_specs(self) -> list[CalEncFeatType]:
+        return features.get_calendar_enc_feature_set(self.calendar_enc_set)
+
+    @property
     def n_market_features(self) -> int:
         count = 0
-        for spec in self.market:
+        for spec in self.market_specs:
             count += spec.n_outputs
 
         return count
 
     @property
     def n_calendar_features(self) -> int:
-        return len(self.calendar)
+        return len(self.calendar_specs)
 
     @property
     def n_calendar_enc_features(self) -> int:
-        return 2 * len(self.calendar)
+        return 2 * len(self.calendar_enc_specs)
 
     @property
     def n_features(self) -> int:
@@ -78,13 +101,13 @@ class DatasetConfig:
     @property
     def features_names(self) -> list[str]:
         names = []
-        for spec in self.market:
+        for spec in self.market_specs:
             names.extend(spec.output_names)
 
-        for name in self.calendar:
+        for name in self.calendar_specs:
             names.append(name)
 
-        for name in self.calendar_enc:
+        for name in self.calendar_enc_specs:
             names.append(f"{name}_sin")
             names.append(f"{name}_cos")
 
