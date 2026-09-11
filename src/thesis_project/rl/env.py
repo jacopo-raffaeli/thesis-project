@@ -542,14 +542,12 @@ if __name__ == "__main__":
         "ignore",
         message=r"WARN: A Box observation space minimum value is -infinity.*",
         category=UserWarning,
-        module=r"gymnasium\.utils\.env_checker",
     )
 
     warnings.filterwarnings(
         "ignore",
         message=r"WARN: A Box observation space maximum value is infinity.*",
         category=UserWarning,
-        module=r"gymnasium\.utils\.env_checker",
     )
 
     dataset_config = DatasetConfig(
