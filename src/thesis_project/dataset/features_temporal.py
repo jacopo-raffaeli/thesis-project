@@ -145,7 +145,7 @@ def encode_second_of_minute(idx: pd.DatetimeIndex) -> Tuple[pd.Series, pd.Series
     return pd.Series(sin, index=idx), pd.Series(cos, index=idx)
 
 
-CalFeatEncType = Literal[
+CalEncFeatType = Literal[
     "hour_of_day",
     "minute_of_day",
     "minute_of_hour",
@@ -156,7 +156,7 @@ CalFeatEncType = Literal[
 
 
 CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
-    CalFeatEncType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
+    CalEncFeatType, Callable[[pd.DatetimeIndex], tuple[pd.Series, pd.Series]]
 ] = {
     "hour_of_day": hour_of_day_encoded,
     "minute_of_day": minute_of_day_encoded,
@@ -167,10 +167,10 @@ CALENDAR_FEATURES_ENCODED_REGISTRY: dict[
 }
 
 
-def validate_calendar_encoded_features(features: list[CalFeatEncType]):
+def validate_calendar_encoded_features(features: list[CalEncFeatType]):
     seen = set()
     for feature in features:
-        if feature not in get_args(CalFeatEncType):
+        if feature not in get_args(CalEncFeatType):
             raise ValueError(feature)
 
         if feature in seen:
@@ -296,9 +296,7 @@ def compute_calendar_features(idx: pd.DatetimeIndex, ids: list[CalFeatType]) -> 
     return pd.DataFrame(features, index=idx)
 
 
-def compute_calendar_features_encoded(
-    idx: pd.DatetimeIndex, ids: list[CalFeatEncType]
-) -> pd.DataFrame:
+def compute_calendar_features_enc(idx: pd.DatetimeIndex, ids: list[CalEncFeatType]) -> pd.DataFrame:
     features: dict[str, pd.Series] = {}
     for id in ids:
         func = CALENDAR_FEATURES_ENCODED_REGISTRY[id]

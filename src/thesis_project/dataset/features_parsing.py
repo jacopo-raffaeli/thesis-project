@@ -3,7 +3,7 @@ from typing import Callable, cast, get_args
 
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.dataset.features_market import FeatureSpec, validate_feature_specs
-from thesis_project.dataset.features_temporal import CalFeatEncType, CalFeatType
+from thesis_project.dataset.features_temporal import CalEncFeatType, CalFeatType
 from thesis_project.dataset.features_transforms import (
     BaseTransform,
     Delta,
@@ -258,11 +258,11 @@ def build_feature_specs(
             calendar.add(name)
             names.remove(name)
 
-        if name.replace("_sin", "") in get_args(CalFeatEncType):
+        if name.replace("_sin", "") in get_args(CalEncFeatType):
             calendar_enc.add(name.replace("_sin", ""))
             names.remove(name)
 
-        if name.replace("_cos", "") in get_args(CalFeatEncType):
+        if name.replace("_cos", "") in get_args(CalEncFeatType):
             calendar_enc.add(name.replace("_cos", ""))
             names.remove(name)
 
