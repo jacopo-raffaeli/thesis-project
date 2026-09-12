@@ -184,16 +184,19 @@ CALENDAR_ENC_FEATURES: list[CalEncFeatType] = [
 ]
 
 MARKET_FEATURE_SETS: dict[str, list[FeatureSpec]] = {
+    "dummy": [FeatureSpec(base_id="basis", transforms=[Identity()])],
     "xgb_cls": MARKET_FEATURES_XGB_CLS,
     "xgb_reg": MARKET_FEATURES_XGB_REG,
     "xgb_reg_it": MARKET_FEATURES_XGB_REG_IT,
 }
 
 CALENDAR_FEATURE_SETS: dict[str, list[CalFeatType]] = {
+    "dummy": [],
     "default": CALENDAR_FEATURES,
 }
 
 CALENDAR_ENC_FEATURE_SETS: dict[str, list[CalEncFeatType]] = {
+    "dummy": [],
     "default": CALENDAR_ENC_FEATURES,
 }
 # fmt: on
