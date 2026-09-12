@@ -468,9 +468,6 @@ def _plot_heatmap(
     close = data.loc[data["terminal"], "timestamp"].iloc[0]
     close_min = close.hour * 60 + close.minute
 
-    print(data["terminal"].dtype)
-    print(data["terminal"].value_counts(dropna=False))
-
     data = data.loc[~data["terminal"]].copy()
 
     data["date"] = data["timestamp"].dt.normalize()
