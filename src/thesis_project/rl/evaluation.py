@@ -13,6 +13,22 @@ def evaluate_episode_gym(
     env: gym.Env,
     episode: int | None = None,
 ) -> list[dict[str, Any]]:
+    """
+    Evaluate one episode using a standard Gymnasium environment.
+
+    The environment is explicitly reset at the beginning of each episode.
+    Unlike SB3 VecEnvs, standard Gymnasium environments do not automatically
+    reset after termination.
+
+    ## Args:
+        * predictor: Policy used to select actions.
+        * env: Gymnasium environment to evaluate.
+        * episode: Optional episode identifier stored in each record.
+
+    ## Returns:
+        * record: A list of trajectory records, including the initial reset
+        record and the final terminal record.
+    """
     records = []
 
     obs, info = env.reset()
@@ -46,6 +62,21 @@ def evaluate_model_gym(
     predictor: Predictor,
     env: gym.Env,
 ) -> pd.DataFrame:
+    """
+    Evaluate a predictor over all dates using a Gymnasium environment.
+
+    The environment is reset once per episode by ``evaluate_episode_gym``.
+    Evaluation requires serial reset mode so that episodes correspond to the
+    dataset dates in chronological order.
+
+    ## Args:
+        * predictor: Policy used to select actions.
+        * env: Gymnasium environment to evaluate.
+
+    ## Returns:
+        * records: DataFrame containing the concatenated trajectory records for
+        all evaluation episodes.
+    """
     config = env.get_wrapper_attr("config")
     dataset = env.get_wrapper_attr("dataset")
 
@@ -73,11 +104,36 @@ def evaluate_model_gym(
 def evaluate_episode_sb3(
     predictor: Predictor,
     env: VecEnv,
+    obs: Any,
     episode: int | None = None,
-) -> list[dict[str, Any]]:
-    records = []
+) -> tuple[list[dict[str, Any]], Any]:
+    """
+    Evaluate one episode using an SB3 VecEnv.
 
-    obs = env.reset()
+    The environment must already have been reset before the first episode.
+    SB3 VecEnvs automatically reset after ``done=True``, so this function must
+    not call ``env.reset()``. The observation returned by the terminal
+    ``step`` is therefore the initial observation of the next episode and is
+    returned to the caller for continued evaluation.
+
+    For ``n_envs=1``, ``infos[0]`` and ``dones[0]`` refer to the single
+    underlying environment. SB3-generated ``TimeLimit.truncated`` and
+    ``terminal_observation`` entries are excluded from the trajectory records.
+
+    ## Args:
+        * predictor: Policy used to select actions.
+        * env: SB3 vectorized environment to evaluate.
+        * obs: Current vectorized observation. For the first episode this must
+          come from ``env.reset()``; afterwards it must be the observation
+          returned by the previous terminal ``step``.
+        * episode: Optional episode identifier stored in each record.
+
+    ## Returns:
+        * record: A tuple containing the episode trajectory records and the
+        current observation, which is already the initial observation of the
+        next episode when the episode has terminated.
+    """
+    records = []
 
     while True:
         action, _ = predictor.predict(
@@ -100,13 +156,30 @@ def evaluate_episode_sb3(
         if dones[0]:
             break
 
-    return records
+    return records, obs
 
 
 def evaluate_model_sb3(
     predictor: Predictor,
     env: VecEnv,
 ) -> pd.DataFrame:
+    """
+    Evaluate a predictor over all dates using an SB3 VecEnv.
+
+    The VecEnv is explicitly reset only once at the beginning. SB3
+    automatically resets the environment after each terminal step, so the
+    observation returned by one episode is passed directly into the next.
+    Evaluation requires serial reset mode so that episodes correspond to the
+    dataset dates in chronological order.
+
+    ## Args:
+        * predictor: Policy used to select actions.
+        * env: SB3 vectorized environment to evaluate.
+
+    ## Returns:
+        * records: DataFrame containing the concatenated trajectory records for
+        all evaluation episodes.
+    """
     config = env.get_attr("config")[0]
     dataset = env.get_attr("dataset")[0]
 
@@ -116,15 +189,16 @@ def evaluate_model_sb3(
         )
 
     records = []
+    obs = env.reset()
 
     for episode in range(dataset.n_dates):
-        records.extend(
-            evaluate_episode_sb3(
-                predictor,
-                env,
-                episode + 1,
-            )
+        episode_records, obs = evaluate_episode_sb3(
+            predictor,
+            env,
+            obs,
+            episode + 1,
         )
+        records.extend(episode_records)
 
     env.close()
 
