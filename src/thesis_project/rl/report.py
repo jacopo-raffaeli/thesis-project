@@ -12,10 +12,22 @@ from thesis_project import config
 Records = dict[int, pd.DataFrame]
 
 
+# TODO:
+# - Confront normalized vs non-normalized market features
+# - Confront different ppo config (batch size, clip_range)
+# - Confront in general 2 or more runs
+
+
 _FIGSIZE_DEFAULT = (12, 6)
 _FIGSIZE_HEATMAP = (14, 8)
 
 PnLType = Literal["net", "gross", "both"]
+
+PNL_TYPE_DICT: dict[PnLType, list[str]] = {
+    "net": ["net"],
+    "gross": ["gross"],
+    "both": ["gross", "net"],
+}
 
 
 def load_records(
@@ -89,7 +101,10 @@ def derive_records(records: pd.DataFrame) -> pd.DataFrame:
 def daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
     data = records.copy()
 
-    daily = data.groupby("episode").agg(
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+    data["date"] = data["timestamp"].dt.normalize()
+
+    daily = data.groupby("date").agg(
         gross_pnl=("gross_reward", "sum"),
         net_pnl=("reward", "sum"),
         cost=("cost", "sum"),
@@ -190,6 +205,17 @@ def aggregate_metrics(
     )
 
 
+def summarize(
+    records: Records,
+) -> pd.DataFrame:
+    metrics = {seed: run_metrics(data) for seed, data in records.items()}
+
+    summary = aggregate_metrics(metrics)
+    summary.attrs["n_seeds"] = len(records)
+
+    return summary
+
+
 def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "both") -> None:
     config.default_plt()
     records = _set_index(records, "timestamp")
@@ -204,68 +230,30 @@ def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "bo
         axis=1,
     )
 
-    net_mean = net.mean(axis=1)
-    gross_mean = gross.mean(axis=1)
-
-    config.default_plt()
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
-    if which == "net":
+    for k in PNL_TYPE_DICT[which]:
         ax.plot(
-            net_mean,
-            label="Net",
-        )
-
-    if which == "gross":
-        ax.plot(
-            gross_mean,
-            label="Gross",
-        )
-
-    if which == "both":
-        ax.plot(
-            gross_mean,
-            label="Gross",
-        )
-
-        ax.plot(
-            net_mean,
-            label="Net",
+            means[k],
+            label=k.capitalize(),
         )
 
     if len(records) > 1:
-        net_std = net.std(axis=1)
-        gross_std = gross.std(axis=1)
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
 
-        if which == "net":
+        for k in PNL_TYPE_DICT[which]:
             ax.fill_between(
-                gross_mean.index,
-                gross_mean - gross_std,
-                gross_mean + gross_std,
-                alpha=0.2,
-            )
-
-        if which == "gross":
-            ax.fill_between(
-                gross_mean.index,
-                gross_mean - gross_std,
-                gross_mean + gross_std,
-                alpha=0.2,
-            )
-
-        if which == "both":
-            ax.fill_between(
-                gross_mean.index,
-                gross_mean - gross_std,
-                gross_mean + gross_std,
-                alpha=0.2,
-            )
-
-            ax.fill_between(
-                net_mean.index,
-                net_mean - net_std,
-                net_mean + net_std,
+                means[k].index,
+                means[k] - stds[k],
+                means[k] + stds[k],
                 alpha=0.2,
             )
 
@@ -324,32 +312,43 @@ def plot_daily_pnl(
     records: Records,
     *,
     label: str | None = None,
+    which: PnLType = "net",
 ) -> None:
     config.default_plt()
-    records = _set_index(records, "timestamp")
 
-    daily = pd.concat(
+    net = pd.concat(
         [daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
     )
 
-    mean = daily.mean(axis=1)
+    gross = pd.concat(
+        [daily_pnl(data)["gross_pnl"].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
 
-    config.default_plt()
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
-    ax.plot(mean)
+    for pnl in PNL_TYPE_DICT[which]:
+        ax.plot(means[pnl], label=pnl.capitalize())
 
     if len(records) > 1:
-        std = daily.std(axis=1)
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
 
-        ax.fill_between(
-            mean.index,
-            mean - std,
-            mean + std,
-            alpha=0.2,
-        )
+        for pnl in PNL_TYPE_DICT[which]:
+            ax.fill_between(
+                means[pnl].index,
+                means[pnl] - stds[pnl],
+                means[pnl] + stds[pnl],
+                alpha=0.2,
+            )
 
     ax.axhline(
         0,
@@ -373,39 +372,51 @@ def plot_drawdown(
     records: Records,
     *,
     label: str | None = None,
+    which: PnLType = "net",
 ) -> None:
     config.default_plt()
     records = _set_index(records, "timestamp")
 
-    data = pd.concat(
+    net = pd.concat(
         [records[seed]["drawdown"].rename(seed) for seed in records],
         axis=1,
     )
 
-    mean = data.mean(axis=1)
+    gross = pd.concat(
+        [records[seed]["gross_drawdown"].rename(seed) for seed in records],
+        axis=1,
+    )
 
-    config.default_plt()
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
-    if len(records) == 1:
-        ax.plot(
-            mean,
-            label="Net",
-        )
-    else:
-        std = data.std(axis=1)
+    for k in PNL_TYPE_DICT[which]:
+        ax.plot(means[k], label=k.capitalize())
 
-        ax.plot(
-            mean,
-            label="Net",
-        )
-        ax.fill_between(
-            mean.index,
-            mean - std,
-            mean + std,
-            alpha=0.2,
-        )
+    if len(records) > 1:
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
+
+        for k in PNL_TYPE_DICT[which]:
+            ax.fill_between(
+                means[k].index,
+                means[k] - stds[k],
+                means[k] + stds[k],
+                alpha=0.2,
+            )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
 
     ax.set_xlabel("Time")
     ax.set_ylabel("€")
@@ -415,6 +426,154 @@ def plot_drawdown(
     ax.spines["right"].set_visible(False)
 
     ax.legend(loc="lower right")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_pnl_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    column = {
+        "net": "cum_reward",
+        "gross": "cum_gross_reward",
+    }[which]
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed, data in records.items():
+        ax.plot(
+            data[column],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"Cumulative {which.capitalize()} PnL per Seed"
+        if label is None
+        else f"Cumulative {which.capitalize()} PnL per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_daily_pnl_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    column = {
+        "net": "net_pnl",
+        "gross": "gross_pnl",
+    }[which]
+
+    daily = pd.concat(
+        [daily_pnl(data)[column].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed in daily.columns:
+        ax.plot(
+            daily.index,
+            daily[seed],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Trading day")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"Daily {which.capitalize()} PnL per Seed"
+        if label is None
+        else f"Daily {which.capitalize()} PnL per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_drawdown_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    column = {
+        "net": "drawdown",
+        "gross": "gross_drawdown",
+    }[which]
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed, data in records.items():
+        ax.plot(
+            data[column],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"{which.capitalize()} Drawdown per Seed"
+        if label is None
+        else f"{which.capitalize()} Drawdown per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
 
     fig.tight_layout()
     plt.show()
@@ -496,55 +655,61 @@ def _plot_heatmap(
         min(times[-1] + persistence_min, close_min),
     )
 
-    if value == "position":
-        matrix = values.to_numpy(float)
+    patch_kwargs = {
+        "edgecolor": "black",
+        "linewidth": 0.5,
+    }
 
-        colors = [
-            "#ff0000",
-            "#ffffff",
-            "#008000",
-        ]
+    match value:
+        case "position":
+            matrix = values.to_numpy(float)
 
-        cmap = ListedColormap(colors)
-        norm = BoundaryNorm(
-            [-1.5, -0.5, 0.5, 1.5],
-            cmap.N,
-        )
+            colors = [
+                "#ff0000",
+                "#ffffff",
+                "#008000",
+            ]
 
-        legend = [
-            Patch(facecolor=colors[0], label="Short"),
-            Patch(facecolor=colors[1], label="Flat"),
-            Patch(facecolor=colors[2], label="Long"),
-        ]
+            cmap = ListedColormap(colors)
+            norm = BoundaryNorm(
+                [-1.5, -0.5, 0.5, 1.5],
+                cmap.N,
+            )
 
-    elif value == "reward":
-        matrix = values.to_numpy(float)
-        matrix = np.where(
-            matrix > 0,
-            1,
-            np.where(matrix < 0, -1, 0),
-        )
+            legend = [
+                Patch(facecolor=colors[0], label="Short", **patch_kwargs),
+                Patch(facecolor=colors[1], label="Flat", **patch_kwargs),
+                Patch(facecolor=colors[2], label="Long", **patch_kwargs),
+            ]
 
-        colors = [
-            "#ff0000",
-            "#ffffff",
-            "#008000",
-        ]
+        case "reward":
+            matrix = values.to_numpy(float)
+            matrix = np.where(
+                matrix > 0,
+                1,
+                np.where(matrix < 0, -1, 0),
+            )
 
-        cmap = ListedColormap(colors)
-        norm = BoundaryNorm(
-            [-1.5, -0.5, 0.5, 1.5],
-            cmap.N,
-        )
+            colors = [
+                "#ff0000",
+                "#ffffff",
+                "#008000",
+            ]
 
-        legend = [
-            Patch(facecolor=colors[0], label="Negative"),
-            Patch(facecolor=colors[1], label="Zero"),
-            Patch(facecolor=colors[2], label="Positive"),
-        ]
+            cmap = ListedColormap(colors)
+            norm = BoundaryNorm(
+                [-1.5, -0.5, 0.5, 1.5],
+                cmap.N,
+            )
 
-    else:
-        raise ValueError(f"Unsupported heatmap value: {value!r}")
+            legend = [
+                Patch(facecolor=colors[0], label="Negative", **patch_kwargs),
+                Patch(facecolor=colors[1], label="Zero", **patch_kwargs),
+                Patch(facecolor=colors[2], label="Positive", **patch_kwargs),
+            ]
+
+        case _:
+            raise ValueError(f"Unsupported heatmap value: {value!r}")
 
     config.default_plt()
 
@@ -564,7 +729,7 @@ def _plot_heatmap(
         0,
         len(values),
         linewidth=0.2,
-        alpha=0.4,
+        alpha=0.6,
         color="black",
     )
 
@@ -599,15 +764,16 @@ def _plot_heatmap(
         ylim=(len(values), 0),
         xlabel="Time of day",
         ylabel="Date",
-        title=title,
     )
+
+    ax.set_title(title, size=12)
 
     ax.spines[["top", "right"]].set_visible(False)
 
     ax.legend(
         handles=legend,
-        loc="center left",
-        bbox_to_anchor=(1.02, 0.5),
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
         frameon=False,
     )
 
@@ -672,11 +838,9 @@ def print_summary(
     n = 22
     n_seeds = metrics.attrs["n_seeds"]
 
-    evaluation = {
-        "n_days": metrics[next(iter(metrics))]["n_days"],
-        "steps_per_day": metrics[next(iter(metrics))]["steps_per_day"],
-        "n_steps": metrics[next(iter(metrics))]["n_steps"],
-    }
+    n_days = metrics.loc["n_days", "mean"]
+    steps_per_day = metrics.loc["steps_per_day", "mean"]
+    n_steps = metrics.loc["n_steps", "mean"]
 
     if metadata:
         print("\nSettings:")
@@ -686,9 +850,9 @@ def print_summary(
     print("\nSummary:")
     if n_seeds > 1:
         print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
-    print(f"- {'Trading days:':<{n}} " f"{evaluation['n_days']:,.0f}")
-    print(f"- {'Steps per day:':<{n}} " f"{evaluation['steps_per_day']:,.0f}")
-    print(f"- {'Total steps:':<{n}} " f"{evaluation['n_steps']:,.0f}")
+    print(f"- {'Trading days:':<{n}} " f"{n_days:,.0f}")
+    print(f"- {'Steps per day:':<{n}} " f"{steps_per_day:,.0f}")
+    print(f"- {'Total steps:':<{n}} " f"{n_steps:,.0f}")
 
     print("\nPnL:")
     print(f"- {'Gross PnL:':<{n}} " f"{_format_metric(metrics, 'gross_pnl')} €")
@@ -775,18 +939,10 @@ def report(
         seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()
     }
 
-    metrics = {
-        seed: run_metrics(
-            data,
-        )
-        for seed, data in records.items()
-    }
-
-    aggregated = aggregate_metrics(metrics)
-    aggregated.attrs["n_seeds"] = len(records)
+    summary = summarize(records)
 
     print_summary(
-        aggregated,
+        summary,
         metadata=metadata,
     )
 
@@ -811,9 +967,28 @@ def report(
         label=label,
     )
 
+    plot_pnl_per_seed(
+        records,
+        which="net",
+        label=label,
+    )
+
+    plot_daily_pnl_per_seed(
+        records,
+        which="net",
+        label=label,
+    )
+
+    plot_drawdown_per_seed(
+        records,
+        which="net",
+        label=label,
+    )
+
     print()
     print()
     print("Action Heatmap:")
+
     plot_action_heatmaps(
         records,
         persistence_min=persistence_min,
@@ -823,6 +998,7 @@ def report(
     print()
     print()
     print("Reward Heatmap:")
+
     plot_reward_heatmaps(
         records,
         persistence_min=persistence_min,
