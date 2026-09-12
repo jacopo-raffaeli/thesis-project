@@ -133,7 +133,7 @@ def main() -> None:
         ticker="fbtp",
         contract_mode="round",
         market_set="xgb_cls",
-        calendar_set="dummy",
+        calendar_set="default",
         calendar_enc_set="default",
     )
 
