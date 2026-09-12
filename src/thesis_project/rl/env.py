@@ -311,62 +311,80 @@ class BasisTradingEnv(gym.Env):
 
     # Info
     def _get_info(self) -> dict[str, Any]:
+        assert isinstance(self.ep_dataset, EpDataset)
         return {
+            # Episode
             "timestamp": self.timestamp,
             "step": self.t,
             "steps_to_go": self._steps_to_go,
+            "terminal": self.terminated,
+            # Portfolio
             "allocation": self.prev_position,
             "position": self.curr_position,
+            # Reward
             "reward": self.reward,
             "gross_reward": self.gross_reward,
             "cost": self.cost,
-            "basis_mid": self._compute_basis(self.t),
-            "basis_spread": self._compute_spread(self.t),
-            "terminal": self.terminated,
+            # CTD
+            "ctd_mid": self._compute_ctd_mid(self.t),
+            "ctd_spread": self._compute_ctd_spread(self.t),
+            "ctd_contracts": self.ep_dataset.ctd_contracts,
+            # FUT
+            "fut_mid": self._compute_fut_mid(self.t),
+            "fut_spread": self._compute_fut_spread(self.t),
+            "fut_contracts": self.ep_dataset.fut_contracts,
+            # Basis
+            "basis_mid": self._compute_basis_mid(self.t),
+            "basis_spread": self._compute_basis_spread(self.t),
         }
 
     # Reward
-    def _compute_basis(self, t: int) -> float:
-        assert isinstance(self.ep_dataset, EpDataset)
-        ctd_mid = (
-            (config.BTP.contract_size / 100)
-            * self.ep_dataset.ctd_contracts
-            * self.ep_dataset.ctd_mid.iloc[t]
-        )
-        fut_mid = (
-            (config.FBTP.contract_size / 100)
-            * self.ep_dataset.fut_contracts
-            * self.ep_dataset.fut_mid.iloc[t]
-        )
-        basis_mid = ctd_mid - fut_mid
-
-        return basis_mid
-
-    def _compute_spread(self, t: int) -> float:
+    def _compute_ctd_mid(self, t: int) -> float:
         assert isinstance(self.ep_dataset, EpDataset)
 
-        ctd_spread = (
-            (config.BTP.contract_size / 100)
-            * self.ep_dataset.ctd_contracts
-            * self.ep_dataset.ctd_spread.iloc[t]
-        )
-        fut_spread = (
-            (config.FBTP.contract_size / 100)
-            * self.ep_dataset.fut_contracts
-            * self.ep_dataset.fut_spread.iloc[t]
-        )
-        basis_spread = ctd_spread + fut_spread
+        return (config.BTP.contract_size / 100) * self.ep_dataset.ctd_mid.iloc[t]
 
-        return basis_spread
+    def _compute_fut_mid(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+
+        return (config.FBTP.contract_size / 100) * self.ep_dataset.fut_mid.iloc[t]
+
+    def _compute_ctd_spread(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+
+        return (config.BTP.contract_size / 100) * self.ep_dataset.ctd_spread.iloc[t]
+
+    def _compute_fut_spread(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+
+        return (config.FBTP.contract_size / 100) * self.ep_dataset.fut_spread.iloc[t]
+
+    def _compute_basis_mid(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+
+        ctd_value = self.ep_dataset.ctd_contracts * self._compute_ctd_mid(t)
+
+        fut_value = self.ep_dataset.fut_contracts * self._compute_fut_mid(t)
+
+        return ctd_value - fut_value
+
+    def _compute_basis_spread(self, t: int) -> float:
+        assert isinstance(self.ep_dataset, EpDataset)
+
+        ctd_spread = self.ep_dataset.ctd_contracts * self._compute_ctd_spread(t)
+
+        fut_spread = self.ep_dataset.fut_contracts * self._compute_fut_spread(t)
+
+        return ctd_spread + fut_spread
 
     def _compute_gross_reward(self, t: int, next_t: int, position: int) -> float:
         assert isinstance(self.ep_dataset, EpDataset)
-        delta = self._compute_basis(next_t) - self._compute_basis(t)
+        delta = self._compute_basis_mid(next_t) - self._compute_basis_mid(t)
 
         return position * delta
 
     def _compute_cost(self, t: int, curr_position: int, prev_position: int) -> float:
-        spread = 0.5 * self._compute_spread(t)
+        spread = 0.5 * self._compute_basis_spread(t)
         size = abs(curr_position - prev_position)
 
         return size * spread
