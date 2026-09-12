@@ -123,26 +123,33 @@ def main() -> None:
     experiment_config = ExperimentConfig(
         split_month="2023-01",
         normalize_market_obs=False,
+        # n_seeds=1,
+        # total_timesteps=10_000,
+        # batch_sizes=(64,),
+        # clip_ranges=(0.2,),
     )
 
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
         contract_mode="round",
         market_set="xgb_cls",
-        calendar_set="default",
+        calendar_set="dummy",
         calendar_enc_set="default",
     )
 
+    price_mode: config.PriceMode = "mid"
+    persistence_min = 10
+
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
-        price_mode="mid",
-        persistence_min=10,
+        price_mode=price_mode,
+        persistence_min=persistence_min,
     )
 
     env_config_serial = rl.env.EnvConfig(
         reset_mode="serial",
-        price_mode="mid",
-        persistence_min=10,
+        price_mode=price_mode,
+        persistence_min=persistence_min,
         trajectory_min=0,
     )
 
@@ -157,12 +164,12 @@ def main() -> None:
 
     - Dataset:
         {"- Ticker:":<20} {dataset_config.ticker}
+        {"- Contract mode:":<20} {dataset_config.contract_mode}
+        {"- Market jobs:":<20} {dataset_config.n_jobs_market}
         {"- Features:":<20} {dataset_config.n_features}
         {"  - Market:":<20} {dataset_config.n_market_features}
         {"  - Calendar:":<20} {dataset_config.n_calendar_features}
         {"  - Calendar enc:":<20} {dataset_config.n_calendar_enc_features}
-        {"- Contract mode:":<20} {dataset_config.contract_mode}
-        {"- Market jobs:":<20} {dataset_config.n_jobs_market}
 
     - Environment:
         {"- Price mode:":<20} {env_config_random.price_mode}
