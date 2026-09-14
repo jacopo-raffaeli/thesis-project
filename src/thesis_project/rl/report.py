@@ -5,6 +5,7 @@ from typing import Any, Literal
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from IPython.display import display
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.patches import Patch
 
@@ -211,6 +212,41 @@ def summarize(
     return summary
 
 
+def compare_summaries(
+    summary_a: pd.DataFrame,
+    summary_b: pd.DataFrame,
+) -> pd.DataFrame:
+    excluded = {
+        "n_days",
+        "n_steps",
+        "steps_per_day",
+    }
+
+    metrics = [metric for metric in summary_a.index if metric not in excluded]
+
+    comparison = pd.DataFrame(
+        {
+            "run_a": summary_a.loc[metrics, "mean"],
+            "run_b": summary_b.loc[metrics, "mean"],
+        }
+    )
+
+    comparison["difference"] = comparison["run_a"] - comparison["run_b"]
+
+    # comparison["relative"] = (
+    #     comparison["difference"]
+    #     / comparison["run_a"].abs()
+    # )
+
+    comparison.index.name = "Metric"
+
+    return comparison
+
+
+def prepare_records(records: Records) -> Records:
+    return {seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()}
+
+
 def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "both") -> None:
     config.default_plt()
     records = _set_index(records, "timestamp")
@@ -272,28 +308,6 @@ def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "bo
     plt.show()
 
 
-def compare_summaries(
-    summary_a: pd.DataFrame,
-    summary_b: pd.DataFrame,
-) -> pd.DataFrame:
-    comparison = pd.DataFrame(
-        {
-            "run_a": summary_a["mean"],
-            "run_b": summary_b["mean"],
-        }
-    )
-
-    comparison["difference"] = comparison["run_b"] - comparison["run_a"]
-
-    comparison["relative"] = comparison["difference"] / comparison["run_a"].abs()
-
-    return comparison
-
-
-def prepare_records(records: Records) -> Records:
-    return {seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()}
-
-
 def plot_pnl_distribution(
     records: Records,
     *,
@@ -305,13 +319,19 @@ def plot_pnl_distribution(
         axis=1,
     )
 
-    config.default_plt()
+    max_abs = daily.abs().max()
+
+    bins = np.linspace(
+        -max_abs,
+        max_abs,
+        31,
+    )
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
 
     ax.hist(
         daily.to_numpy().ravel(),
-        bins=50,
+        bins=bins,  # type: ignore
     )
 
     ax.set_xlabel("Daily PnL")
@@ -847,6 +867,213 @@ def plot_reward_heatmaps(
         )
 
 
+def plot_comparison_pnl(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+    which: Literal["net", "gross"] = "net",
+) -> None:
+    config.default_plt()
+
+    records_a = _set_index(records_a, "timestamp")
+    records_b = _set_index(records_b, "timestamp")
+
+    data = {
+        label_a: pd.concat(
+            [
+                records_a[seed]["cum_reward" if which == "net" else "cum_gross_reward"].rename(seed)
+                for seed in records_a
+            ],
+            axis=1,
+        ),
+        label_b: pd.concat(
+            [
+                records_b[seed]["cum_reward" if which == "net" else "cum_gross_reward"].rename(seed)
+                for seed in records_b
+            ],
+            axis=1,
+        ),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, pnl in data.items():
+        mean = pnl.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(pnl.columns) > 1:
+            std = pnl.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(f"Cumulative {which.capitalize()} PnL")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_pnl_distribution(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+
+    daily_a = pd.concat(
+        [daily_pnl(data)["net_pnl"] for data in records_a.values()],
+        ignore_index=True,
+    )
+
+    daily_b = pd.concat(
+        [daily_pnl(data)["net_pnl"] for data in records_b.values()],
+        ignore_index=True,
+    )
+
+    values = pd.concat([daily_a, daily_b]).dropna()
+
+    max_abs = values.abs().max()
+
+    bins = np.linspace(
+        -max_abs,
+        max_abs,
+        31,
+    )
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(14, 5),
+        sharex=True,
+        sharey=True,
+    )
+
+    axes[0].hist(daily_a.dropna(), bins=bins)
+    axes[0].set_title(label_a)
+    axes[0].set_xlabel("Daily Net PnL")
+    axes[0].set_ylabel("Frequency")
+
+    axes[1].hist(daily_b.dropna(), bins=bins)
+    axes[1].set_title(label_b)
+    axes[1].set_xlabel("Daily Net PnL")
+
+    for ax in axes:
+        # ax.axvline(
+        #     0,
+        #     linewidth=0.5,
+        #     color="black",
+        #     linestyle="--",
+        # )
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    fig.suptitle("Daily Net PnL Distribution")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_daily_pnl(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+
+    daily_a = {seed: daily_pnl(data)["net_pnl"] for seed, data in records_a.items()}
+    daily_b = {seed: daily_pnl(data)["net_pnl"] for seed, data in records_b.items()}
+
+    data = {
+        label_a: pd.concat(daily_a, axis=1),
+        label_b: pd.concat(daily_b, axis=1),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, pnl in data.items():
+        mean = pnl.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(pnl.columns) > 1:
+            std = pnl.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("€")
+    ax.set_title("Daily Net PnL")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_drawdown(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+
+    data = {}
+
+    for label, records in [
+        (label_a, records_a),
+        (label_b, records_b),
+    ]:
+        drawdowns = pd.concat(
+            [records[seed]["drawdown"].rename(seed) for seed in records],
+            axis=1,
+        )
+        data[label] = drawdowns
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, drawdown in data.items():
+        mean = drawdown.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(drawdown.columns) > 1:
+            std = drawdown.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title("Drawdown")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
 def print_summary(
     metrics: pd.DataFrame,
     *,
@@ -939,6 +1166,80 @@ def _format_percentage(
         return f"{mean:.2f} %"
 
     return f"{mean:.2f} ± {std:.2f} %"
+
+
+def _format_comparison(
+    comparison: pd.DataFrame,
+) -> pd.DataFrame:
+    formatted = comparison.astype(object)
+
+    euro_metrics = {
+        "gross_pnl",
+        "net_pnl",
+        "cost",
+        "gross_pnl_per_day",
+        "net_pnl_per_day",
+        "cost_per_day",
+        "daily_pnl_mean",
+        "daily_pnl_std",
+        "max_drawdown",
+        "worst_day",
+        "best_day",
+    }
+
+    percentage_metrics = {
+        "profitable_days",
+        "neutral_days",
+        "losing_days",
+        "short_pct",
+        "flat_pct",
+        "long_pct",
+        "win_rate",
+        "positive_rewards",
+        "zero_rewards",
+        "negative_rewards",
+    }
+
+    integer_metrics = {
+        "short",
+        "flat",
+        "long",
+        "trades",
+        "turnover",
+        "profitable_trades",
+        "neutral_trades",
+        "losing_trades",
+    }
+
+    ratio_metrics = {
+        "sharpe",
+        "sortino",
+    }
+
+    for metric in formatted.index:
+        if metric in euro_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(lambda x: f"€{x:,.2f}")
+
+        elif metric in percentage_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(
+                lambda x: f"{100 * x:.2f}%" if pd.notna(x) else "—"
+            )
+
+        elif metric in integer_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(lambda x: f"{x:,.0f}")
+
+        elif metric in ratio_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(
+                lambda x: f"{x:.2f}" if pd.notna(x) else "—"
+            )
+
+    # formatted["relative"] = comparison["Fve"].map(
+    #     lambda x: f"{100 * x:.2f}%"
+    #     if pd.notna(x)
+    #     else "—"
+    # )
+
+    return formatted
 
 
 def report(
@@ -1120,16 +1421,72 @@ def print_metadata_comparison(
         metadata_b,
     )
 
-    print("\nConfiguration Comparison:")
+    different = different.set_index("parameter")
+    same = same.set_index("parameter")
+
+    print("Configuration Comparison")
 
     print("\nDifferent:")
-    if different.empty:
-        print("None")
-    else:
-        print(different.to_string(index=False))
+    display(different if not different.empty else pd.DataFrame())
 
     print("\nSame:")
-    if same.empty:
-        print("None")
-    else:
-        print(same.to_string(index=False))
+    display(same if not same.empty else pd.DataFrame())
+
+
+def compare_report(
+    records_a: Records,
+    records_b: Records,
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+    which: Literal["net", "gross"] = "net",
+) -> None:
+    records_a = prepare_records(records_a)
+    records_b = prepare_records(records_b)
+
+    summary_a = summarize(records_a)
+    summary_b = summarize(records_b)
+
+    print_metadata_comparison(
+        metadata_a,
+        metadata_b,
+    )
+
+    comparison = compare_summaries(
+        summary_a,
+        summary_b,
+    )
+
+    print("\nPerformance Comparison:")
+    display(_format_comparison(comparison))
+
+    plot_comparison_pnl(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+        which=which,
+    )
+
+    plot_comparison_daily_pnl(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )
+
+    plot_comparison_drawdown(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )
+
+    plot_comparison_pnl_distribution(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )
