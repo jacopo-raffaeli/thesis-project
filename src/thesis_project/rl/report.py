@@ -87,6 +87,19 @@ def derive_records(records: pd.DataFrame) -> pd.DataFrame:
     data["trade"] = data["position"] != data["allocation"]
     data["turnover"] = (data["position"] - data["allocation"]).abs()
 
+    # Compute costs
+    data["ctd_cost_per_contract"] = 0.5 * data["turnover"] * data["ctd_spread"]
+
+    data["ctd_cost"] = data["ctd_cost_per_contract"] * data["ctd_contracts"]
+
+    data["fut_cost_per_contract"] = 0.5 * data["turnover"] * data["fut_spread"]
+
+    data["fut_cost"] = data["fut_cost_per_contract"] * data["fut_contracts"]
+
+    data["basis_cost_per_contract"] = data["ctd_cost_per_contract"] + data["fut_cost_per_contract"]
+
+    data["basis_cost"] = data["ctd_cost"] + data["fut_cost"]
+
     data["profit"] = data["trade"] & (data["reward"] > 0)
     data["neutral"] = data["trade"] & (data["reward"] == 0)
     data["loss"] = data["trade"] & (data["reward"] < 0)
@@ -136,6 +149,11 @@ def run_metrics(
     total_actions = len(records)
     total_trades = records["trade"].sum()
 
+    gross_pnl = records["gross_reward"].sum()
+    ctd_cost = records["ctd_cost"].sum()
+    fut_cost = records["fut_cost"].sum()
+    basis_cost = records["basis_cost"].sum()
+
     traded_records = records.loc[records["trade"]]
 
     profitable_trades = traded_records["profit"].sum()
@@ -181,6 +199,11 @@ def run_metrics(
         "positive_rewards": (records["reward"] > 0).mean(),
         "zero_rewards": (records["reward"] == 0).mean(),
         "negative_rewards": (records["reward"] < 0).mean(),
+        # "basis_cost": records["basis_cost"].sum(),
+        "break_even_cost_per_trade": (gross_pnl / total_trades if total_trades != 0 else np.nan),
+        "ctd_cost_per_trade": (ctd_cost / total_trades if total_trades != 0 else np.nan),
+        "fut_cost_per_trade": (fut_cost / total_trades if total_trades != 0 else np.nan),
+        "basis_cost_per_trade": (basis_cost / total_trades if total_trades != 0 else np.nan),
     }
 
 
@@ -319,7 +342,8 @@ def plot_pnl_distribution(
         axis=1,
     )
 
-    max_abs = daily.abs().max()
+    values = daily.to_numpy().ravel()
+    max_abs = np.abs(values).max()
 
     bins = np.linspace(
         -max_abs,
@@ -664,7 +688,7 @@ def _plot_heatmap(
     close = data.loc[data["terminal"], "timestamp"].iloc[0]
     close_min = close.hour * 60 + close.minute
 
-    data = data.loc[~data["terminal"]].copy()
+    # data = data.loc[~data["terminal"]].copy()
 
     data["date"] = data["timestamp"].dt.normalize()
 
@@ -1092,8 +1116,7 @@ def print_summary(
             print(f"- {key + ':':<{n}} {value}")
 
     print("\nSummary:")
-    if n_seeds > 1:
-        print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
+    print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
     print(f"- {'Trading days:':<{n}} " f"{n_days:,.0f}")
     print(f"- {'Steps per day:':<{n}} " f"{steps_per_day:,.0f}")
     print(f"- {'Total steps:':<{n}} " f"{n_steps:,.0f}")
@@ -1107,8 +1130,8 @@ def print_summary(
 
     print("\nRisk:")
     print(f"- {'Daily volatility:':<{n}} " f"{_format_metric(metrics, 'daily_pnl_std')} €")
-    print(f"- {'Sharpe ratio:':<{n}} " f"{_format_metric(metrics, 'sharpe')}")
-    print(f"- {'Sortino ratio:':<{n}} " f"{_format_metric(metrics, 'sortino')}")
+    # print(f"- {'Sharpe ratio:':<{n}} " f"{_format_metric(metrics, 'sharpe')}")
+    # print(f"- {'Sortino ratio:':<{n}} " f"{_format_metric(metrics, 'sortino')}")
     print(f"- {'Maximum drawdown:':<{n}} " f"{_format_metric(metrics, 'max_drawdown')} €")
     print(f"- {'Worst day:':<{n}} " f"{_format_metric(metrics, 'worst_day')} €")
     print(f"- {'Best day:':<{n}} " f"{_format_metric(metrics, 'best_day')} €")
@@ -1132,6 +1155,18 @@ def print_summary(
     print(f"- {'Positive rewards:':<{n}} " f"{_format_percentage(metrics, 'positive_rewards')}")
     print(f"- {'Zero rewards:':<{n}} " f"{_format_percentage(metrics, 'zero_rewards')}")
     print(f"- {'Negative rewards:':<{n}} " f"{_format_percentage(metrics, 'negative_rewards')}")
+
+    print("\nCost Analysis:")
+    # print(f"- {'Cost:':<{n}} " f"{_format_metric(metrics, 'basis_cost')} €")
+    print(
+        f"- {'Break-even cost per trade:':<{n}} "
+        f"{metrics.loc['break_even_cost_per_trade', 'mean']:,.2f} €"
+    )
+    print(f"- {'CTD cost per trade:':<{n}} " f"{metrics.loc['ctd_cost_per_trade', 'mean']:,.2f} €")
+    print(f"- {'FUT cost per trade:':<{n}} " f"{metrics.loc['fut_cost_per_trade', 'mean']:,.2f} €")
+    print(
+        f"- {'Basis cost per trade:':<{n}} " f"{metrics.loc['basis_cost_per_trade', 'mean']:,.2f} €"
+    )
 
 
 def _format_metric(
@@ -1253,11 +1288,13 @@ def report(
     persistence_min = metadata.get("persistence_min", 10)
     which: PnLType = metadata.get("which", "both")
 
-    records = {
+    heatmap_records = {seed: derive_records(data) for seed, data in records.items()}
+
+    no_reset_records = {
         seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()
     }
 
-    summary = summarize(records)
+    summary = summarize(no_reset_records)
 
     print_summary(
         summary,
@@ -1265,40 +1302,40 @@ def report(
     )
 
     plot_pnl(
-        records,
+        no_reset_records,
         label=label,
         which=which,
     )
 
     plot_pnl_distribution(
-        records,
+        no_reset_records,
         label=label,
     )
 
     plot_daily_pnl(
-        records,
+        no_reset_records,
         label=label,
     )
 
     plot_drawdown(
-        records,
+        no_reset_records,
         label=label,
     )
 
     plot_pnl_per_seed(
-        records,
+        no_reset_records,
         which="net",
         label=label,
     )
 
     plot_daily_pnl_per_seed(
-        records,
+        no_reset_records,
         which="net",
         label=label,
     )
 
     plot_drawdown_per_seed(
-        records,
+        no_reset_records,
         which="net",
         label=label,
     )
@@ -1308,7 +1345,7 @@ def report(
     print("Action Heatmap:")
 
     plot_action_heatmaps(
-        records,
+        heatmap_records,
         persistence_min=persistence_min,
         label=label,
     )
@@ -1318,7 +1355,7 @@ def report(
     print("Reward Heatmap:")
 
     plot_reward_heatmaps(
-        records,
+        heatmap_records,
         persistence_min=persistence_min,
         label=label,
     )
