@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,12 +11,6 @@ from matplotlib.patches import Patch
 from thesis_project import config
 
 Records = dict[int, pd.DataFrame]
-
-
-# TODO:
-# - Confront normalized vs non-normalized market features
-# - Confront different ppo config (batch size, clip_range)
-# - Confront in general 2 or more runs
 
 
 _FIGSIZE_DEFAULT = (12, 6)
@@ -275,6 +270,28 @@ def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "bo
 
     fig.tight_layout()
     plt.show()
+
+
+def compare_summaries(
+    summary_a: pd.DataFrame,
+    summary_b: pd.DataFrame,
+) -> pd.DataFrame:
+    comparison = pd.DataFrame(
+        {
+            "run_a": summary_a["mean"],
+            "run_b": summary_b["mean"],
+        }
+    )
+
+    comparison["difference"] = comparison["run_b"] - comparison["run_a"]
+
+    comparison["relative"] = comparison["difference"] / comparison["run_a"].abs()
+
+    return comparison
+
+
+def prepare_records(records: Records) -> Records:
+    return {seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()}
 
 
 def plot_pnl_distribution(
@@ -1008,3 +1025,111 @@ def report(
 
 def _set_index(records: Records, column: str) -> Records:
     return {seed: record.set_index(column) for seed, record in records.items()}
+
+
+def load_metadata(
+    path: Path,
+    *,
+    batch_size: int,
+    clip_range: float,
+    seeds: list[int],
+    split: str,
+    env: Literal["random", "serial"] = "serial",
+) -> dict[str, Any]:
+    config_file = path / "config.json"
+
+    if not config_file.exists():
+        raise FileNotFoundError(config_file)
+
+    with config_file.open() as file:
+        config = json.load(file)
+
+    experiment = config["experiment"]
+    dataset = config["dataset"]
+    environment = config[f"env_{env}"]
+
+    return {
+        # Experiment
+        "split": split,
+        "split_month": experiment["split_month"],
+        "total_timesteps": experiment["total_timesteps"],
+        "batch_size": batch_size,
+        "clip_range": clip_range,
+        "normalize_market_obs": experiment["normalize_market_obs"],
+        # Dataset
+        "ticker": dataset["ticker"],
+        "contract_mode": dataset["contract_mode"],
+        "ctd_contracts": dataset["ctd_contracts"],
+        "market_set": dataset["market_set"],
+        "calendar_set": dataset["calendar_set"],
+        "calendar_enc_set": dataset["calendar_enc_set"],
+        # Environment
+        "reset_mode": environment["reset_mode"],
+        "price_mode": environment["price_mode"],
+        "persistence_min": environment["persistence_min"],
+        "position_encoding": environment["position_encoding"],
+        "trajectory_min": environment["trajectory_min"],
+        # Seeds
+        "seeds": seeds,
+    }
+
+
+def compare_metadata(
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    keys = sorted(
+        set(metadata_a) | set(metadata_b),
+    )
+
+    different = []
+    same = []
+
+    for key in keys:
+        value_a = metadata_a.get(key)
+        value_b = metadata_b.get(key)
+
+        if value_a == value_b:
+            same.append(
+                {
+                    "parameter": key,
+                    "value": value_a,
+                }
+            )
+        else:
+            different.append(
+                {
+                    "parameter": key,
+                    "run_a": value_a,
+                    "run_b": value_b,
+                }
+            )
+
+    return (
+        pd.DataFrame(different),
+        pd.DataFrame(same),
+    )
+
+
+def print_metadata_comparison(
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+) -> None:
+    different, same = compare_metadata(
+        metadata_a,
+        metadata_b,
+    )
+
+    print("\nConfiguration Comparison:")
+
+    print("\nDifferent:")
+    if different.empty:
+        print("None")
+    else:
+        print(different.to_string(index=False))
+
+    print("\nSame:")
+    if same.empty:
+        print("None")
+    else:
+        print(same.to_string(index=False))
