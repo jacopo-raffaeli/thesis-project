@@ -26,7 +26,7 @@ from thesis_project.dataset.data import BASE_FEATURES
 # ==============================================================================
 
 
-def plot_price(
+def price_ts(
     ticker: config.FutTicker,
     role: config.AssetRole,
     levels: Iterable[int] = (1,),
@@ -62,7 +62,7 @@ def plot_price(
     plt.show()
 
 
-def plot_mid_price(
+def mid_price_ts(
     ticker: config.FutTicker,
     role: config.AssetRole,
     window: tuple[datetime.time, datetime.time] | None = None,
@@ -95,11 +95,52 @@ def plot_mid_price(
 
 
 # ==============================================================================
+# Sizes
+# ==============================================================================
+
+
+def size_ts(
+    ticker: config.FutTicker,
+    role: config.AssetRole,
+    levels: Iterable[int] = (1,),
+    sides: Iterable[config.LobSide] = ("bid", "ask"),
+    window: tuple[datetime.time, datetime.time] | None = None,
+    dates: list[datetime.date] | None = None,
+):
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    for level in levels:
+        for side in sides:
+            name = f"{role}_{side}_size_{level}"
+            path = BASE_FEATURES[name].path
+            data = utils.io.load_filtered_parquet(
+                path,
+                time_window=window,
+                dates_to_include=dates,
+            )
+            data = data.resample("5min").last()
+
+            ax.plot(data, label=name.replace("_", " ").title(), linewidth=0.7)
+
+    ax.set_xlabel("Time")
+
+    ax.set_ylabel("Size")
+
+    ax.set_title(f"{ticker.upper()} {role.upper()} Prices")
+
+    ax.spines[["top", "right"]].set_visible(False)
+
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.show()
+
+
+# ==============================================================================
 # Spreads
 # ==============================================================================
 
 
-def plot_spread(
+def spread_ts(
     ticker: config.FutTicker,
     role: config.AssetRole,
     window: tuple[datetime.time, datetime.time] | None = None,
@@ -122,12 +163,6 @@ def plot_spread(
 
     ax.set_ylabel("Price")
 
-    # start = data.min()
-    # stop = data.max()
-    # step = config.ASSET_BY_TICKER_ROLE[ticker, role].price_tick_perc
-    # yticks = np.arange(start, stop, step).round(2)
-    # ax.set_yticks(yticks)
-
     ax.set_title(f"{ticker.upper()} {role.upper()} Spread")
 
     ax.spines[["top", "right"]].set_visible(False)
@@ -149,8 +184,8 @@ if __name__ == "__main__":
 
     # Dates settings
     min_date = datetime.date(2022, 8, 1)
-    max_date = datetime.date(2023, 8, 1)
+    max_date = datetime.date(2022, 8, 1)
     dates = [min_date + datetime.timedelta(days=i) for i in range((max_date - min_date).days + 1)]
 
-    plot_spread(ticker, "ctd", window=window, dates=dates)
-    plot_spread(ticker, "fut", window=window, dates=dates)
+    size_ts(ticker, "ctd", window=window, dates=dates)
+    size_ts(ticker, "fut", window=window, dates=dates)
