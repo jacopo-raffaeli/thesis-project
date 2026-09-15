@@ -69,6 +69,8 @@ def make_evaluation_env(
     )
 
     vec_env.training = False
+    vec_env.norm_obs = True
     vec_env.norm_reward = False
+    vec_env.norm_obs_keys = ["market"]
 
     return vec_env
