@@ -131,15 +131,15 @@ def main() -> None:
 
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
-        ctd_contracts=10.0,
+        ctd_contracts=1.0,
         contract_mode="round",
         market_set="xgb_cls",
         calendar_set="default",
         calendar_enc_set="default",
     )
 
-    price_mode: config.PriceMode = "quoted"
-    persistence_min = 10
+    price_mode: config.PriceMode = "mid"
+    persistence_min = 1
 
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
