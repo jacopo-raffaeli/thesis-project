@@ -34,13 +34,13 @@ def train_model(
         seed=seed,
         batch_size=batch_size,
         clip_range=clip_range,
-        tensorboard_log=tensorboard_log,
+        # tensorboard_log=tensorboard_log,
     )
 
     model.learn(
         total_timesteps=total_timesteps,
         progress_bar=True,
-        tb_log_name=tb_log_name,
+        # tb_log_name=tb_log_name,
     )
 
     return model
@@ -139,7 +139,7 @@ def main() -> None:
     )
 
     price_mode: config.PriceMode = "mid"
-    persistence_min = 1
+    persistence_min = 30
 
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
