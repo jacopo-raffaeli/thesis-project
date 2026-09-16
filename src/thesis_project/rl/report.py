@@ -1059,6 +1059,8 @@ def plot_comparison_drawdown(
     label_b: str = "Run B",
 ) -> None:
     config.default_plt()
+    records_a = _set_index(records_a, "timestamp")
+    records_b = _set_index(records_b, "timestamp")
 
     data = {}
 
@@ -1103,7 +1105,7 @@ def print_summary(
     *,
     metadata: dict[str, object] | None = None,
 ) -> None:
-    n = 22
+    n = 30
     n_seeds = metrics.attrs["n_seeds"]
 
     n_days = metrics.loc["n_days", "mean"]
@@ -1115,6 +1117,7 @@ def print_summary(
         for key, value in metadata.items():
             print(f"- {key + ':':<{n}} {value}")
 
+    # fmt: off
     print("\nSummary:")
     print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
     print(f"- {'Trading days:':<{n}} " f"{n_days:,.0f}")
@@ -1157,16 +1160,11 @@ def print_summary(
     print(f"- {'Negative rewards:':<{n}} " f"{_format_percentage(metrics, 'negative_rewards')}")
 
     print("\nCost Analysis:")
-    # print(f"- {'Cost:':<{n}} " f"{_format_metric(metrics, 'basis_cost')} €")
-    print(
-        f"- {'Break-even cost per trade:':<{n}} "
-        f"{metrics.loc['break_even_cost_per_trade', 'mean']:,.2f} €"
-    )
-    print(f"- {'CTD cost per trade:':<{n}} " f"{metrics.loc['ctd_cost_per_trade', 'mean']:,.2f} €")
-    print(f"- {'FUT cost per trade:':<{n}} " f"{metrics.loc['fut_cost_per_trade', 'mean']:,.2f} €")
-    print(
-        f"- {'Basis cost per trade:':<{n}} " f"{metrics.loc['basis_cost_per_trade', 'mean']:,.2f} €"
-    )
+    print(f"- {'Break-even cost per trade:':<{n}} " f"{_format_metric(metrics, 'break_even_cost_per_trade')} €")
+    print(f"- {'CTD cost per trade:':<{n}} " f"{_format_metric(metrics, 'ctd_cost_per_trade')} €")
+    print(f"- {'FUT cost per trade:':<{n}} " f"{_format_metric(metrics, 'fut_cost_per_trade')} €")
+    print(f"- {'Basis cost per trade:':<{n}} " f"{_format_metric(metrics, 'basis_cost_per_trade')} €")
+    # fmt: on
 
 
 def _format_metric(
