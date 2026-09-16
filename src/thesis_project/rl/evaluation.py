@@ -105,8 +105,9 @@ def evaluate_episode_sb3(
     predictor: Predictor,
     env: VecEnv,
     obs: Any,
+    reset_info: dict[str, Any],
     episode: int | None = None,
-) -> tuple[list[dict[str, Any]], Any]:
+) -> tuple[list[dict[str, Any]], Any, dict[str, Any]]:
     """
     Evaluate one episode using an SB3 VecEnv.
 
@@ -126,6 +127,7 @@ def evaluate_episode_sb3(
         * obs: Current vectorized observation. For the first episode this must
           come from ``env.reset()``; afterwards it must be the observation
           returned by the previous terminal ``step``.
+        * reset_info: Info from the preivous episode reset
         * episode: Optional episode identifier stored in each record.
 
     ## Returns:
@@ -134,6 +136,12 @@ def evaluate_episode_sb3(
         next episode when the episode has terminated.
     """
     records = []
+
+    # Record reset info.
+    record = reset_info.copy()
+    if episode is not None:
+        record["episode"] = episode
+    records.append(record)
 
     while True:
         action, _ = predictor.predict(
@@ -154,9 +162,11 @@ def evaluate_episode_sb3(
         records.append(info)
 
         if dones[0]:
+            # DummyVecEnv has already reset the underlying environment.
+            reset_info = env.reset_infos[0].copy()
             break
 
-    return records, obs
+    return records, obs, reset_info
 
 
 def evaluate_model_sb3(
@@ -189,13 +199,16 @@ def evaluate_model_sb3(
         )
 
     records = []
+
     obs = env.reset()
+    reset_info = env.reset_infos[0].copy()
 
     for episode in range(dataset.n_dates):
-        episode_records, obs = evaluate_episode_sb3(
+        episode_records, obs, reset_info = evaluate_episode_sb3(
             predictor,
             env,
             obs,
+            reset_info,
             episode + 1,
         )
         records.extend(episode_records)
