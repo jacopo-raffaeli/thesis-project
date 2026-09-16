@@ -291,21 +291,21 @@ class BasisTradingEnv(gym.Env):
         assert isinstance(self.ep_dataset, EpDataset)
 
         observation = {
-            "market": self.dataset.market_features.iloc[self.t].to_numpy(
+            "market": self.ep_dataset.market_features.iloc[self.t].to_numpy(
                 dtype=self.config.obs_dtype
             ),
             "position": self._encoded_position,
         }
 
-        if self.dataset.n_calendar_features > 0:
-            observation["temporal"] = self.dataset.calendar_features.iloc[self.t].to_numpy(
+        if self.ep_dataset.n_calendar_features > 0:
+            observation["temporal"] = self.ep_dataset.calendar_features.iloc[self.t].to_numpy(
                 dtype=self.config.obs_dtype
             )
 
-        if self.dataset.n_calendar_enc_features > 0:
-            observation["temporal_enc"] = self.dataset.calendar_enc_features.iloc[self.t].to_numpy(
-                dtype=self.config.obs_dtype
-            )
+        if self.ep_dataset.n_calendar_enc_features > 0:
+            observation["temporal_enc"] = self.ep_dataset.calendar_enc_features.iloc[
+                self.t
+            ].to_numpy(dtype=self.config.obs_dtype)
 
         return observation
 
