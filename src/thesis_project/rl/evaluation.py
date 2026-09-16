@@ -3,9 +3,16 @@ from typing import Any
 import gymnasium as gym
 import pandas as pd
 from sb3_contrib.common.maskable.utils import get_action_masks
-from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.vec_env import VecEnv, VecNormalize
 
 from thesis_project.rl.policies import Predictor
+
+
+def _get_reset_info(env: VecEnv) -> dict[str, Any]:
+    if isinstance(env, VecNormalize) and isinstance(env.venv, VecEnv):
+        return env.venv.reset_infos[0].copy()
+
+    return env.reset_infos[0].copy()
 
 
 def evaluate_episode_gym(
@@ -127,7 +134,7 @@ def evaluate_episode_sb3(
         * obs: Current vectorized observation. For the first episode this must
           come from ``env.reset()``; afterwards it must be the observation
           returned by the previous terminal ``step``.
-        * reset_info: Info from the preivous episode reset
+        * reset_info: Info from the previous episode reset
         * episode: Optional episode identifier stored in each record.
 
     ## Returns:
@@ -163,7 +170,7 @@ def evaluate_episode_sb3(
 
         if dones[0]:
             # DummyVecEnv has already reset the underlying environment.
-            reset_info = env.reset_infos[0].copy()
+            reset_info = _get_reset_info(env)
             break
 
     return records, obs, reset_info
@@ -190,6 +197,7 @@ def evaluate_model_sb3(
         * records: DataFrame containing the concatenated trajectory records for
         all evaluation episodes.
     """
+
     config = env.get_attr("config")[0]
     dataset = env.get_attr("dataset")[0]
 
@@ -201,7 +209,7 @@ def evaluate_model_sb3(
     records = []
 
     obs = env.reset()
-    reset_info = env.reset_infos[0].copy()
+    reset_info = _get_reset_info(env)
 
     for episode in range(dataset.n_dates):
         episode_records, obs, reset_info = evaluate_episode_sb3(
