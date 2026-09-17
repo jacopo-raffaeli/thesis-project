@@ -1320,23 +1320,24 @@ def report(
         label=label,
     )
 
-    plot_pnl_per_seed(
-        no_reset_records,
-        which="net",
-        label=label,
-    )
+    if len(records) > 1:
+        plot_pnl_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
 
-    plot_daily_pnl_per_seed(
-        no_reset_records,
-        which="net",
-        label=label,
-    )
+        plot_daily_pnl_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
 
-    plot_drawdown_per_seed(
-        no_reset_records,
-        which="net",
-        label=label,
-    )
+        plot_drawdown_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
 
     print()
     print()

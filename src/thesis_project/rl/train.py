@@ -122,7 +122,7 @@ def train_evaluate(
 def main() -> None:
     experiment_config = ExperimentConfig(
         split_month="2023-01",
-        normalize_market_obs=False,
+        normalize_market_obs=True,
         # n_seeds=1,
         # total_timesteps=10_000,
         # batch_sizes=(64,),
@@ -139,7 +139,7 @@ def main() -> None:
     )
 
     price_mode: config.PriceMode = "mid"
-    persistence_min = 30
+    persistence_min = 10
 
     env_config_random = rl.env.EnvConfig(
         reset_mode="random",
