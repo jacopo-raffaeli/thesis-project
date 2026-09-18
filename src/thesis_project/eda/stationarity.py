@@ -8,29 +8,14 @@ from arch.unitroot.unitroot import kpss_crit, mackinnoncrit
 from tqdm.auto import tqdm
 
 from thesis_project import config, utils
+from thesis_project.dataset.data import BASE_FEATURES
+from thesis_project.utils.io import load_filtered_parquet
 
 Trend = Literal["c", "ct"]
 Confidence = Literal["1%", "5%", "10%"]
 
-# ---------------------------------------------------------------------------
-# Defaults
-# ---------------------------------------------------------------------------
-
-DEFAULT_LAGS: dict[str, list[int]] = {
-    "1s": [60, 120, 180],
-    "5s": [12, 24, 36],
-    "10s": [6, 12, 18],
-    "30s": [2, 4, 6],
-    "1min": [5, 10, 15],
-    "5min": [1, 2, 3],
-}
 
 DEFAULT_TRENDS: list[Trend] = ["c", "ct"]
-
-
-# ---------------------------------------------------------------------------
-# Unit-root tests
-# ---------------------------------------------------------------------------
 
 
 def adf(
@@ -394,9 +379,9 @@ def _run_tests(
 def run_stationarity_tests(
     s: pd.Series,
     *,
-    freq_lags_dict: dict[str, list[int]] = DEFAULT_LAGS,
-    trends: list[Trend] = DEFAULT_TRENDS,
     window: Literal["daily", "hourly"] = "daily",
+    trends: list[Trend] = DEFAULT_TRENDS,
+    freq_lags_dict: dict[str, list[int]],
 ) -> pd.DataFrame:
     """
     Run ADF and KPSS tests over daily or hourly windows.
@@ -447,7 +432,7 @@ def save(
     results: pd.DataFrame,
     *,
     ticker: config.FutTicker,
-    series: str,
+    name: str,
     window: Literal["daily", "hourly"],
 ) -> None:
     """
@@ -470,7 +455,7 @@ def save(
         ["frequency", "lags"],
         sort=False,
     ):
-        filename = f"{series}_stationarity_{window}_freq_{frequency}_lags_{n_lags}.parquet"
+        filename = f"{name}_stationarity_{window}_freq_{frequency}_lags_{n_lags}.parquet"
         path = root / filename
 
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -480,7 +465,7 @@ def save(
 def load(
     *,
     ticker: config.FutTicker,
-    series: str,
+    name: str,
     window: Literal["daily", "hourly"],
     frequency: str,
     n_lags: int,
@@ -495,6 +480,29 @@ def load(
     *
     """
     root = config.RES_EXP_DIR / ticker / "stationarity"
-    filename = f"{series}_stationarity_{window}_freq_{frequency}_lags_{n_lags}.parquet"
+    filename = f"{name}_stationarity_{window}_freq_{frequency}_lags_{n_lags}.parquet"
 
     return pd.read_parquet(root / filename)
+
+
+def main(
+    ticker: config.FutTicker,
+    name: str,
+    *,
+    window: Literal["daily", "hourly"],
+    freq_lags_dict: dict[str, list[int]],
+    dates_to_exclude: list[datetime.date],
+):
+    s = load_filtered_parquet(
+        BASE_FEATURES[name].path,
+        dates_to_exclude=dates_to_exclude,
+    )
+
+    results = run_stationarity_tests(s, freq_lags_dict=freq_lags_dict)
+
+    save(
+        results,
+        ticker=ticker,
+        name=name,
+        window=window,
+    )
