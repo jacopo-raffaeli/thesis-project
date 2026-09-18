@@ -47,13 +47,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-FREQ_LAGS_DICT: dict[str, list[int]] = {
-    "1s": [60, 120, 180],
-    "5s": [12, 24, 36],
-    "10s": [6, 12, 18],
-    "30s": [2, 4, 6],
-    "1min": [5, 10, 15],
-    "5min": [1, 2, 3],
+FREQ_LAGS_DICT_DAILY: dict[str, list[int]] = {
+    "1s": [60]
+    # "1s": [10, 30, 60, 300, 600, 900, 1800, 3600, 7200],
+}
+
+FREQ_LAGS_DICT_HOURLY: dict[str, list[int]] = {
+    "1s": [10, 30, 60, 300, 600, 900, 1800],
+}
+
+FREQ_LAGS_DICT: dict[str, dict[str, list[int]]] = {
+    "daily": FREQ_LAGS_DICT_DAILY,
+    "hourly": FREQ_LAGS_DICT_HOURLY,
 }
 
 
@@ -68,7 +73,7 @@ def main():
         ticker=args.ticker,
         name=args.name,
         window=args.window,
-        freq_lags_dict=FREQ_LAGS_DICT,
+        freq_lags_dict=FREQ_LAGS_DICT[args.window],
         dates_to_exclude=dates_to_exclude,
     )
 
