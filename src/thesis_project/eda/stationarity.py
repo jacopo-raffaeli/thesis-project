@@ -157,7 +157,7 @@ def critical_values(
     raise ValueError(f"Unknown test: {test}")
 
 
-def split_daily(s: pd.Series) -> list[tuple[datetime.date, pd.Timestamp, pd.Series]]:
+def split_daily(s: pd.Series) -> list[tuple[datetime.date, datetime.time, pd.Series]]:
     """
     Split a series into one observation window per day.
 
@@ -177,14 +177,14 @@ def split_daily(s: pd.Series) -> list[tuple[datetime.date, pd.Timestamp, pd.Seri
     result = []
 
     for date, group in s.groupby(normalized):
-        result.append((date.date(), group.index[0], group))
+        result.append((date.date(), group.index[0].time(), group))
 
     return result
 
 
 def split_hourly(
     s: pd.Series,
-) -> list[tuple[datetime.date, pd.Timestamp, pd.Series]]:
+) -> list[tuple[datetime.date, datetime.time, pd.Series]]:
     """
     Split a series into non-overlapping, one hour long windows.
 
@@ -218,7 +218,7 @@ def split_hourly(
             )
 
             if len(window):
-                result.append((date.date(), start, window))
+                result.append((date.date(), start.time(), window))
 
     return result
 
@@ -273,11 +273,11 @@ def validate_lags(
         raise ValueError(f"Requested lag is too large for sample size nobs={nobs}: {lags}")
 
 
-def _run_tests_for_lag(
+def _run_tests_single_lag(
     data: pd.Series,
     *,
     date: datetime.date,
-    window_start: pd.Timestamp,
+    window_start: datetime.time,
     frequency: str,
     lag: int,
     trends: list[Trend],
@@ -338,7 +338,7 @@ def _run_tests(
     data: pd.Series,
     *,
     date: datetime.date,
-    window_start: pd.Timestamp,
+    window_start: datetime.time,
     frequency: str,
     lags: list[int],
     trends: list[Trend],
@@ -361,9 +361,9 @@ def _run_tests(
 
     records = []
 
-    for lag in lags:
+    for lag in tqdm(lags, desc="lags", leave=False):
         records.extend(
-            _run_tests_for_lag(
+            _run_tests_single_lag(
                 data,
                 date=date,
                 window_start=window_start,
@@ -404,7 +404,7 @@ def run_stationarity_tests(
 
     records = []
 
-    for frequency, lags in tqdm(freq_lags_dict.items()):
+    for frequency, lags in tqdm(freq_lags_dict.items(), desc="frequency"):
         for date, window_start, data in windows:
             prepared = prepare_series(
                 data,
@@ -459,7 +459,7 @@ def save(
         path = root / filename
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        group.to_parquet(path, index=False)
+        group.drop(columns=["frequency", "lags"]).to_parquet(path, index=False)
 
 
 def load(
@@ -482,7 +482,10 @@ def load(
     root = config.RES_EXP_DIR / ticker / "stationarity"
     filename = f"{name}_stationarity_{window}_freq_{frequency}_lags_{n_lags}.parquet"
 
-    return pd.read_parquet(root / filename)
+    df = pd.read_parquet(root / filename)
+    df = df.set_index(["date"])
+
+    return df
 
 
 def main(
