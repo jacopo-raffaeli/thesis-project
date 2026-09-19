@@ -14,7 +14,6 @@ def cf_ts(
 
     fig, ax = plt.subplots(figsize=(10, 4))
 
-    # Continuous line connecting all segments
     ax.plot(
         df.index,
         df["CF"],
@@ -23,7 +22,6 @@ def cf_ts(
         zorder=1,
     )
 
-    # Class-specific segments
     colors = plt.cm.tab20.colors  # type: ignore
     for i, k in enumerate(df[key].unique()):
         mask = df[key] == k
