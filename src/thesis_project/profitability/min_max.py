@@ -1,5 +1,3 @@
-from typing import Literal
-
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -7,8 +5,6 @@ from thesis_project import config, utils
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.utils.io import load_filtered_parquet
 from thesis_project.utils.misc import align_cf, get_dates_to_exclude
-
-Frequency = Literal["1D", "1W"]
 
 # Analysis parameters
 MIN_TIME = config.DEFAULT_OPENING_TIME
@@ -59,6 +55,21 @@ def load_data(
     assert ctd_mid.index.equals(ctd_spread.index)
     assert ctd_mid.index.equals(fut_spread.index)
 
+    return pd.DataFrame(
+        {
+            "ctd_mid": ctd_mid,
+            "fut_mid": fut_mid,
+            "ctd_spread": ctd_spread,
+            "fut_spread": fut_spread,
+        }
+    )
+
+
+def get_fut_contracts(
+    ticker: config.FutTicker,
+    ctd_contracts: int,
+    reference: pd.DataFrame,
+) -> pd.Series:
     cf = utils.io.load_cf(ticker)["CF"]
 
     fut_contracts = utils.misc.frac_fut_contracts(
@@ -69,9 +80,25 @@ def load_data(
         fut_contracts,
     )
     fut_contracts = align_cf(
-        fut_mid.to_frame(),
+        reference,
         fut_contracts,
     )
+
+    return fut_contracts
+
+
+def preprocess_data(
+    data: pd.DataFrame,
+    ctd_contracts: int,
+    fut_contracts: pd.Series,
+) -> pd.DataFrame:
+    ctd_mid = data["ctd_mid"] * ctd_contracts * CTD_SCALE
+    fut_mid = data["fut_mid"] * fut_contracts * FUT_SCALE
+    basis_mid = ctd_mid - fut_mid
+
+    ctd_spread = data["ctd_spread"] * ctd_contracts * CTD_SCALE
+    fut_spread = data["fut_spread"] * fut_contracts * FUT_SCALE
+    basis_spread = ctd_spread + fut_spread
 
     return pd.DataFrame(
         {
@@ -79,32 +106,8 @@ def load_data(
             "fut_mid": fut_mid,
             "ctd_spread": ctd_spread,
             "fut_spread": fut_spread,
-            "ctd_contracts": ctd_contracts,
-            "fut_contracts": fut_contracts,
-        }
-    )
-
-
-def preprocess_data(
-    data: pd.DataFrame,
-    ctd_contracts: int,
-) -> pd.DataFrame:
-    ctd_side = data["ctd_mid"] * ctd_contracts * CTD_SCALE
-
-    fut_side = data["fut_mid"] * data["fut_contracts"] * FUT_SCALE
-
-    basis = ctd_side - fut_side
-
-    ctd_spread = data["ctd_spread"] * ctd_contracts * CTD_SCALE
-
-    fut_spread = data["fut_spread"] * data["fut_contracts"] * FUT_SCALE
-
-    spread = ctd_spread + fut_spread
-
-    return pd.DataFrame(
-        {
-            "basis": basis,
-            "spread": spread,
+            "basis_mid": basis_mid,
+            "basis_spread": basis_spread,
         },
         index=data.index,
     )
@@ -112,13 +115,13 @@ def preprocess_data(
 
 def analyze(
     data: pd.DataFrame,
-    frequency: Frequency,
+    freq: str,
 ) -> pd.DataFrame:
     if not isinstance(data.index, pd.DatetimeIndex):
         raise TypeError("data must have a DatetimeIndex")
 
     grouped = data.groupby(
-        pd.Grouper(freq=frequency),
+        pd.Grouper(freq=freq),
         sort=True,
     )
 
@@ -128,48 +131,68 @@ def analyze(
         if group.empty:
             continue
 
-        min_time = group["basis"].idxmin()
-        max_time = group["basis"].idxmax()
+        opening_date = group.index[0].date
+        closing_date = group.index[-1].date
 
-        min_basis = group.loc[min_time, "basis"]
-        max_basis = group.loc[max_time, "basis"]
+        min_time = group["basis_mid"].idxmin()
+        max_time = group["basis_mid"].idxmax()
 
-        min_spread = group.loc[min_time, "spread"]
-        max_spread = group.loc[max_time, "spread"]
+        # Min mid prices
+        min_ctd_mid = group.loc[min_time, "ctd_mid"]
+        min_fut_mid = group.loc[min_time, "fut_mid"]
+        min_basis_mid = group.loc[min_time, "basis_mid"]
 
-        if min_time < max_time:
+        # Max mid prices
+        max_ctd_mid = group.loc[max_time, "ctd_mid"]
+        max_fut_mid = group.loc[max_time, "fut_mid"]
+        max_basis_mid = group.loc[max_time, "basis_mid"]
+
+        # Min spread
+        min_ctd_spread = group.loc[min_time, "ctd_spread"]
+        min_fut_spread = group.loc[min_time, "fut_spread"]
+        min_basis_spread = group.loc[min_time, "basis_spread"]
+
+        # Max spread
+        max_ctd_spread = group.loc[max_time, "ctd_spread"]
+        max_fut_spread = group.loc[max_time, "fut_spread"]
+        max_basis_spread = group.loc[max_time, "basis_spread"]
+
+        if min_time < max_time:  # type: ignore
             direction = "long"
             entry_time = min_time
             exit_time = max_time
-            entry_basis = min_basis
-            exit_basis = max_basis
+            entry_basis = min_basis_mid
+            exit_basis = max_basis_mid
 
-        elif max_time < min_time:
+        if min_time > max_time:  # type: ignore
             direction = "short"
             entry_time = max_time
             exit_time = min_time
-            entry_basis = max_basis
-            exit_basis = min_basis
+            entry_basis = max_basis_mid
+            exit_basis = min_basis_mid
 
-        else:
-            continue
-
-        gross_pnl = abs(max_basis - min_basis)  # type: ignore
-
-        cost = (
-            min_spread / 2  # type: ignore
-            + max_spread / 2  # type: ignore
-        )
+        gross_pnl = abs(max_basis_mid - min_basis_mid)  # type: ignore
+        cost = (min_basis_spread + max_basis_spread) / 2  # type: ignore
 
         rows.append(
             {
                 "period": period,
+                "opening_date": opening_date,
+                "closing_date": closing_date,
                 "min_time": min_time,
                 "max_time": max_time,
-                "min_basis": min_basis,
-                "max_basis": max_basis,
-                "min_spread": min_spread,
-                "max_spread": max_spread,
+                "min_ctd_mid": min_ctd_mid,
+                "min_fut_mid": min_fut_mid,
+                "min_basis_mid": min_basis_mid,
+                "max_ctd_mid": max_ctd_mid,
+                "max_fut_mid": max_fut_mid,
+                "max_basis_mid": max_basis_mid,
+                "min_ctd_spread": min_ctd_spread,
+                "min_fut_spread": min_fut_spread,
+                "min_basis_spread": min_basis_spread,
+                "max_ctd_spread": max_ctd_spread,
+                "max_fut_spread": max_fut_spread,
+                "max_basis_spread": max_basis_spread,
                 "direction": direction,
                 "entry_time": entry_time,
                 "exit_time": exit_time,
@@ -185,13 +208,21 @@ def analyze(
     result = pd.DataFrame(rows).set_index("period")
 
     monetary_columns = [
-        "min_basis",
-        "max_basis",
+        "min_ctd_mid",
+        "min_fut_mid",
+        "min_basis_mid",
+        "max_ctd_mid",
+        "max_fut_mid",
+        "max_basis_mid",
         "entry_basis",
         "exit_basis",
         "gross_pnl",
-        "min_spread",
-        "max_spread",
+        "min_ctd_spread",
+        "min_fut_spread",
+        "min_basis_spread",
+        "max_ctd_spread",
+        "max_fut_spread",
+        "max_basis_spread",
         "cost",
         "net_pnl",
     ]
@@ -236,12 +267,12 @@ def plot_extrema(result: pd.DataFrame) -> None:
 
     ax.plot(
         result.index,
-        result["max_basis"],
+        result["max_basis_mid"],
         label="Max Basis",
     )
     ax.plot(
         result.index,
-        result["min_basis"],
+        result["min_basis_mid"],
         label="Min Basis",
     )
 
@@ -263,12 +294,12 @@ def plot_spreads(result: pd.DataFrame) -> None:
 
     ax.plot(
         result.index,
-        result["max_spread"],
+        result["max_basis_spread"],
         label="Spread at Max Basis",
     )
     ax.plot(
         result.index,
-        result["min_spread"],
+        result["min_basis_spread"],
         label="Spread at Min Basis",
     )
 
@@ -286,23 +317,23 @@ def plot_spreads(result: pd.DataFrame) -> None:
 
 
 def run(
-    ticker: config.FutTicker,
-    ctd_contracts: int,
-    frequency: Frequency,
+    *,
+    ticker: config.FutTicker = "fbtp",
+    ctd_contracts: int = 1,
+    freq: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     raw = load_data(
         ticker=ticker,
         ctd_contracts=ctd_contracts,
     )
 
-    data = preprocess_data(
-        raw,
-        ctd_contracts=ctd_contracts,
-    )
+    fut_contracts = get_fut_contracts(ticker, ctd_contracts, raw)
+
+    data = preprocess_data(data=raw, ctd_contracts=ctd_contracts, fut_contracts=fut_contracts)
 
     result = analyze(
         data,
-        frequency=frequency,
+        freq=freq,
     )
 
     summary = make_summary(result)
@@ -313,3 +344,7 @@ def run(
     plot_spreads(result)
 
     return result, summary
+
+
+if __name__ == "__main__":
+    run(freq="3D")
