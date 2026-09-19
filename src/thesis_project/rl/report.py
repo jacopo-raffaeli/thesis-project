@@ -89,20 +89,24 @@ def derive_records(records: pd.DataFrame) -> pd.DataFrame:
 
     # Compute costs
     data["ctd_cost_per_contract"] = 0.5 * data["turnover"] * data["ctd_spread"]
-
     data["ctd_cost"] = data["ctd_cost_per_contract"] * data["ctd_contracts"]
-
     data["fut_cost_per_contract"] = 0.5 * data["turnover"] * data["fut_spread"]
-
     data["fut_cost"] = data["fut_cost_per_contract"] * data["fut_contracts"]
-
     data["basis_cost_per_contract"] = data["ctd_cost_per_contract"] + data["fut_cost_per_contract"]
-
     data["basis_cost"] = data["ctd_cost"] + data["fut_cost"]
 
+    # Compute trades by PnL
     data["profit"] = data["trade"] & (data["reward"] > 0)
     data["neutral"] = data["trade"] & (data["reward"] == 0)
     data["loss"] = data["trade"] & (data["reward"] < 0)
+
+    # Compute notionals
+    data["ctd_notional"] = data["ctd_contracts"] * config.BTP.contract_size
+    data["fut_notional"] = data["fut_contracts"] * config.FBTP.contract_size
+    data["notional"] = data["ctd_notional"] + data["fut_notional"]
+
+    # Compute returns
+    data["ctd"]
 
     return data
 
