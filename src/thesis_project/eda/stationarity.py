@@ -405,7 +405,7 @@ def run_stationarity_tests(
     records = []
 
     for frequency, lags in tqdm(freq_lags_dict.items(), desc="frequency"):
-        for date, window_start, data in windows:
+        for date, window_start, data in tqdm(windows, desc="date", leave=False):
             prepared = prepare_series(
                 data,
                 frequency=frequency,
