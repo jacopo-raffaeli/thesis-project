@@ -68,9 +68,8 @@ def derive_records(records: pd.DataFrame) -> pd.DataFrame:
 
     # Order data
     data["timestamp"] = pd.to_datetime(data["timestamp"])
-    data = data.sort_values(
-        ["episode", "timestamp"],
-    ).reset_index(drop=True)
+    data = data.sort_values(["episode", "timestamp"])
+    data = data.reset_index(drop=True)
 
     # Compute cumulative rewards
     data["cum_reward"] = data["reward"].cumsum()
@@ -106,12 +105,13 @@ def derive_records(records: pd.DataFrame) -> pd.DataFrame:
     data["notional"] = data["ctd_notional"] + data["fut_notional"]
 
     # Compute returns
-    data["ctd"]
+    data["gross_return"] = data["gross_reward"] / data["notional"]
+    data["return"] = data["reward"] / data["notional"]
 
     return data
 
 
-def daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
+def agg_daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
     data = records.copy()
 
     data["timestamp"] = pd.to_datetime(data["timestamp"])
@@ -126,27 +126,61 @@ def daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
     return daily
 
 
+def agg_daily_return(records: pd.DataFrame) -> pd.DataFrame:
+    data = records.copy()
+
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+    data["date"] = data["timestamp"].dt.normalize()
+
+    daily = data.groupby("date").agg(
+        gross_return=("gross_return", "sum"),
+        net_return=("return", "sum"),
+    )
+
+    return daily
+
+
 def run_metrics(
     records: pd.DataFrame,
 ) -> dict[str, float]:
     _TRADING_DAYS = 252
     _ANNUALIZATION = np.sqrt(_TRADING_DAYS)
 
-    daily = daily_pnl(records)
+    daily_pnls = agg_daily_pnl(records)
+    daily_returns = agg_daily_return(records)
 
-    daily_returns = daily["net_pnl"]
+    # Daily returns
+    gross_daily_returns = daily_returns["gross_return"]
+    net_daily_returns = daily_returns["net_return"]
 
-    daily_mean = daily_returns.mean()
-    daily_std = daily_returns.std()
+    daily_return_mean = net_daily_returns.mean()
+    daily_return_std = net_daily_returns.std()
 
-    sortino_target = 0.0
-    downside = daily_returns[daily_returns < sortino_target] - sortino_target
-
+    rf_rate = 0.0
+    downside = net_daily_returns[net_daily_returns < rf_rate] - rf_rate
     downside_std = np.sqrt(np.mean(downside.pow(2)))
 
-    cumulative = daily_returns.cumsum()
-    running_max = cumulative.cummax()
-    daily_drawdown = cumulative - running_max
+    sharpe = (
+        (daily_return_mean - rf_rate) / daily_return_std * _ANNUALIZATION
+        if daily_return_std != 0
+        else np.nan
+    )
+
+    sortino = (
+        (daily_return_mean - rf_rate) / downside_std * _ANNUALIZATION
+        if downside_std != 0
+        else np.nan
+    )
+
+    # Monetary daily statistics
+    daily_pnl = daily_pnls["net_pnl"]
+    daily_pnl_mean = daily_pnl.mean()
+    daily_pnl_std = daily_pnl.std()
+
+    # Monetary drawdown
+    cumulative_pnl = daily_pnl.cumsum()
+    running_max = cumulative_pnl.cummax()
+    daily_drawdown = cumulative_pnl - running_max
 
     action_counts = records["position"].value_counts()
 
@@ -165,45 +199,55 @@ def run_metrics(
     losing_trades = traded_records["loss"].sum()
 
     return {
-        "n_days": float(len(daily)),
+        "n_days": float(len(daily_pnls)),
         "n_steps": float(len(records)),
-        "steps_per_day": float(len(records) / len(daily)),
-        "gross_pnl": records["gross_reward"].sum(),
+        "steps_per_day": float(len(records) / len(daily_pnls)),
+        # PnL
+        "gross_pnl": gross_pnl,
         "net_pnl": records["reward"].sum(),
         "cost": records["cost"].sum(),
-        "gross_pnl_per_day": daily["gross_pnl"].mean(),
-        "net_pnl_per_day": daily["net_pnl"].mean(),
-        "cost_per_day": daily["cost"].mean(),
-        "daily_pnl_mean": daily_mean,
-        "daily_pnl_std": daily_std,
-        "sharpe": (daily_mean / daily_std * _ANNUALIZATION if daily_std != 0 else np.nan),
-        "sortino": (
-            (daily_mean - sortino_target) / downside_std * _ANNUALIZATION
-            if downside_std != 0
-            else np.nan
-        ),
+        "gross_pnl_per_day": daily_pnls["gross_pnl"].mean(),
+        "net_pnl_per_day": daily_pnls["net_pnl"].mean(),
+        "cost_per_day": daily_pnls["cost"].mean(),
+        # Daily returns
+        "gross_return_mean": gross_daily_returns.mean(),
+        "net_return_mean": daily_return_mean,
+        "net_return_std": daily_return_std,
+        # Annualized metrics
+        "annualized_return": daily_return_mean * _TRADING_DAYS,
+        "annualized_volatility": daily_return_std * _ANNUALIZATION,
+        # Risk-adjusted returns
+        "sharpe": sharpe,
+        "sortino": sortino,
+        # Monetary daily statistics
+        "daily_pnl_mean": daily_pnl_mean,
+        "daily_pnl_std": daily_pnl_std,
+        # Monetary drawdown
         "max_drawdown": daily_drawdown.min(),
-        "worst_day": daily_returns.min(),
-        "best_day": daily_returns.max(),
-        "profitable_days": (daily_returns > 0).mean(),
-        "neutral_days": (daily_returns == 0).mean(),
-        "losing_days": (daily_returns < 0).mean(),
+        "worst_day": daily_pnl.min(),
+        "best_day": daily_pnl.max(),
+        "profitable_days": (daily_pnl > 0).mean(),
+        "neutral_days": (daily_pnl == 0).mean(),
+        "losing_days": (daily_pnl < 0).mean(),
+        # Actions
         "short": float(action_counts.get(-1, 0)),
         "flat": float(action_counts.get(0, 0)),
         "long": float(action_counts.get(1, 0)),
-        "short_pct": (action_counts.get(-1, 0) / total_actions),
-        "flat_pct": (action_counts.get(0, 0) / total_actions),
-        "long_pct": (action_counts.get(1, 0) / total_actions),
+        "short_pct": action_counts.get(-1, 0) / total_actions,
+        "flat_pct": action_counts.get(0, 0) / total_actions,
+        "long_pct": action_counts.get(1, 0) / total_actions,
+        # Trades
         "trades": float(total_trades),
         "turnover": records["turnover"].sum(),
         "profitable_trades": float(profitable_trades),
         "neutral_trades": float(neutral_trades),
         "losing_trades": float(losing_trades),
         "win_rate": (profitable_trades / total_trades if total_trades != 0 else np.nan),
-        "positive_rewards": (records["reward"] > 0).mean(),
-        "zero_rewards": (records["reward"] == 0).mean(),
-        "negative_rewards": (records["reward"] < 0).mean(),
-        # "basis_cost": records["basis_cost"].sum(),
+        # Step returns
+        "positive_returns": (records["return"] > 0).mean(),
+        "zero_returns": (records["return"] == 0).mean(),
+        "negative_returns": (records["return"] < 0).mean(),
+        # Costs
         "break_even_cost_per_trade": (gross_pnl / total_trades if total_trades != 0 else np.nan),
         "ctd_cost_per_trade": (ctd_cost / total_trades if total_trades != 0 else np.nan),
         "fut_cost_per_trade": (fut_cost / total_trades if total_trades != 0 else np.nan),
@@ -342,7 +386,7 @@ def plot_pnl_distribution(
 ) -> None:
     config.default_plt()
     daily = pd.concat(
-        [daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
+        [agg_daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
     )
 
@@ -382,12 +426,12 @@ def plot_daily_pnl(
     config.default_plt()
 
     net = pd.concat(
-        [daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
+        [agg_daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
     )
 
     gross = pd.concat(
-        [daily_pnl(data)["gross_pnl"].rename(seed) for seed, data in records.items()],
+        [agg_daily_pnl(data)["gross_pnl"].rename(seed) for seed, data in records.items()],
         axis=1,
     )
 
@@ -557,7 +601,7 @@ def plot_daily_pnl_per_seed(
     }[which]
 
     daily = pd.concat(
-        [daily_pnl(data)[column].rename(seed) for seed, data in records.items()],
+        [agg_daily_pnl(data)[column].rename(seed) for seed, data in records.items()],
         axis=1,
     )
 
@@ -961,12 +1005,12 @@ def plot_comparison_pnl_distribution(
     config.default_plt()
 
     daily_a = pd.concat(
-        [daily_pnl(data)["net_pnl"] for data in records_a.values()],
+        [agg_daily_pnl(data)["net_pnl"] for data in records_a.values()],
         ignore_index=True,
     )
 
     daily_b = pd.concat(
-        [daily_pnl(data)["net_pnl"] for data in records_b.values()],
+        [agg_daily_pnl(data)["net_pnl"] for data in records_b.values()],
         ignore_index=True,
     )
 
@@ -1021,8 +1065,8 @@ def plot_comparison_daily_pnl(
 ) -> None:
     config.default_plt()
 
-    daily_a = {seed: daily_pnl(data)["net_pnl"] for seed, data in records_a.items()}
-    daily_b = {seed: daily_pnl(data)["net_pnl"] for seed, data in records_b.items()}
+    daily_a = {seed: agg_daily_pnl(data)["net_pnl"] for seed, data in records_a.items()}
+    daily_b = {seed: agg_daily_pnl(data)["net_pnl"] for seed, data in records_b.items()}
 
     data = {
         label_a: pd.concat(daily_a, axis=1),
@@ -1136,9 +1180,11 @@ def print_summary(
     print(f"- {'Net PnL / day:':<{n}} " f"{_format_metric(metrics, 'net_pnl_per_day')} €")
 
     print("\nRisk:")
-    print(f"- {'Daily volatility:':<{n}} " f"{_format_metric(metrics, 'daily_pnl_std')} €")
-    # print(f"- {'Sharpe ratio:':<{n}} " f"{_format_metric(metrics, 'sharpe')}")
-    # print(f"- {'Sortino ratio:':<{n}} " f"{_format_metric(metrics, 'sortino')}")
+    print(f"- {'Daily PnL volatility:':<{n}} " f"{_format_metric(metrics, 'daily_pnl_std')} €")
+    print(f"- {'Annualized return:':<{n}} " f"{_format_percentage(metrics, 'annualized_return')}")
+    print(f"- {'Annualized volatility:':<{n}} " f"{_format_percentage(metrics, 'annualized_volatility')}")
+    print(f"- {'Sharpe ratio:':<{n}} " f"{_format_metric(metrics, 'sharpe')}")
+    print(f"- {'Sortino ratio:':<{n}} " f"{_format_metric(metrics, 'sortino')}")
     print(f"- {'Maximum drawdown:':<{n}} " f"{_format_metric(metrics, 'max_drawdown')} €")
     print(f"- {'Worst day:':<{n}} " f"{_format_metric(metrics, 'worst_day')} €")
     print(f"- {'Best day:':<{n}} " f"{_format_metric(metrics, 'best_day')} €")
@@ -1158,10 +1204,10 @@ def print_summary(
     print(f"- {'Losing trades:':<{n}} " f"{_format_metric(metrics, 'losing_trades')}")
     print(f"- {'Win rate:':<{n}} " f"{_format_percentage(metrics, 'win_rate')}")
 
-    print("\nRewards:")
-    print(f"- {'Positive rewards:':<{n}} " f"{_format_percentage(metrics, 'positive_rewards')}")
-    print(f"- {'Zero rewards:':<{n}} " f"{_format_percentage(metrics, 'zero_rewards')}")
-    print(f"- {'Negative rewards:':<{n}} " f"{_format_percentage(metrics, 'negative_rewards')}")
+    print("\nReturns:")
+    print(f"- {'Positive returns:':<{n}} " f"{_format_percentage(metrics, 'positive_returns')}")
+    print(f"- {'Zero returns:':<{n}} " f"{_format_percentage(metrics, 'zero_returns')}")
+    print(f"- {'Negative returns:':<{n}} " f"{_format_percentage(metrics, 'negative_returns')}")
 
     print("\nCost Analysis:")
     print(f"- {'Break-even cost per trade:':<{n}} " f"{_format_metric(metrics, 'break_even_cost_per_trade')} €")
