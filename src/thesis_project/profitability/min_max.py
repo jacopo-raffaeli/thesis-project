@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from IPython.display import display
 
 from thesis_project import config, utils
 from thesis_project.dataset.data import BASE_FEATURES
@@ -131,8 +132,8 @@ def analyze(
         if group.empty:
             continue
 
-        opening_date = group.index[0].date
-        closing_date = group.index[-1].date
+        opening_date = group.index[0].date()
+        closing_date = group.index[-1].date()
 
         min_time = group["basis_mid"].idxmin()
         max_time = group["basis_mid"].idxmax()
@@ -338,7 +339,7 @@ def run(
 
     summary = make_summary(result)
 
-    print(summary)
+    display(summary)
 
     plot_extrema(result)
     plot_spreads(result)
