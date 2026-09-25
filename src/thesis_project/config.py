@@ -128,6 +128,10 @@ class AssetConfig:
     def price_tick_euro(self) -> float:
         return self.contract_size * (self.price_tick_perc / 100)
 
+    @property
+    def scale(self) -> float:
+        return self.contract_size / self.par_value
+
 
 BTP = AssetConfig(
     symbol="btp",
