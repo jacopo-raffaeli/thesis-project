@@ -8,6 +8,78 @@ from thesis_project.dataset.features_transforms import (
 )
 
 # fmt: off
+BASELINE: list[FeatureSpec] = [
+    FeatureSpec(
+        base_id="basis",
+        transforms=[
+            Identity(
+                lags=[60, 300],
+            ),
+            Delta(
+                deltas=[60],
+                lags=[60, 300],
+            ),
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_mid_price",
+        transforms=[
+            Identity(),
+            Delta(
+                deltas=[60],
+                lags=[60, 300],
+            ),
+        ],
+    ),
+    FeatureSpec(
+        base_id="fut_mid_price",
+        transforms=[
+            Identity(),
+            Delta(
+                deltas=[60],
+                lags=[60, 300],
+            ),
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_obi_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+    FeatureSpec(
+        base_id="fut_obi_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_bof_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+    FeatureSpec(
+        base_id="fut_bof_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+    FeatureSpec(
+        base_id="ctd_aof_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+    FeatureSpec(
+        base_id="fut_aof_1",
+        transforms=[
+            Identity(),
+        ],
+    ),
+]
+
+
 MARKET_FEATURES_XGB_CLS: list[FeatureSpec] = [
     FeatureSpec(
         base_id="basis",
@@ -185,6 +257,7 @@ CALENDAR_ENC_FEATURES: list[CalEncFeatType] = [
 
 MARKET_FEATURE_SETS: dict[str, list[FeatureSpec]] = {
     "dummy": [FeatureSpec(base_id="basis", transforms=[Identity()])],
+    "baseline": BASELINE,
     "xgb_cls": MARKET_FEATURES_XGB_CLS,
     "xgb_reg": MARKET_FEATURES_XGB_REG,
     "xgb_reg_it": MARKET_FEATURES_XGB_REG_IT,
