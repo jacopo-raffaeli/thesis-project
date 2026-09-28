@@ -81,6 +81,22 @@ class RLDataset:
     def n_dates(self) -> int:
         return len(self.dates)
 
+    @property
+    def ctd_bid(self) -> pd.Series:
+        return (self.ctd_mid - self.ctd_spread) / 2
+
+    @property
+    def ctd_ask(self) -> pd.Series:
+        return (self.ctd_mid + self.ctd_spread) / 2
+
+    @property
+    def fut_bid(self) -> pd.Series:
+        return (self.fut_mid - self.fut_spread) / 2
+
+    @property
+    def fut_ask(self) -> pd.Series:
+        return (self.fut_mid + self.fut_spread) / 2
+
 
 @dataclass(frozen=True)
 class EpDataset:
