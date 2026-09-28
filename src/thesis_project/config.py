@@ -315,6 +315,13 @@ DEFAULT_EXCLUDED_DATES: dict[DateType, tuple[int, int] | None] = {
 def default_plt():
     plt.rcdefaults()
     plt.style.use("seaborn-v0_8-paper")
+    plt.rcParams.update(
+        {
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "savefig.format": "png",
+        }
+    )
 
 
 # Apply default settings
