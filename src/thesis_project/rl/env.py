@@ -215,7 +215,7 @@ class BasisTradingEnv(gym.Env):
                 dtype=env_config.obs_dtype,
             )
 
-        # Using a dict allow to easily normalize only certain families of features
+        # Define observation space
         self.observation_space = gym.spaces.Dict(spaces)
 
         # Define action space
@@ -237,7 +237,7 @@ class BasisTradingEnv(gym.Env):
         # Reset date and trajectory
         self.date = self._reset_date()
         self.trajectory_min = self._reset_trajectory()
-        self.t = self.trajectory_sec
+        self.t = self._trajectory_sec
         self.ep_dataset = self._build_episode_rl_dataset()
 
         if self.t >= self.ep_dataset.episode_length:
@@ -256,7 +256,7 @@ class BasisTradingEnv(gym.Env):
 
         # Compute reward
         step_reward = self._compute_reward(
-            self.t, self.next_t, self.curr_position, self.prev_position
+            self.t, self._next_t, self.curr_position, self.prev_position
         )
 
         # Update reward
@@ -265,7 +265,7 @@ class BasisTradingEnv(gym.Env):
         self.cost = step_reward.cost
 
         # Update index
-        self.t = self.next_t
+        self.t = self._next_t
         self.terminated = self._is_last_mrkt_t
 
         # Get data
@@ -314,7 +314,7 @@ class BasisTradingEnv(gym.Env):
         assert isinstance(self.ep_dataset, EpDataset)
         return {
             # Episode
-            "timestamp": self.timestamp,
+            "timestamp": self._timestamp,
             "step": self.t,
             "steps_to_go": self._steps_to_go,
             "terminal": self.terminated,
@@ -515,33 +515,33 @@ class BasisTradingEnv(gym.Env):
 
     # General purpose utilities
     @property
-    def next_t(self) -> int:
+    def _next_t(self) -> int:
         return min(self.t + self.config.persistence_sec, self._last_mrkt_t)
 
     @property
-    def timestamp(self) -> pd.Timestamp:
+    def _timestamp(self) -> pd.Timestamp:
         assert isinstance(self.ep_dataset, EpDataset)
         return self.ep_dataset.market_features.index[self.t]
 
     @property
-    def trajectory_sec(self) -> int:
+    def _trajectory_sec(self) -> int:
         return self.trajectory_min * 60
 
     @property
-    def episode_length(self) -> int:
+    def _episode_length(self) -> int:
         assert isinstance(self.ep_dataset, EpDataset)
         return len(self.ep_dataset.market_features)
 
     # Terminal index
     @property
     def _last_mrkt_t(self) -> int:
-        return self.episode_length - 1
+        return self._episode_length - 1
 
     @property
     def _last_agent_t(self) -> int:
-        n_steps = (self._last_mrkt_t - self.trajectory_sec - 1) // self.config.persistence_sec
+        n_steps = (self._last_mrkt_t - self._trajectory_sec - 1) // self.config.persistence_sec
 
-        return self.trajectory_sec + n_steps * self.config.persistence_sec
+        return self._trajectory_sec + n_steps * self.config.persistence_sec
 
     @property
     def _is_last_mrkt_t(self) -> bool:
@@ -578,7 +578,6 @@ if __name__ == "__main__":
 
     dataset_config = DatasetConfig(
         ticker="fbtp",
-        n_jobs_market=4,
         contract_mode="round",
         market_set="xgb_cls",
         calendar_set="default",
