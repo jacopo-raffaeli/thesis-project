@@ -14,10 +14,6 @@ from thesis_project import config, utils
 logger = logging.getLogger(__name__)
 
 
-# TODO: Add utilities to LobReportCollector
-# TODO: Add utilities to generate dates to exclude (maybe better in utils than here)
-# TODO: Add number of levels to LobReportCollector or preprocess()
-
 LobRecordTypeNormalization = Literal[
     # LOB index timezone
     "TIMEZONE_LOCALIZED",
