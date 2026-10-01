@@ -4,7 +4,7 @@ from joblib import Parallel, delayed
 from thesis_project import dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.rl.dataset_config import DatasetConfig
-from thesis_project.rl.env import RLDataset
+from thesis_project.rl.env_trading import RLDataset
 
 # TODO:
 # - Improve the RLDataset splitting method
