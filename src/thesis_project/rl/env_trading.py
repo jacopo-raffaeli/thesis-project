@@ -247,7 +247,6 @@ class BasisTradingEnv(gym.Env):
                 dtype=env_config.obs_dtype,
             )
 
-        # Define observation space
         self.observation_space = gym.spaces.Dict(spaces)
 
         # Define action space
