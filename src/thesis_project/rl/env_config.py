@@ -5,6 +5,9 @@ import numpy as np
 
 from thesis_project import config
 
+SEED = 42
+OBS_DTYPE = np.float32
+
 
 @dataclass(frozen=True)
 class BasisTradingEnvConfig:
@@ -12,8 +15,8 @@ class BasisTradingEnvConfig:
     price_mode: config.PriceMode
     persistence_min: int
 
-    seed: int = 42
-    obs_dtype: type = np.float32
+    seed: int = SEED
+    obs_dtype: type = OBS_DTYPE
     position_encoding: Literal["int", "ohe"] = "int"
     trajectory_min: int | None = None
 
@@ -37,3 +40,38 @@ class BasisTradingEnvConfig:
     @property
     def persistence_sec(self) -> int:
         return self.persistence_min * 60
+
+
+@dataclass(frozen=True)
+class ExecutionEnvConfig:
+    horizon_min: int
+    step_sec: int
+    max_quote_distance: int
+    tick_size: float
+
+    seed: int = SEED
+    obs_dtype: type = OBS_DTYPE
+
+    def __post_init__(self):
+        if self.horizon_min <= 0:
+            raise ValueError(f"Invalid execution episode length: '{self.horizon_min}'")
+
+        if self.step_sec <= 0:
+            raise ValueError(f"Invalid execution step length: '{self.step_sec}'")
+
+        if self.episode_sec % self.step_sec != 0:
+            raise ValueError("Execution episode length must be divisible by execution step length")
+
+        if self.max_quote_distance < 1:
+            raise ValueError(f"Invalid maximum quote distance: '{self.max_quote_distance}'")
+
+        if self.tick_size <= 0:
+            raise ValueError(f"Invalid tick size: '{self.tick_size}'")
+
+    @property
+    def episode_sec(self) -> int:
+        return self.horizon_min * 60
+
+    @property
+    def n_steps(self) -> int:
+        return self.episode_sec // self.step_sec
