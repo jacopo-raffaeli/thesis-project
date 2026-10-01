@@ -46,7 +46,7 @@ class BasisTradingEnvConfig:
 class ExecutionEnvConfig:
     horizon_min: int
     step_sec: int
-    max_quote_distance: int
+    max_n_tick: int
     tick_size: float
 
     seed: int = SEED
@@ -62,8 +62,8 @@ class ExecutionEnvConfig:
         if self.episode_sec % self.step_sec != 0:
             raise ValueError("Execution episode length must be divisible by execution step length")
 
-        if self.max_quote_distance < 1:
-            raise ValueError(f"Invalid maximum quote distance: '{self.max_quote_distance}'")
+        if self.max_n_tick < 1:
+            raise ValueError(f"Invalid maximum quote distance: '{self.max_n_tick}'")
 
         if self.tick_size <= 0:
             raise ValueError(f"Invalid tick size: '{self.tick_size}'")
