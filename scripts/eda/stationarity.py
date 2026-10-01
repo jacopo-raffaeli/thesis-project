@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
 
 
 FREQ_LAGS_DICT_DAILY: dict[str, list[int]] = {
-    "1s": [10, 30, 60, 300, 600, 900, 1800, 3600, 7200],
+    "1s": [1800, 3600, 7200],
 }
 
 FREQ_LAGS_DICT_HOURLY: dict[str, list[int]] = {
