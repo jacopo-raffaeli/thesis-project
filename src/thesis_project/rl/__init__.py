@@ -8,4 +8,4 @@ from . import policies as policies
 from . import report as report
 from . import train as train
 
-register(id="BasisTradingEnv-v0", entry_point="thesis_project.rl.env:BasisTradingEnv")
+register(id="BasisTradingEnv-v0", entry_point="thesis_project.rl.env_trading:BasisTradingEnv")
