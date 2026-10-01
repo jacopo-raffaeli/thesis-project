@@ -47,10 +47,10 @@ def train_model(
 
 
 def train_evaluate(
-    dataset_train: rl.env.RLDataset,
-    dataset_test: rl.env.RLDataset,
-    env_config_random: rl.env.BasisTradingEnvConfig,
-    env_config_serial: rl.env.BasisTradingEnvConfig,
+    dataset_train: rl.env_trading.RLDataset,
+    dataset_test: rl.env_trading.RLDataset,
+    env_config_random: rl.env_trading.BasisTradingEnvConfig,
+    env_config_serial: rl.env_trading.BasisTradingEnvConfig,
     experiment: ExperimentConfig,
     path: Path,
     batch_size: int,
@@ -141,13 +141,13 @@ def main() -> None:
     price_mode: config.PriceMode = "mid"
     persistence_min = 1
 
-    env_config_random = rl.env.BasisTradingEnvConfig(
+    env_config_random = rl.env_trading.BasisTradingEnvConfig(
         reset_mode="random",
         price_mode=price_mode,
         persistence_min=persistence_min,
     )
 
-    env_config_serial = rl.env.BasisTradingEnvConfig(
+    env_config_serial = rl.env_trading.BasisTradingEnvConfig(
         reset_mode="serial",
         price_mode=price_mode,
         persistence_min=persistence_min,
