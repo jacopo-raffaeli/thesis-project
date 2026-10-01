@@ -75,3 +75,7 @@ class ExecutionEnvConfig:
     @property
     def n_steps(self) -> int:
         return self.episode_sec // self.step_sec
+
+    @property
+    def n_actions(self) -> int:
+        return self.max_n_tick + 1
