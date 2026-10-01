@@ -139,7 +139,7 @@ def main() -> None:
     )
 
     price_mode: config.PriceMode = "mid"
-    persistence_min = 1
+    persistence_min = 10
 
     env_config_random = rl.env_trading.BasisTradingEnvConfig(
         reset_mode="random",
