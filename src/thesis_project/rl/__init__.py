@@ -1,7 +1,7 @@
 from gymnasium.envs.registration import register
 
 from . import dataset as dataset
-from . import env as env
+from . import env_trading as env_trading
 from . import evaluation as evaluation
 from . import features as features
 from . import policies as policies
