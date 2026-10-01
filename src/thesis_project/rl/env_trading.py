@@ -215,18 +215,18 @@ class BasisTradingEnv(gym.Env):
         self.terminated: bool
         self.truncated: bool
 
-        self.dataset = dataset
         self.ep_dataset: EpDataset | None = None
 
+        self.dataset = dataset
         self.config = env_config
 
         # Define observation spaces
-        spaces = {
+        spaces: dict[str, gym.spaces.Space] = {
             "market": gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
                 shape=(dataset.n_market_features,),
-                dtype=env_config.obs_dtype,
+                dtype=self.config.obs_dtype,
             ),
             "position": self._position_space,
         }
@@ -236,7 +236,7 @@ class BasisTradingEnv(gym.Env):
                 low=-np.inf,
                 high=np.inf,
                 shape=(dataset.n_calendar_features,),
-                dtype=env_config.obs_dtype,
+                dtype=self.config.obs_dtype,
             )
 
         if dataset.n_calendar_enc_features > 0:
@@ -244,7 +244,7 @@ class BasisTradingEnv(gym.Env):
                 low=-np.inf,
                 high=np.inf,
                 shape=(dataset.n_calendar_enc_features,),
-                dtype=env_config.obs_dtype,
+                dtype=self.config.obs_dtype,
             )
 
         self.observation_space = gym.spaces.Dict(spaces)
