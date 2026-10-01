@@ -7,7 +7,7 @@ from thesis_project import config
 
 
 @dataclass(frozen=True)
-class EnvConfig:
+class BasisTradingEnvConfig:
     reset_mode: Literal["random", "serial"]
     price_mode: config.PriceMode
     persistence_min: int

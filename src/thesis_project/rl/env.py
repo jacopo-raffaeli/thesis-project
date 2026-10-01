@@ -8,7 +8,7 @@ import pandas as pd
 
 from thesis_project import config
 from thesis_project.rl.dataset import DatasetConfig
-from thesis_project.rl.env_config import EnvConfig
+from thesis_project.rl.env_config import BasisTradingEnvConfig
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
@@ -198,7 +198,7 @@ class BasisTradingEnv(gym.Env):
     _FULL_MASK = np.array([True, True, True], dtype=bool)
     _FLAT_MASK = np.array([False, True, False], dtype=bool)
 
-    def __init__(self, dataset: RLDataset, env_config: EnvConfig):
+    def __init__(self, dataset: RLDataset, env_config: BasisTradingEnvConfig):
         super().__init__()
 
         self.date: pd.Timestamp
@@ -616,7 +616,7 @@ if __name__ == "__main__":
         calendar_enc_set="default",
     )
 
-    env_config = EnvConfig(
+    env_config = BasisTradingEnvConfig(
         price_mode="quoted",
         reset_mode="random",
         persistence_min=10,

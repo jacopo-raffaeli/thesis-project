@@ -5,12 +5,12 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, VecNormalize
 
 from thesis_project.rl.env import RLDataset
-from thesis_project.rl.env_config import EnvConfig
+from thesis_project.rl.env_config import BasisTradingEnvConfig
 
 
 def make_gym_env(
     dataset: RLDataset,
-    env_config: EnvConfig,
+    env_config: BasisTradingEnvConfig,
 ) -> gym.Env:
     env = gym.make(
         "BasisTradingEnv-v0",
@@ -23,14 +23,14 @@ def make_gym_env(
 
 def make_vec_env(
     dataset: RLDataset,
-    env_config: EnvConfig,
+    env_config: BasisTradingEnvConfig,
 ) -> DummyVecEnv:
     return DummyVecEnv([lambda: make_gym_env(dataset, env_config)])
 
 
 def make_training_env(
     dataset: RLDataset,
-    env_config: EnvConfig,
+    env_config: BasisTradingEnvConfig,
     *,
     normalize: bool,
 ) -> VecEnv:
@@ -50,7 +50,7 @@ def make_training_env(
 
 def make_evaluation_env(
     dataset: RLDataset,
-    env_config: EnvConfig,
+    env_config: BasisTradingEnvConfig,
     *,
     normalize: bool,
     path: Path | None = None,
