@@ -190,7 +190,7 @@ class ExecutionEnv(gym.Env, ABC):
         self._current_time = self._opening_time
 
         self.ep_dataset = self._build_episode_rl_dataset()
-        self.quantity = int(self.ep_dataset.ctd_contracts)
+        self.quantity = self.ep_dataset.ctd_contracts
 
         # Reset benchmark
         self.benchmark_price = self._get_best_price(self._opening_time)
@@ -245,11 +245,11 @@ class ExecutionEnv(gym.Env, ABC):
     def _step_limit_order(
         self,
         action: int,
-        opening_time: pd.Timestamp,
+        current_time: pd.Timestamp,
     ):
         self.limit_price = self._action_to_limit_price(action)
 
-        interval_closing = opening_time + pd.Timedelta(seconds=self.config.step_sec)
+        interval_closing = current_time + pd.Timedelta(seconds=self.config.step_sec)
 
         closing_time = self._closing_time
 
@@ -260,7 +260,7 @@ class ExecutionEnv(gym.Env, ABC):
 
         # Check for limit order fill
         fill_time = self._find_fill_time(
-            opening_time,
+            current_time,
             interval_closing,
             self.limit_price,
         )
@@ -489,25 +489,13 @@ class ExecutionEnv(gym.Env, ABC):
         if not isinstance(options, dict):
             raise TypeError("Execution reset options must be a dictionary")
 
-        if "date" not in options:
-            raise ValueError("Execution reset options must contain 'date'")
+        if "opening_time" not in options:
+            raise ValueError("Execution reset options must contain 'opening_time'")
 
-        if "time" not in options:
-            raise ValueError("Execution reset options must contain 'time'")
+        opening_time = options["opening_time"]
 
-        date = options["date"]
-        time = options["time"]
-
-        if isinstance(date, datetime.datetime) or not isinstance(date, datetime.date):
-            raise TypeError("Execution reset option 'date' must be a datetime.date")
-
-        if not isinstance(time, datetime.time):
-            raise TypeError("Execution reset option 'time' must be a datetime.time")
-
-        if time.tzinfo is not None:
-            raise ValueError("Execution reset option 'time' must be timezone-naive")
-
-        opening_time = pd.Timestamp(datetime.datetime.combine(date, time))
+        if not isinstance(opening_time, pd.Timestamp):
+            raise TypeError("Execution reset option 'opening_time' must be a pd.Timestamp")
 
         self._validate_opening_time(opening_time)
 
@@ -537,6 +525,13 @@ class ExecutionEnv(gym.Env, ABC):
     ) -> None:
         if opening_time.nanosecond != 0 or opening_time.microsecond != 0:
             raise ValueError("Execution opening time must be aligned to the 1-second data grid")
+
+        assert isinstance(self.dataset.ctd_mid.index, pd.DatetimeIndex)
+        dataset_tz = self.dataset.ctd_mid.index.tz
+        if opening_time.tz != dataset_tz:
+            raise ValueError(
+                f"Execution opening time is not in the expected tz: " f"'{opening_time.tz}'"
+            )
 
         if opening_time not in self.dataset.ctd_mid.index:
             raise ValueError(
