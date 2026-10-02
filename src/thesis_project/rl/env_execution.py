@@ -24,7 +24,7 @@ class ExecutionRequest:
     side: config.LobSide
     date: datetime.date
     time: datetime.time
-    quantity: int
+    quantity: float
 
     def __post_init__(self):
         if self.quantity <= 0:
@@ -406,7 +406,6 @@ class ExecutionEnv(gym.Env, ABC):
 
     # Info
     def _get_info(self) -> dict[str, Any]:
-        ep_dataset = self._get_ep_dataset()
         current_time = self._get_current_time()
 
         return {
@@ -423,7 +422,7 @@ class ExecutionEnv(gym.Env, ABC):
             "status": (self.result.status if self.result is not None else None),
             "execution_price": (self.result.execution_price if self.result is not None else None),
             "execution_time": (self.result.execution_time if self.result is not None else None),
-            "quantity": ep_dataset.ctd_contracts,
+            "quantity": self.quantity,
         }
 
     # Episode
@@ -471,6 +470,12 @@ class ExecutionEnv(gym.Env, ABC):
         self,
         options: dict[str, Any] | None,
     ) -> pd.Timestamp:
+        if options is None:
+            return self._sample_opening_time()
+
+        if not isinstance(options, dict):
+            raise TypeError("Execution reset options must be a dictionary")
+
         if not options:
             return self._sample_opening_time()
 
