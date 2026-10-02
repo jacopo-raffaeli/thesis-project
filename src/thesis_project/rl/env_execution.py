@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config
+from thesis_project.rl.dataset import DatasetConfig
 from thesis_project.rl.env_config import ExecutionEnvConfig
 from thesis_project.rl.env_trading import EpDataset, RLDataset
 
@@ -450,7 +451,7 @@ class ExecutionEnv(gym.Env, ABC):
                 f"{expected_length} rows, got {len(episode_index)}"
             )
 
-        date = opening.normalize()
+        date = opening.tz_localize(None).floor("D")
         fut_contracts = self.dataset.fut_contracts.loc[date]
 
         return EpDataset(
@@ -470,7 +471,7 @@ class ExecutionEnv(gym.Env, ABC):
         self,
         options: dict[str, Any] | None,
     ) -> pd.Timestamp:
-        if options is None:
+        if not options:
             return self._sample_opening_time()
 
         return self._get_opening_time_from_options(options)
@@ -707,3 +708,50 @@ class AskExecutionEnv(ExecutionEnv):
             execution_price = result.execution_price
 
         return execution_price - self.benchmark_price
+
+
+if __name__ == "__main__":
+    import warnings
+
+    from gymnasium.utils.env_checker import check_env
+
+    from thesis_project.rl.dataset import build_rl_dataset
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"WARN: A Box observation space minimum value is -infinity.*",
+        category=UserWarning,
+    )
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"WARN: A Box observation space maximum value is infinity.*",
+        category=UserWarning,
+    )
+
+    dataset_config = DatasetConfig(
+        ticker="fbtp",
+        contract_mode="round",
+        market_set="dummy",
+        calendar_set="default",
+        calendar_enc_set="default",
+    )
+
+    env_config = ExecutionEnvConfig(
+        horizon_min=10,
+        step_sec=10,
+        max_n_tick=50,
+        tick_size=0.01,
+    )
+
+    rl_dataset = build_rl_dataset(dataset_config)
+
+    env = BidExecutionEnv(rl_dataset, env_config)
+    check_env(env, skip_render_check=True, skip_close_check=True)
+    print("Bid env checked!")
+
+    env = AskExecutionEnv(rl_dataset, env_config)
+    check_env(env, skip_render_check=True, skip_close_check=True)
+    print("Ask env checked!")
+
+    print("Both envs checked!")
