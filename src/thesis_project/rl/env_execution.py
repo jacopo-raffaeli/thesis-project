@@ -7,10 +7,9 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 
+from thesis_project import config
 from thesis_project.rl.env_config import ExecutionEnvConfig
 from thesis_project.rl.env_trading import EpDataset, RLDataset
-
-ExecutionSide = Literal["bid", "ask"]
 
 ExecutionStatus = Literal[
     "market",
@@ -21,7 +20,7 @@ ExecutionStatus = Literal[
 
 @dataclass(frozen=True, slots=True)
 class ExecutionRequest:
-    side: ExecutionSide
+    side: config.LobSide
     date: datetime.date
     time: datetime.time
     quantity: int
@@ -33,11 +32,12 @@ class ExecutionRequest:
 
 @dataclass(frozen=True, slots=True)
 class ExecutionResult:
-    side: ExecutionSide
+    side: config.LobSide
     quantity: float
     status: ExecutionStatus
+    limit_price: float | None
     execution_price: float
-    execution_time: datetime.datetime
+    execution_time: pd.Timestamp
 
 
 class ExecutionEnv(gym.Env, ABC):
@@ -79,7 +79,7 @@ class ExecutionEnv(gym.Env, ABC):
                 shape=(dataset.n_market_features,),
                 dtype=self.config.obs_dtype,
             ),
-            "best_price": gym.spaces.Box(
+            "market_price": gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
                 shape=(1,),
@@ -117,17 +117,17 @@ class ExecutionEnv(gym.Env, ABC):
     # Side specific
     @property
     @abstractmethod
-    def execution_side(self) -> ExecutionSide:
-        """Return the market side used for execution."""
+    def execution_side(self) -> config.LobSide:
+        """Return the market side on which the passive order is placed."""
 
     @abstractmethod
-    def _get_best_price(self, timestamp: pd.Timestamp) -> float:
-        """Return the current executable market price."""
+    def _get_market_price(self, timestamp: pd.Timestamp) -> float:
+        """Return the immediate executable market price for the execution side."""
 
     @abstractmethod
     def _get_limit_price(
         self,
-        best_price: float,
+        market_price: float,
         quote_distance: int,
     ) -> float:
         """Return the passive limit price."""
@@ -146,7 +146,7 @@ class ExecutionEnv(gym.Env, ABC):
         self,
         timestamp: pd.Timestamp,
     ) -> float:
-        """Return the executable market price."""
+        """Return the executable market price at the given timestamp."""
 
     @abstractmethod
     def _get_reward(self) -> float:
@@ -193,7 +193,7 @@ class ExecutionEnv(gym.Env, ABC):
         self.quantity = self.ep_dataset.ctd_contracts
 
         # Reset benchmark
-        self.benchmark_price = self._get_best_price(self._opening_time)
+        self.benchmark_price = self._get_market_price(self._opening_time)
 
         if not np.isfinite(self.benchmark_price):
             raise ValueError(f"Invalid benchmark price at '{self._opening_time}'")
@@ -250,7 +250,6 @@ class ExecutionEnv(gym.Env, ABC):
         self.limit_price = self._action_to_limit_price(action)
 
         interval_closing = current_time + pd.Timedelta(seconds=self.config.step_sec)
-
         closing_time = self._closing_time
 
         if interval_closing > closing_time:
@@ -288,10 +287,14 @@ class ExecutionEnv(gym.Env, ABC):
         self,
         fill_time: pd.Timestamp,
     ):
+        # The limit price is the price proposed by the agent.
+        # The execution price is the observed opposite quote at the fill time.
+        execution_price = self._get_market_execution_price(fill_time)
+
         self._execute(
             status="limit",
             timestamp=fill_time,
-            execution_price=self.limit_price,
+            execution_price=execution_price,
         )
 
         self.terminated = True
@@ -323,10 +326,10 @@ class ExecutionEnv(gym.Env, ABC):
     def _action_to_limit_price(self, action: int) -> float:
         current_time = self._get_current_time()
 
-        best_price = self._get_best_price(current_time)
+        market_price = self._get_market_price(current_time)
 
         limit_price = self._get_limit_price(
-            best_price,
+            market_price,
             action,
         )
 
@@ -364,8 +367,9 @@ class ExecutionEnv(gym.Env, ABC):
             side=self.execution_side,
             quantity=quantity,
             status=status,
+            limit_price=self.limit_price,
             execution_price=float(execution_price),
-            execution_time=timestamp.to_pydatetime(),
+            execution_time=timestamp,
         )
 
     # Observation
@@ -377,8 +381,8 @@ class ExecutionEnv(gym.Env, ABC):
             "market": ep_dataset.market_features.loc[current_time].to_numpy(
                 dtype=self.config.obs_dtype
             ),
-            "best_price": np.asarray(
-                [self._get_best_price(current_time)],
+            "market_price": np.asarray(
+                [self._get_market_price(current_time)],
                 dtype=self.config.obs_dtype,
             ),
             "steps_remaining": np.asarray(
@@ -411,7 +415,7 @@ class ExecutionEnv(gym.Env, ABC):
             "steps_remaining": self.steps_remaining,
             "terminal": self.terminated,
             # Execution
-            "best_price": self._get_best_price(current_time),
+            "market_price": self._get_market_price(current_time),
             "limit_price": self.limit_price,
             "benchmark_price": self.benchmark_price,
             "action": self.last_action,
@@ -528,6 +532,7 @@ class ExecutionEnv(gym.Env, ABC):
 
         assert isinstance(self.dataset.ctd_mid.index, pd.DatetimeIndex)
         dataset_tz = self.dataset.ctd_mid.index.tz
+
         if opening_time.tz != dataset_tz:
             raise ValueError(
                 f"Execution opening time is not in the expected tz: " f"'{opening_time.tz}'"
@@ -553,19 +558,19 @@ class ExecutionEnv(gym.Env, ABC):
     # General purpose utilities
     def _get_opening_time(self) -> pd.Timestamp:
         if self._opening_time is None:
-            raise RuntimeError("Environment must be reset before requesting " "the opening time")
+            raise RuntimeError("Environment must be reset before requesting the opening time")
 
         return self._opening_time
 
     def _get_current_time(self) -> pd.Timestamp:
         if self._current_time is None:
-            raise RuntimeError("Environment must be reset before requesting " "the current time")
+            raise RuntimeError("Environment must be reset before requesting the current time")
 
         return self._current_time
 
     def _get_ep_dataset(self) -> EpDataset:
         if self.ep_dataset is None:
-            raise RuntimeError("Environment must be reset before requesting " "the episode dataset")
+            raise RuntimeError("Environment must be reset before requesting the episode dataset")
 
         return self.ep_dataset
 
@@ -574,3 +579,131 @@ class ExecutionEnv(gym.Env, ABC):
             raise RuntimeError("Execution quantity is not available")
 
         return self.quantity
+
+
+class BidExecutionEnv(ExecutionEnv):
+    """Execution environment for buying the CTD using passive bid orders."""
+
+    @property
+    def execution_side(self) -> config.LobSide:
+        return "bid"
+
+    def _get_market_price(self, timestamp: pd.Timestamp) -> float:
+        ep_dataset = self._get_ep_dataset()
+
+        return float(ep_dataset.ctd_ask.loc[timestamp])
+
+    def _get_limit_price(
+        self,
+        market_price: float,
+        quote_distance: int,
+    ) -> float:
+        return market_price - quote_distance * self.config.tick_size
+
+    def _find_fill_time(
+        self,
+        opening_time: pd.Timestamp,
+        closing_time: pd.Timestamp,
+        limit_price: float,
+    ) -> pd.Timestamp | None:
+        ep_dataset = self._get_ep_dataset()
+
+        timestamps = ep_dataset.ctd_mid.index[
+            (ep_dataset.ctd_mid.index >= opening_time) & (ep_dataset.ctd_mid.index < closing_time)
+        ]
+
+        ask = ep_dataset.ctd_ask.loc[timestamps]
+
+        hit_mask = ask <= limit_price
+        hit_timestamps = timestamps[hit_mask]
+
+        if len(hit_timestamps) == 0:
+            return None
+
+        return hit_timestamps[0]
+
+    def _get_market_execution_price(
+        self,
+        timestamp: pd.Timestamp,
+    ) -> float:
+        return self._get_market_price(timestamp)
+
+    def _get_reward(self) -> float:
+        result = self.result
+
+        if result is None:
+            raise RuntimeError("Execution result is not available")
+
+        if result.status == "limit":
+            if result.limit_price is None:
+                raise RuntimeError("Limit execution result does not contain a limit price")
+
+            execution_price = result.limit_price
+        else:
+            execution_price = result.execution_price
+
+        return self.benchmark_price - execution_price
+
+
+class AskExecutionEnv(ExecutionEnv):
+    """Execution environment for selling the CTD using passive ask orders."""
+
+    @property
+    def execution_side(self) -> config.LobSide:
+        return "ask"
+
+    def _get_market_price(self, timestamp: pd.Timestamp) -> float:
+        ep_dataset = self._get_ep_dataset()
+
+        return float(ep_dataset.ctd_bid.loc[timestamp])
+
+    def _get_limit_price(
+        self,
+        market_price: float,
+        quote_distance: int,
+    ) -> float:
+        return market_price + quote_distance * self.config.tick_size
+
+    def _find_fill_time(
+        self,
+        opening_time: pd.Timestamp,
+        closing_time: pd.Timestamp,
+        limit_price: float,
+    ) -> pd.Timestamp | None:
+        ep_dataset = self._get_ep_dataset()
+
+        timestamps = ep_dataset.ctd_mid.index[
+            (ep_dataset.ctd_mid.index >= opening_time) & (ep_dataset.ctd_mid.index < closing_time)
+        ]
+
+        bid = ep_dataset.ctd_bid.loc[timestamps]
+
+        hit_mask = bid >= limit_price
+        hit_timestamps = timestamps[hit_mask]
+
+        if len(hit_timestamps) == 0:
+            return None
+
+        return hit_timestamps[0]
+
+    def _get_market_execution_price(
+        self,
+        timestamp: pd.Timestamp,
+    ) -> float:
+        return self._get_market_price(timestamp)
+
+    def _get_reward(self) -> float:
+        result = self.result
+
+        if result is None:
+            raise RuntimeError("Execution result is not available")
+
+        if result.status == "limit":
+            if result.limit_price is None:
+                raise RuntimeError("Limit execution result does not contain a limit price")
+
+            execution_price = result.limit_price
+        else:
+            execution_price = result.execution_price
+
+        return execution_price - self.benchmark_price
