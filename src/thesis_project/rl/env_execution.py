@@ -40,7 +40,7 @@ class ExecutionResult:
     execution_time: datetime.datetime
 
 
-class BaseExecutionEnv(gym.Env, ABC):
+class ExecutionEnv(gym.Env, ABC):
     def __init__(
         self,
         dataset: RLDataset,
