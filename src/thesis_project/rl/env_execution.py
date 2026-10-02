@@ -53,7 +53,7 @@ class BaseExecutionEnv(gym.Env, ABC):
 
         self.t: int = 0
         self.steps_remaining: int = 0
-        self.quantity: int = 0
+        self.quantity: float = 0.0
 
         self.benchmark_price: float = 0.0
         self.limit_price: float | None = None
@@ -154,7 +154,7 @@ class BaseExecutionEnv(gym.Env, ABC):
 
     # Properties
     @property
-    def closing_time(self) -> pd.Timestamp:
+    def _closing_time(self) -> pd.Timestamp:
         opening_time = self._get_opening_time()
 
         return opening_time + pd.Timedelta(seconds=self.config.episode_sec)
@@ -219,6 +219,12 @@ class BaseExecutionEnv(gym.Env, ABC):
         # Limit order
         return self._step_limit_order(action, current_time)
 
+    def close(self):
+        pass
+
+    def render(self):
+        pass
+
     def _step_market_order(
         self,
         timestamp: pd.Timestamp,
@@ -245,7 +251,7 @@ class BaseExecutionEnv(gym.Env, ABC):
 
         interval_closing = opening_time + pd.Timedelta(seconds=self.config.step_sec)
 
-        closing_time = self.closing_time
+        closing_time = self._closing_time
 
         if interval_closing > closing_time:
             raise RuntimeError(
@@ -312,12 +318,6 @@ class BaseExecutionEnv(gym.Env, ABC):
         info = self._get_info()
 
         return observation, reward, self.terminated, self.truncated, info
-
-    def close(self):
-        pass
-
-    def render(self):
-        pass
 
     # Order mechanics
     def _action_to_limit_price(self, action: int) -> float:
@@ -408,7 +408,7 @@ class BaseExecutionEnv(gym.Env, ABC):
             # Episode
             "timestamp": current_time,
             "step": self.t,
-            "steps_to_go": self.steps_remaining,
+            "steps_remaining": self.steps_remaining,
             "terminal": self.terminated,
             # Execution
             "best_price": self._get_best_price(current_time),
@@ -424,7 +424,7 @@ class BaseExecutionEnv(gym.Env, ABC):
     # Episode
     def _build_episode_rl_dataset(self) -> EpDataset:
         opening = self._get_opening_time()
-        closing = self.closing_time
+        closing = self._closing_time
 
         market_features = self.dataset.market_features.loc[opening:closing]
         calendar_features = self.dataset.calendar_features.loc[opening:closing]
@@ -574,7 +574,7 @@ class BaseExecutionEnv(gym.Env, ABC):
 
         return self.ep_dataset
 
-    def _get_quantity(self) -> int:
+    def _get_quantity(self) -> float:
         if self.quantity <= 0:
             raise RuntimeError("Execution quantity is not available")
 
