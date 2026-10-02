@@ -42,6 +42,13 @@ class RLDataset:
         assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
         assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
         assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
+        assert self.market_features.index.is_monotonic_increasing
+        assert self.calendar_features.index.is_monotonic_increasing
+        assert self.calendar_enc_features.index.is_monotonic_increasing
+        assert self.ctd_mid.index.is_monotonic_increasing
+        assert self.fut_mid.index.is_monotonic_increasing
+        assert self.ctd_spread.index.is_monotonic_increasing
+        assert self.fut_spread.index.is_monotonic_increasing
         assert self.market_features.index.equals(self.calendar_features.index)
         assert self.market_features.index.equals(self.calendar_enc_features.index)
         assert self.market_features.index.equals(self.ctd_mid.index)
