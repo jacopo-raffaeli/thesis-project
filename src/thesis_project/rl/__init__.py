@@ -6,6 +6,6 @@ from . import evaluation as evaluation
 from . import features as features
 from . import policies as policies
 from . import report as report
-from . import train as train
+from . import train_trading as train_trading
 
 register(id="BasisTradingEnv-v0", entry_point="thesis_project.rl.env_trading:BasisTradingEnv")

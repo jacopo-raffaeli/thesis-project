@@ -35,7 +35,7 @@ def main():
 
     utils.logging.setup_logging(level=args.log_level)
 
-    rl.train.main()
+    rl.train_trading.main()
 
 
 if __name__ == "__main__":
