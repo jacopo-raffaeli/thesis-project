@@ -61,7 +61,7 @@ def make_evaluation_env(
         return vec_env
 
     if path is None:
-        raise ValueError("normalize_stats_path is required when market normalization is enabled")
+        raise ValueError("'path' is required when market normalization is enabled")
 
     vec_env = VecNormalize.load(
         str(path),
