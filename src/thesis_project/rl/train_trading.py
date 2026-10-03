@@ -11,7 +11,7 @@ from thesis_project.rl.env_factory import (
     make_evaluation_env,
     make_training_env,
 )
-from thesis_project.rl.evaluation import evaluate_model_sb3
+from thesis_project.rl.evaluation_trading import evaluate_model_sb3
 from thesis_project.rl.experiment_config import ExperimentConfig
 from thesis_project.utils.io import dump_configs
 from thesis_project.utils.misc import generate_seeds
