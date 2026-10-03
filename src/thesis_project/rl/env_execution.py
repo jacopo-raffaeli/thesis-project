@@ -742,6 +742,7 @@ if __name__ == "__main__":
     )
 
     env_config = ExecutionEnvConfig(
+        reset_mode="random",
         horizon_min=10,
         step_sec=10,
         max_n_tick=50,
