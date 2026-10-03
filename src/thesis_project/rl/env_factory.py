@@ -4,8 +4,8 @@ import gymnasium as gym
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, VecNormalize
 
+from thesis_project.rl.dataset import RLDataset
 from thesis_project.rl.env_config import BasisTradingEnvConfig
-from thesis_project.rl.env_trading import RLDataset
 
 
 def make_gym_env(

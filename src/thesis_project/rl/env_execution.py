@@ -8,9 +8,8 @@ import numpy as np
 import pandas as pd
 
 from thesis_project import config
-from thesis_project.rl.dataset import DatasetConfig
+from thesis_project.rl.dataset import DatasetConfig, EpDataset, RLDataset
 from thesis_project.rl.env_config import ExecutionEnvConfig
-from thesis_project.rl.env_trading import EpDataset, RLDataset
 
 ExecutionStatus = Literal[
     "market",

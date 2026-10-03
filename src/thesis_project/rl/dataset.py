@@ -1,13 +1,103 @@
+from dataclasses import dataclass, field
+
+import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 
 from thesis_project import dataset, utils
 from thesis_project.dataset.data import BASE_FEATURES
 from thesis_project.rl.dataset_config import DatasetConfig
-from thesis_project.rl.env_trading import RLDataset
 
-# TODO:
-# - Improve the RLDataset splitting method
+
+@dataclass(frozen=True)
+class RLDataset:
+    # Features
+    market_features: pd.DataFrame
+    calendar_features: pd.DataFrame
+    calendar_enc_features: pd.DataFrame
+
+    # Market
+    ctd_mid: pd.Series = field(default_factory=pd.Series)
+    fut_mid: pd.Series = field(default_factory=pd.Series)
+    ctd_contracts: float = field(default_factory=float)
+    fut_contracts: pd.Series = field(default_factory=pd.Series)
+    ctd_spread: pd.Series = field(default_factory=pd.Series)
+    fut_spread: pd.Series = field(default_factory=pd.Series)
+
+    # Temporal
+    dates: list[pd.Timestamp] = field(default_factory=list[pd.Timestamp])
+    date_to_slice: dict[pd.Timestamp, slice] = field(default_factory=dict[pd.Timestamp, slice])
+
+    def __post_init__(self):
+        # Check series consistency
+        assert isinstance(self.market_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_enc_features.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
+        assert self.market_features.index.is_monotonic_increasing
+        assert self.calendar_features.index.is_monotonic_increasing
+        assert self.calendar_enc_features.index.is_monotonic_increasing
+        assert self.ctd_mid.index.is_monotonic_increasing
+        assert self.fut_mid.index.is_monotonic_increasing
+        assert self.ctd_spread.index.is_monotonic_increasing
+        assert self.fut_spread.index.is_monotonic_increasing
+        assert self.market_features.index.equals(self.calendar_features.index)
+        assert self.market_features.index.equals(self.calendar_enc_features.index)
+        assert self.market_features.index.equals(self.ctd_mid.index)
+        assert self.market_features.index.equals(self.fut_mid.index)
+        assert self.market_features.index.equals(self.ctd_spread.index)
+        assert self.market_features.index.equals(self.fut_spread.index)
+
+        # Find unique dates
+        dates_idx = self.market_features.index.tz_localize(None).floor("D")
+        dates = dates_idx.unique()
+        object.__setattr__(self, "dates", list(dates))
+
+        # Map dates to indexes
+        date_to_slice = {}
+        for date in dates:
+            rows = np.flatnonzero(dates_idx == date)
+            date_to_slice[date] = slice(rows[0], rows[-1] + 1)
+        object.__setattr__(self, "date_to_slice", date_to_slice)
+
+    @property
+    def n_market_features(self) -> int:
+        return len(self.market_features.columns)
+
+    @property
+    def n_calendar_features(self) -> int:
+        return len(self.calendar_features.columns)
+
+    @property
+    def n_calendar_enc_features(self) -> int:
+        return len(self.calendar_enc_features.columns)
+
+    @property
+    def n_features(self) -> int:
+        return self.n_market_features + self.n_calendar_features + self.n_calendar_enc_features
+
+    @property
+    def n_dates(self) -> int:
+        return len(self.dates)
+
+    @property
+    def ctd_bid(self) -> pd.Series:
+        return self.ctd_mid - (self.ctd_spread / 2)
+
+    @property
+    def ctd_ask(self) -> pd.Series:
+        return self.ctd_mid + (self.ctd_spread / 2)
+
+    @property
+    def fut_bid(self) -> pd.Series:
+        return self.fut_mid - (self.fut_spread / 2)
+
+    @property
+    def fut_ask(self) -> pd.Series:
+        return self.fut_mid + (self.fut_spread / 2)
 
 
 def build_spec(
@@ -150,3 +240,71 @@ def _load_aligned_feature(base: dataset.data.BaseFeature, idx: pd.DatetimeIndex)
         )
 
     return s
+
+
+@dataclass(frozen=True)
+class EpDataset:
+    # Features
+    market_features: pd.DataFrame
+    calendar_features: pd.DataFrame
+    calendar_enc_features: pd.DataFrame
+
+    # Market
+    ctd_mid: pd.Series = field(default_factory=pd.Series)
+    fut_mid: pd.Series = field(default_factory=pd.Series)
+    ctd_contracts: float = field(default_factory=float)
+    fut_contracts: float = field(default_factory=float)
+    ctd_spread: pd.Series = field(default_factory=pd.Series)
+    fut_spread: pd.Series = field(default_factory=pd.Series)
+
+    def __post_init__(self):
+        # Check series consistency
+        assert isinstance(self.market_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_features.index, pd.DatetimeIndex)
+        assert isinstance(self.calendar_enc_features.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_mid.index, pd.DatetimeIndex)
+        assert isinstance(self.ctd_spread.index, pd.DatetimeIndex)
+        assert isinstance(self.fut_spread.index, pd.DatetimeIndex)
+        assert self.market_features.index.equals(self.calendar_features.index)
+        assert self.market_features.index.equals(self.calendar_enc_features.index)
+        assert self.market_features.index.equals(self.ctd_mid.index)
+        assert self.market_features.index.equals(self.fut_mid.index)
+        assert self.market_features.index.equals(self.ctd_spread.index)
+        assert self.market_features.index.equals(self.fut_spread.index)
+
+    @property
+    def n_market_features(self) -> int:
+        return len(self.market_features.columns)
+
+    @property
+    def n_calendar_features(self) -> int:
+        return len(self.calendar_features.columns)
+
+    @property
+    def n_calendar_enc_features(self) -> int:
+        return len(self.calendar_enc_features.columns)
+
+    @property
+    def n_features(self) -> int:
+        return self.n_market_features + self.n_calendar_features + self.n_calendar_enc_features
+
+    @property
+    def episode_length(self) -> int:
+        return len(self.market_features)
+
+    @property
+    def ctd_bid(self) -> pd.Series:
+        return self.ctd_mid - (self.ctd_spread / 2)
+
+    @property
+    def ctd_ask(self) -> pd.Series:
+        return self.ctd_mid + (self.ctd_spread / 2)
+
+    @property
+    def fut_bid(self) -> pd.Series:
+        return self.fut_mid - (self.fut_spread / 2)
+
+    @property
+    def fut_ask(self) -> pd.Series:
+        return self.fut_mid + (self.fut_spread / 2)

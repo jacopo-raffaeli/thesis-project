@@ -6,6 +6,7 @@ from joblib import Parallel, delayed
 from sb3_contrib import MaskablePPO
 
 from thesis_project import config, rl, utils
+from thesis_project.rl import dataset
 from thesis_project.rl.env_factory import (
     make_evaluation_env,
     make_training_env,
@@ -47,8 +48,8 @@ def train_model(
 
 
 def train_evaluate(
-    dataset_train: rl.env_trading.RLDataset,
-    dataset_test: rl.env_trading.RLDataset,
+    dataset_train: dataset.RLDataset,
+    dataset_test: dataset.RLDataset,
     env_config_random: rl.env_trading.BasisTradingEnvConfig,
     env_config_serial: rl.env_trading.BasisTradingEnvConfig,
     experiment: ExperimentConfig,
