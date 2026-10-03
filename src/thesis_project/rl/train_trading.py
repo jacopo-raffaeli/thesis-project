@@ -7,7 +7,7 @@ from sb3_contrib import MaskablePPO
 
 from thesis_project import config, rl, utils
 from thesis_project.rl import dataset
-from thesis_project.rl.env_factory import (
+from thesis_project.rl.env_factory_trading import (
     make_evaluation_env,
     make_training_env,
 )
