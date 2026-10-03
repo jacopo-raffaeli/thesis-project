@@ -9,3 +9,5 @@ from . import report as report
 from . import train_trading as train_trading
 
 register(id="BasisTradingEnv-v0", entry_point="thesis_project.rl.env_trading:BasisTradingEnv")
+register(id="BidExecutionEnv-v0", entry_point="thesis_project.rl.env_execution:BidExecutionEnv")
+register(id="AskExecutionEnv-v0", entry_point="thesis_project.rl.env_execution:AskExecutionEnv")
