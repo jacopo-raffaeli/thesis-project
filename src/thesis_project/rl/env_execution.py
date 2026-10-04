@@ -518,6 +518,13 @@ class ExecutionEnv(gym.Env, ABC):
 
         return serial_openings
 
+    @property
+    def n_serial_openings(self) -> int:
+        if self.config.reset_mode != "serial":
+            raise RuntimeError("Serial openings are available only in serial mode")
+
+        return len(self._serial_openings)
+
     def _validate_opening_time(
         self,
         timestamp: pd.Timestamp,
@@ -587,7 +594,7 @@ class ExecutionEnv(gym.Env, ABC):
         """Return the executable market price at the given timestamp."""
 
     @abstractmethod
-    def _get_reward(self) -> float:
+    def _get_reward(self) -> int:
         """Return the reward for the completed execution."""
 
     # Properties
@@ -674,7 +681,7 @@ class BidExecutionEnv(ExecutionEnv):
     ) -> float:
         return self._get_market_price(timestamp)
 
-    def _get_reward(self) -> float:
+    def _get_reward(self) -> int:
         result = self.result
 
         if result is None:
@@ -688,7 +695,7 @@ class BidExecutionEnv(ExecutionEnv):
         else:
             execution_price = result.execution_price
 
-        return self.benchmark_price - execution_price
+        return round((self.benchmark_price - execution_price) / self.config.tick_size)
 
 
 class AskExecutionEnv(ExecutionEnv):
@@ -738,7 +745,7 @@ class AskExecutionEnv(ExecutionEnv):
     ) -> float:
         return self._get_market_price(timestamp)
 
-    def _get_reward(self) -> float:
+    def _get_reward(self) -> int:
         result = self.result
 
         if result is None:
@@ -752,7 +759,7 @@ class AskExecutionEnv(ExecutionEnv):
         else:
             execution_price = result.execution_price
 
-        return execution_price - self.benchmark_price
+        return round((execution_price - self.benchmark_price) / self.config.tick_size)
 
 
 if __name__ == "__main__":
