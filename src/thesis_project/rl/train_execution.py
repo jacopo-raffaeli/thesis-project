@@ -128,37 +128,42 @@ def train_evaluate(
 
 def main() -> None:
     experiment_config = ExperimentConfig(
-        split_month="2023-01",
+        split_month="2022-10",
         normalize_market_obs=True,
-        # n_seeds=1,
-        # total_timesteps=10_000,
-        # batch_sizes=(64,),
-        # clip_ranges=(0.2,),
+        n_seeds=1,
+        total_timesteps=10_000,
+        batch_sizes=(64,),
+        clip_ranges=(0.2,),
     )
 
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
         ctd_contracts=1.0,
         contract_mode="round",
-        market_set="xgb_cls",
+        market_set="dummy",
         calendar_set="default",
         calendar_enc_set="default",
     )
 
+    horizon_min = 10
+    step_sec = 10
+    max_n_tick = 50
+    tick_size = 0.01
+
     env_config_random = ExecutionEnvConfig(
         reset_mode="random",
-        horizon_min=10,
-        step_sec=10,
-        max_n_tick=50,
-        tick_size=0.01,
+        horizon_min=horizon_min,
+        step_sec=step_sec,
+        max_n_tick=max_n_tick,
+        tick_size=tick_size,
     )
 
     env_config_serial = ExecutionEnvConfig(
         reset_mode="serial",
-        horizon_min=10,
-        step_sec=10,
-        max_n_tick=50,
-        tick_size=0.01,
+        horizon_min=horizon_min,
+        step_sec=step_sec,
+        max_n_tick=max_n_tick,
+        tick_size=tick_size,
     )
 
     logger.debug(
