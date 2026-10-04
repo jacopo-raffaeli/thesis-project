@@ -1,0 +1,244 @@
+import logging
+from itertools import product
+from pathlib import Path
+from typing import get_args
+
+from joblib import Parallel, delayed
+from stable_baselines3 import PPO
+
+from thesis_project import config, rl, utils
+from thesis_project.rl import dataset
+from thesis_project.rl.env_config import ExecutionEnvConfig
+from thesis_project.rl.env_factory_execution import (
+    make_evaluation_env,
+    make_training_env,
+)
+from thesis_project.rl.evaluation_execution import evaluate_model_sb3
+from thesis_project.rl.experiment_config import ExperimentConfig
+from thesis_project.utils.io import dump_configs
+from thesis_project.utils.misc import generate_seeds
+
+logger = logging.getLogger(__name__)
+
+
+def train_model(
+    env,
+    *,
+    batch_size: int,
+    clip_range: float,
+    seed: int,
+    total_timesteps: int,
+    tensorboard_log: str | None = None,
+    tb_log_name: str = "PPO",
+) -> PPO:
+    model = PPO(
+        policy="MultiInputPolicy",
+        env=env,
+        seed=seed,
+        batch_size=batch_size,
+        clip_range=clip_range,
+        # tensorboard_log=tensorboard_log,
+    )
+
+    model.learn(
+        total_timesteps=total_timesteps,
+        progress_bar=True,
+        # tb_log_name=tb_log_name,
+    )
+
+    return model
+
+
+def train_evaluate(
+    dataset_train: dataset.RLDataset,
+    dataset_test: dataset.RLDataset,
+    env_config_random: ExecutionEnvConfig,
+    env_config_serial: ExecutionEnvConfig,
+    experiment: ExperimentConfig,
+    side: config.LobSide,
+    path: Path,
+    batch_size: int,
+    clip_range: float,
+    seed: int,
+) -> None:
+    filename = f"{side}_bs_{batch_size}_cr_{clip_range}_{seed}"
+
+    # Training
+    env_train = make_training_env(
+        dataset_train,
+        env_config_random,
+        side=side,
+        normalize=experiment.normalize_market_obs,
+    )
+
+    model = train_model(
+        env_train,
+        batch_size=batch_size,
+        clip_range=clip_range,
+        seed=seed,
+        total_timesteps=experiment.total_timesteps,
+        tensorboard_log=str(path / "tensorboard"),
+        tb_log_name=filename,
+    )
+
+    # Save model
+    model_path = path / f"{filename}.zip"
+    model.save(model_path)
+
+    # Save EnvNormalize stats if enabled
+    path_vec_norm = None
+    if experiment.normalize_market_obs:
+        path_vec_norm = path / f"{filename}_vecnormalize.pkl"
+        env_train.save(str(path_vec_norm))  # type: ignore
+
+    env_train.close()
+
+    # Train evaluation
+    env_train_eval = make_evaluation_env(
+        dataset_train,
+        env_config_serial,
+        side=side,
+        normalize=experiment.normalize_market_obs,
+        path=path_vec_norm,
+    )
+
+    records = evaluate_model_sb3(
+        model,  # type: ignore[arg-type]
+        env_train_eval,
+    )
+    records.to_parquet(path / f"{filename}_train.parquet")
+
+    # Test evaluation
+    env_test_eval = make_evaluation_env(
+        dataset_test,
+        env_config_serial,
+        side=side,
+        normalize=experiment.normalize_market_obs,
+        path=path_vec_norm,
+    )
+
+    records = evaluate_model_sb3(
+        model,  # type: ignore[arg-type]
+        env_test_eval,
+    )
+    records.to_parquet(path / f"{filename}_test.parquet")
+
+    del model
+
+
+def main() -> None:
+    experiment_config = ExperimentConfig(
+        split_month="2023-01",
+        normalize_market_obs=True,
+        # n_seeds=1,
+        # total_timesteps=10_000,
+        # batch_sizes=(64,),
+        # clip_ranges=(0.2,),
+    )
+
+    dataset_config = rl.dataset.DatasetConfig(
+        ticker="fbtp",
+        ctd_contracts=1.0,
+        contract_mode="round",
+        market_set="xgb_cls",
+        calendar_set="default",
+        calendar_enc_set="default",
+    )
+
+    env_config_random = ExecutionEnvConfig(
+        reset_mode="random",
+        horizon_min=10,
+        step_sec=10,
+        max_n_tick=50,
+        tick_size=0.01,
+    )
+
+    env_config_serial = ExecutionEnvConfig(
+        reset_mode="serial",
+        horizon_min=10,
+        step_sec=10,
+        max_n_tick=50,
+        tick_size=0.01,
+    )
+
+    logger.debug(
+        f"""
+    RL analysis:
+
+    - Experiment:
+        {"- Split month:":<20} {experiment_config.split_month}
+        {"- Timesteps:":<20} {experiment_config.total_timesteps:,}
+        {"- Seeds:":<20} {experiment_config.n_seeds}
+        {"- Normalize market:":<20} {experiment_config.normalize_market_obs}
+
+    - Dataset:
+        {"- Ticker:":<20} {dataset_config.ticker}
+        {"- Contract mode:":<20} {dataset_config.contract_mode}
+        {"- CTD contracts:":<20} {dataset_config.ctd_contracts}
+        {"- Market jobs:":<20} {dataset_config.n_jobs_market}
+        {"- Features:":<20} {dataset_config.n_features}
+        {"  - Market:":<20} {dataset_config.n_market_features}
+        {"  - Calendar:":<20} {dataset_config.n_calendar_features}
+        {"  - Calendar enc:":<20} {dataset_config.n_calendar_enc_features}
+
+    - Environment:
+        {"- Horizon:":<20} {env_config_random.horizon_min} min
+        {"- Step:":<20} {env_config_random.step_sec} sec
+        {"- Max quote:":<20} {env_config_random.max_n_tick} ticks
+        {"- Tick size:":<20} {env_config_random.tick_size}
+    """
+    )
+
+    dataset = rl.dataset.build_rl_dataset(dataset_config)
+
+    dataset_train, dataset_test = rl.dataset.split_rl_dataset(
+        dataset,
+        experiment_config.split_month,
+    )
+
+    del dataset
+
+    root = config.RES_EXP_DIR / dataset_config.ticker / "rl" / "rl-execution"
+    path = utils.io.create_run_path(root)
+
+    seeds = generate_seeds(
+        experiment_config.n_seeds,
+        seed=experiment_config.seed,
+    )
+
+    dump_configs(
+        path / "config.json",
+        experiment=experiment_config,
+        dataset=dataset_config,
+        env_random=env_config_random,
+        env_serial=env_config_serial,
+        sides=get_args(config.LobSide),
+        seeds=seeds,
+    )
+
+    for side in get_args(config.LobSide):
+        for batch_size, clip_range in product(
+            experiment_config.batch_sizes, experiment_config.clip_ranges
+        ):
+            Parallel(
+                n_jobs=len(seeds),
+                backend="loky",
+            )(
+                delayed(train_evaluate)(
+                    dataset_train,
+                    dataset_test,
+                    env_config_random,
+                    env_config_serial,
+                    experiment_config,
+                    side,
+                    path,
+                    batch_size,
+                    clip_range,
+                    seed,
+                )
+                for seed in seeds
+            )
+
+
+if __name__ == "__main__":
+    main()
