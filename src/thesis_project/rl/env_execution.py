@@ -68,8 +68,17 @@ class ExecutionEnv(gym.Env, ABC):
         self.dataset = dataset
         self.config = env_config
 
-        # Build valid execution opening sample space
-        self._valid_openings = self._build_valid_openings()
+        # Build valid opening timestamps from random mode
+        self._random_openings: list[pd.Timestamp]
+        if self.config.reset_mode == "random":
+            self._random_openings = self._build_random_openings()
+
+        # Build valid opening timestamps from serial mode
+        self._serial_openings: list[pd.Timestamp]
+        self._serial_index: int
+        if self.config.reset_mode == "serial":
+            self._serial_openings = self._build_serial_openings()
+            self._serial_index = -1
 
         # Define observation spaces
         spaces: dict[str, gym.spaces.Space] = {
@@ -114,55 +123,6 @@ class ExecutionEnv(gym.Env, ABC):
         # Define action space
         self.action_space = gym.spaces.Discrete(self.config.n_actions)
 
-    # Side specific
-    @property
-    @abstractmethod
-    def execution_side(self) -> config.LobSide:
-        """Return the market side on which the passive order is placed."""
-
-    @abstractmethod
-    def _get_market_price(self, timestamp: pd.Timestamp) -> float:
-        """Return the immediate executable market price for the execution side."""
-
-    @abstractmethod
-    def _get_limit_price(
-        self,
-        market_price: float,
-        quote_distance: int,
-    ) -> float:
-        """Return the passive limit price."""
-
-    @abstractmethod
-    def _find_fill_time(
-        self,
-        opening_time: pd.Timestamp,
-        closing_time: pd.Timestamp,
-        limit_price: float,
-    ) -> pd.Timestamp | None:
-        """Return the first fill time in [opening_time, closing_time)."""
-
-    @abstractmethod
-    def _get_market_execution_price(
-        self,
-        timestamp: pd.Timestamp,
-    ) -> float:
-        """Return the executable market price at the given timestamp."""
-
-    @abstractmethod
-    def _get_reward(self) -> float:
-        """Return the reward for the completed execution."""
-
-    # Properties
-    @property
-    def _closing_time(self) -> pd.Timestamp:
-        opening_time = self._get_opening_time()
-
-        return opening_time + pd.Timedelta(seconds=self.config.episode_sec)
-
-    @property
-    def result(self) -> ExecutionResult | None:
-        return self._result
-
     # Main
     def reset(
         self,
@@ -187,14 +147,13 @@ class ExecutionEnv(gym.Env, ABC):
 
         # Reset opening and episode
         self._opening_time = self._select_opening_time(options)
-        self._current_time = self._opening_time
+        self._current_time = self._get_opening_time()
 
         self.ep_dataset = self._build_episode_rl_dataset()
         self.quantity = self.ep_dataset.ctd_contracts
 
         # Reset benchmark
         self.benchmark_price = self._get_market_price(self._opening_time)
-
         if not np.isfinite(self.benchmark_price):
             raise ValueError(f"Invalid benchmark price at '{self._opening_time}'")
 
@@ -205,12 +164,11 @@ class ExecutionEnv(gym.Env, ABC):
         return observation, info
 
     def step(self, action: int):
-        current_time = self._get_current_time()
-
         if not self.action_space.contains(action):
             raise ValueError(f"Invalid execution action: '{action}'")
-
         self.last_action = int(action)
+
+        current_time = self._get_current_time()
 
         # Market order
         if action == 0:
@@ -224,6 +182,58 @@ class ExecutionEnv(gym.Env, ABC):
 
     def render(self):
         pass
+
+    # Observation
+    def _get_observation(self) -> dict[str, np.ndarray]:
+        ep_dataset = self._get_ep_dataset()
+        current_time = self._get_current_time()
+
+        observation = {
+            "market": ep_dataset.market_features.loc[current_time].to_numpy(
+                dtype=self.config.obs_dtype
+            ),
+            "market_price": np.asarray(
+                [self._get_market_price(current_time)],
+                dtype=self.config.obs_dtype,
+            ),
+            "steps_remaining": np.asarray(
+                [self.steps_remaining],
+                dtype=self.config.obs_dtype,
+            ),
+        }
+
+        if ep_dataset.n_calendar_features > 0:
+            observation["temporal"] = ep_dataset.calendar_features.loc[current_time].to_numpy(
+                dtype=self.config.obs_dtype
+            )
+
+        if ep_dataset.n_calendar_enc_features > 0:
+            observation["temporal_enc"] = ep_dataset.calendar_enc_features.loc[
+                current_time
+            ].to_numpy(dtype=self.config.obs_dtype)
+
+        return observation
+
+    # Info
+    def _get_info(self) -> dict[str, Any]:
+        current_time = self._get_current_time()
+
+        return {
+            # Episode
+            "timestamp": current_time,
+            "step": self.t,
+            "steps_remaining": self.steps_remaining,
+            "terminal": self.terminated,
+            # Execution
+            "market_price": self._get_market_price(current_time),
+            "limit_price": self.limit_price,
+            "benchmark_price": self.benchmark_price,
+            "action": self.last_action,
+            "status": (self.result.status if self.result is not None else None),
+            "execution_price": (self.result.execution_price if self.result is not None else None),
+            "execution_time": (self.result.execution_time if self.result is not None else None),
+            "quantity": self.quantity,
+        }
 
     def _step_market_order(
         self,
@@ -364,7 +374,7 @@ class ExecutionEnv(gym.Env, ABC):
         self.steps_remaining = 0
 
         self._result = ExecutionResult(
-            side=self.execution_side,
+            side=self._execution_side,
             quantity=quantity,
             status=status,
             limit_price=self.limit_price,
@@ -372,57 +382,60 @@ class ExecutionEnv(gym.Env, ABC):
             execution_time=timestamp,
         )
 
-    # Observation
-    def _get_observation(self) -> dict[str, np.ndarray]:
-        ep_dataset = self._get_ep_dataset()
-        current_time = self._get_current_time()
+    def _select_opening_time(
+        self,
+        options: dict[str, Any] | None,
+    ) -> pd.Timestamp:
+        if options is not None:
+            if not isinstance(options, dict):
+                raise TypeError("Execution reset options must be a dictionary")
 
-        observation = {
-            "market": ep_dataset.market_features.loc[current_time].to_numpy(
-                dtype=self.config.obs_dtype
-            ),
-            "market_price": np.asarray(
-                [self._get_market_price(current_time)],
-                dtype=self.config.obs_dtype,
-            ),
-            "steps_remaining": np.asarray(
-                [self.steps_remaining],
-                dtype=self.config.obs_dtype,
-            ),
-        }
+            if options:
+                return self._options_opening_time(options)
 
-        if ep_dataset.n_calendar_features > 0:
-            observation["temporal"] = ep_dataset.calendar_features.loc[current_time].to_numpy(
-                dtype=self.config.obs_dtype
-            )
+        match self.config.reset_mode:
+            case "random":
+                return self._random_opening_time()
 
-        if ep_dataset.n_calendar_enc_features > 0:
-            observation["temporal_enc"] = ep_dataset.calendar_enc_features.loc[
-                current_time
-            ].to_numpy(dtype=self.config.obs_dtype)
+            case "serial":
+                return self._serial_opening_time()
 
-        return observation
+            case None:
+                raise ValueError(
+                    "Execution reset requires 'opening_time' in options " "when reset_mode is None"
+                )
 
-    # Info
-    def _get_info(self) -> dict[str, Any]:
-        current_time = self._get_current_time()
+            case _:
+                raise ValueError(f"Invalid reset mode: '{self.config.reset_mode}'")
 
-        return {
-            # Episode
-            "timestamp": current_time,
-            "step": self.t,
-            "steps_remaining": self.steps_remaining,
-            "terminal": self.terminated,
-            # Execution
-            "market_price": self._get_market_price(current_time),
-            "limit_price": self.limit_price,
-            "benchmark_price": self.benchmark_price,
-            "action": self.last_action,
-            "status": (self.result.status if self.result is not None else None),
-            "execution_price": (self.result.execution_price if self.result is not None else None),
-            "execution_time": (self.result.execution_time if self.result is not None else None),
-            "quantity": self.quantity,
-        }
+    def _random_opening_time(self) -> pd.Timestamp:
+        if len(self._random_openings) == 0:
+            raise ValueError("Dataset contains no valid execution opening times")
+
+        index = self.np_random.integers(len(self._random_openings))
+
+        opening_time = self._random_openings[index]
+        self._validate_opening_time(opening_time)
+
+        return opening_time
+
+    def _serial_opening_time(self) -> pd.Timestamp:
+        self._serial_index = (self._serial_index + 1) % len(self._serial_openings)
+        return self._serial_openings[self._serial_index]
+
+    def _options_opening_time(
+        self,
+        options: dict[str, Any],
+    ) -> pd.Timestamp:
+        if "opening_time" not in options:
+            raise ValueError("Execution reset options must contain 'opening_time'")
+
+        if not isinstance(options["opening_time"], pd.Timestamp):
+            raise TypeError("Execution reset option 'opening_time' must be a pd.Timestamp")
+
+        self._validate_opening_time(options["opening_time"])
+
+        return options["opening_time"]
 
     # Episode
     def _build_episode_rl_dataset(self) -> EpDataset:
@@ -464,53 +477,7 @@ class ExecutionEnv(gym.Env, ABC):
             fut_spread=fut_spread,
         )
 
-    # Reset opening
-    def _select_opening_time(
-        self,
-        options: dict[str, Any] | None,
-    ) -> pd.Timestamp:
-        if options is None:
-            return self._sample_opening_time()
-
-        if not isinstance(options, dict):
-            raise TypeError("Execution reset options must be a dictionary")
-
-        if not options:
-            return self._sample_opening_time()
-
-        return self._get_opening_time_from_options(options)
-
-    def _sample_opening_time(self) -> pd.Timestamp:
-        if len(self._valid_openings) == 0:
-            raise ValueError("Dataset contains no valid execution opening times")
-
-        index = self.np_random.integers(len(self._valid_openings))
-
-        opening_time = self._valid_openings[index]
-        self._validate_opening_time(opening_time)
-
-        return opening_time
-
-    def _get_opening_time_from_options(
-        self,
-        options: dict[str, Any],
-    ) -> pd.Timestamp:
-        if not isinstance(options, dict):
-            raise TypeError("Execution reset options must be a dictionary")
-
-        if "opening_time" not in options:
-            raise ValueError("Execution reset options must contain 'opening_time'")
-
-        opening_time = options["opening_time"]
-
-        if not isinstance(opening_time, pd.Timestamp):
-            raise TypeError("Execution reset option 'opening_time' must be a pd.Timestamp")
-
-        self._validate_opening_time(opening_time)
-
-        return opening_time
-
-    def _build_valid_openings(self) -> list[pd.Timestamp]:
+    def _build_random_openings(self) -> list[pd.Timestamp]:
         valid_openings: list[pd.Timestamp] = []
 
         for _, rows in self.dataset.date_to_slice.items():
@@ -528,37 +495,111 @@ class ExecutionEnv(gym.Env, ABC):
 
         return valid_openings
 
+    def _build_serial_openings(self) -> list[pd.Timestamp]:
+        serial_openings: list[pd.Timestamp] = []
+
+        for _, rows in self.dataset.date_to_slice.items():
+            day_index = self.dataset.ctd_mid.index[rows]
+
+            if len(day_index) == 0:
+                continue
+
+            first_opening = day_index[0]
+            latest_opening = day_index[-1] - pd.Timedelta(seconds=self.config.episode_sec)
+
+            opening_time = first_opening
+
+            while opening_time <= latest_opening:
+                serial_openings.append(opening_time)
+                opening_time += pd.Timedelta(seconds=self.config.episode_sec)
+
+        if not serial_openings:
+            raise ValueError("Dataset contains no valid execution evaluation openings")
+
+        return serial_openings
+
     def _validate_opening_time(
         self,
-        opening_time: pd.Timestamp,
+        timestamp: pd.Timestamp,
     ) -> None:
-        if opening_time.nanosecond != 0 or opening_time.microsecond != 0:
+        if timestamp.nanosecond != 0 or timestamp.microsecond != 0:
             raise ValueError("Execution opening time must be aligned to the 1-second data grid")
 
         assert isinstance(self.dataset.ctd_mid.index, pd.DatetimeIndex)
         dataset_tz = self.dataset.ctd_mid.index.tz
 
-        if opening_time.tz != dataset_tz:
+        if timestamp.tz != dataset_tz:
             raise ValueError(
-                f"Execution opening time is not in the expected tz: " f"'{opening_time.tz}'"
+                f"Execution opening time is not in the expected tz: " f"'{timestamp.tz}'"
             )
 
-        if opening_time not in self.dataset.ctd_mid.index:
-            raise ValueError(
-                f"Execution opening time is not present in dataset: " f"'{opening_time}'"
-            )
+        if timestamp not in self.dataset.ctd_mid.index:
+            raise ValueError(f"Execution opening time is not present in dataset: " f"'{timestamp}'")
 
-        closing_time = opening_time + pd.Timedelta(seconds=self.config.episode_sec)
+        closing_time = timestamp + pd.Timedelta(seconds=self.config.episode_sec)
 
         if closing_time not in self.dataset.ctd_mid.index:
             raise ValueError(
-                f"Insufficient data for execution horizon opening at " f"'{opening_time}'"
+                f"Insufficient data for execution horizon opening at " f"'{timestamp}'"
             )
 
-        if opening_time.normalize() != closing_time.normalize():
-            raise ValueError(
-                f"Execution horizon crosses a trading day boundary: " f"'{opening_time}'"
-            )
+        if timestamp.normalize() != closing_time.normalize():
+            raise ValueError(f"Execution horizon crosses a trading day boundary: " f"'{timestamp}'")
+
+    def init_serial(self):
+        if self.config.reset_mode != "serial":
+            raise ValueError("This method can be called only in serial mode")
+
+        self._serial_index = -1
+
+    # Side specific
+    @property
+    @abstractmethod
+    def _execution_side(self) -> config.LobSide:
+        """Return the market side on which the passive order is placed."""
+
+    @abstractmethod
+    def _get_market_price(self, timestamp: pd.Timestamp) -> float:
+        """Return the immediate executable market price for the execution side."""
+
+    @abstractmethod
+    def _get_limit_price(
+        self,
+        market_price: float,
+        quote_distance: int,
+    ) -> float:
+        """Return the passive limit price."""
+
+    @abstractmethod
+    def _find_fill_time(
+        self,
+        opening_time: pd.Timestamp,
+        closing_time: pd.Timestamp,
+        limit_price: float,
+    ) -> pd.Timestamp | None:
+        """Return the first fill time in [opening_time, closing_time)."""
+
+    @abstractmethod
+    def _get_market_execution_price(
+        self,
+        timestamp: pd.Timestamp,
+    ) -> float:
+        """Return the executable market price at the given timestamp."""
+
+    @abstractmethod
+    def _get_reward(self) -> float:
+        """Return the reward for the completed execution."""
+
+    # Properties
+    @property
+    def _closing_time(self) -> pd.Timestamp:
+        opening_time = self._get_opening_time()
+
+        return opening_time + pd.Timedelta(seconds=self.config.episode_sec)
+
+    @property
+    def result(self) -> ExecutionResult | None:
+        return self._result
 
     # General purpose utilities
     def _get_opening_time(self) -> pd.Timestamp:
@@ -590,7 +631,7 @@ class BidExecutionEnv(ExecutionEnv):
     """Execution environment for buying the CTD using passive bid orders."""
 
     @property
-    def execution_side(self) -> config.LobSide:
+    def _execution_side(self) -> config.LobSide:
         return "bid"
 
     def _get_market_price(self, timestamp: pd.Timestamp) -> float:
@@ -654,7 +695,7 @@ class AskExecutionEnv(ExecutionEnv):
     """Execution environment for selling the CTD using passive ask orders."""
 
     @property
-    def execution_side(self) -> config.LobSide:
+    def _execution_side(self) -> config.LobSide:
         return "ask"
 
     def _get_market_price(self, timestamp: pd.Timestamp) -> float:
