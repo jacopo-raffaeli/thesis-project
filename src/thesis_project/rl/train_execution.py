@@ -147,7 +147,7 @@ def main() -> None:
 
     horizon_min = 10
     step_sec = 10
-    max_n_tick = 50
+    max_n_tick = 5
     tick_size = 0.01
 
     env_config_random = ExecutionEnvConfig(
@@ -168,7 +168,7 @@ def main() -> None:
 
     logger.debug(
         f"""
-    RL analysis:
+    RL execution analysis:
 
     - Experiment:
         {"- Split month:":<20} {experiment_config.split_month}
@@ -203,7 +203,7 @@ def main() -> None:
 
     del dataset
 
-    root = config.RES_EXP_DIR / dataset_config.ticker / "rl" / "rl-execution"
+    root = config.RES_EXP_DIR / dataset_config.ticker / "rl-execution"
     path = utils.io.create_run_path(root)
 
     seeds = generate_seeds(

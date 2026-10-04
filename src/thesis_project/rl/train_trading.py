@@ -189,7 +189,7 @@ def main() -> None:
 
     del dataset
 
-    root = config.RES_EXP_DIR / dataset_config.ticker / "rl"
+    root = config.RES_EXP_DIR / dataset_config.ticker / "rl-trading"
     path = utils.io.create_run_path(root)
 
     seeds = generate_seeds(
