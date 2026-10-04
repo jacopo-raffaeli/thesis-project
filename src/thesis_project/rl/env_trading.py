@@ -330,7 +330,7 @@ class BasisTradingEnv(gym.Env):
             case _:
                 raise ValueError(f"Invalid evaluation mode: '{self.config.reset_mode}'")
 
-    def init_serial_date(self):
+    def init_serial(self):
         if self.config.reset_mode != "serial":
             raise ValueError("This method can be called only in serial mode")
 

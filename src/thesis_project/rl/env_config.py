@@ -44,7 +44,7 @@ class BasisTradingEnvConfig:
 
 @dataclass(frozen=True)
 class ExecutionEnvConfig:
-    reset_mode: Literal["random", "serial"]
+    reset_mode: Literal["random", "serial"] | None
     horizon_min: int
     step_sec: int
     max_n_tick: int
