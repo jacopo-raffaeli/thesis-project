@@ -1,0 +1,1578 @@
+import json
+from pathlib import Path
+from typing import Any, Literal
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from IPython.display import display
+from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.patches import Patch
+
+from thesis_project import config
+
+Records = dict[int, pd.DataFrame]
+
+
+_FIGSIZE_DEFAULT = (12, 6)
+_FIGSIZE_HEATMAP = (14, 8)
+
+PnLType = Literal["net", "gross", "both"]
+
+PNL_TYPE_DICT: dict[PnLType, list[str]] = {
+    "net": ["net"],
+    "gross": ["gross"],
+    "both": ["gross", "net"],
+}
+
+
+def load_records(
+    path: Path,
+    *,
+    batch_size: int,
+    clip_range: float,
+    seeds: list[int],
+    split: str,
+) -> Records:
+    records = {}
+
+    for seed in seeds:
+        file = path / f"bs_{batch_size}_cr_{clip_range}_{seed}_{split}.parquet"
+
+        if not file.exists():
+            raise FileNotFoundError(file)
+
+        records[seed] = pd.read_parquet(file)
+
+    return records
+
+
+def remove_reset_observations(
+    records: pd.DataFrame,
+) -> pd.DataFrame:
+    indices = records.groupby("episode", sort=False).head(1).index
+
+    return records.drop(indices).copy()
+
+
+def remove_terminal_observations(
+    records: pd.DataFrame,
+) -> pd.DataFrame:
+    indeces = ~records["terminal"]
+
+    return records.loc[indeces].copy()
+
+
+def derive_records(records: pd.DataFrame) -> pd.DataFrame:
+    data = records.copy()
+
+    # Order data
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+    data = data.sort_values(["episode", "timestamp"])
+    data = data.reset_index(drop=True)
+
+    # Compute cumulative rewards
+    data["cum_reward"] = data["reward"].cumsum()
+    data["cum_gross_reward"] = data["gross_reward"].cumsum()
+    data["cum_cost"] = data["cost"].cumsum()
+
+    # Compute drawdowns
+    data["cum_max_reward"] = data["cum_reward"].cummax()
+    data["cum_max_gross_reward"] = data["cum_gross_reward"].cummax()
+    data["drawdown"] = data["cum_reward"] - data["cum_max_reward"]
+    data["gross_drawdown"] = data["cum_gross_reward"] - data["cum_max_gross_reward"]
+
+    # Compute trades statistics
+    data["trade"] = data["position"] != data["allocation"]
+    data["turnover"] = (data["position"] - data["allocation"]).abs()
+
+    # Compute costs
+    data["ctd_cost_per_contract"] = 0.5 * data["turnover"] * data["ctd_spread"]
+    data["ctd_cost"] = data["ctd_cost_per_contract"] * data["ctd_contracts"]
+    data["fut_cost_per_contract"] = 0.5 * data["turnover"] * data["fut_spread"]
+    data["fut_cost"] = data["fut_cost_per_contract"] * data["fut_contracts"]
+    data["basis_cost_per_contract"] = data["ctd_cost_per_contract"] + data["fut_cost_per_contract"]
+    data["basis_cost"] = data["ctd_cost"] + data["fut_cost"]
+
+    # Compute trades by PnL
+    data["profit"] = data["trade"] & (data["reward"] > 0)
+    data["neutral"] = data["trade"] & (data["reward"] == 0)
+    data["loss"] = data["trade"] & (data["reward"] < 0)
+
+    # Compute notionals
+    data["ctd_notional"] = data["ctd_contracts"] * config.BTP.contract_size
+    data["fut_notional"] = data["fut_contracts"] * config.FBTP.contract_size
+    data["notional"] = data["ctd_notional"] + data["fut_notional"]
+
+    # Compute returns
+    data["gross_return"] = data["gross_reward"] / data["notional"]
+    data["return"] = data["reward"] / data["notional"]
+
+    return data
+
+
+def agg_daily_pnl(records: pd.DataFrame) -> pd.DataFrame:
+    data = records.copy()
+
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+    data["date"] = data["timestamp"].dt.normalize()
+
+    daily = data.groupby("date").agg(
+        gross_pnl=("gross_reward", "sum"),
+        net_pnl=("reward", "sum"),
+        cost=("cost", "sum"),
+    )
+
+    return daily
+
+
+def agg_daily_return(records: pd.DataFrame) -> pd.DataFrame:
+    data = records.copy()
+
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+    data["date"] = data["timestamp"].dt.normalize()
+
+    daily = data.groupby("date").agg(
+        gross_return=("gross_return", "sum"),
+        net_return=("return", "sum"),
+    )
+
+    return daily
+
+
+def run_metrics(
+    records: pd.DataFrame,
+) -> dict[str, float]:
+    _TRADING_DAYS = 252
+    _ANNUALIZATION = np.sqrt(_TRADING_DAYS)
+
+    daily_pnls = agg_daily_pnl(records)
+    daily_returns = agg_daily_return(records)
+
+    # Daily returns
+    gross_daily_returns = daily_returns["gross_return"]
+    net_daily_returns = daily_returns["net_return"]
+
+    daily_return_mean = net_daily_returns.mean()
+    daily_return_std = net_daily_returns.std()
+
+    rf_rate = 0.0
+    downside = net_daily_returns[net_daily_returns < rf_rate] - rf_rate
+    downside_std = np.sqrt(np.mean(downside.pow(2)))
+
+    sharpe = (
+        (daily_return_mean - rf_rate) / daily_return_std * _ANNUALIZATION
+        if daily_return_std != 0
+        else np.nan
+    )
+
+    sortino = (
+        (daily_return_mean - rf_rate) / downside_std * _ANNUALIZATION
+        if downside_std != 0
+        else np.nan
+    )
+
+    # Monetary daily statistics
+    daily_pnl = daily_pnls["net_pnl"]
+    daily_pnl_mean = daily_pnl.mean()
+    daily_pnl_std = daily_pnl.std()
+
+    # Monetary drawdown
+    cumulative_pnl = daily_pnl.cumsum()
+    running_max = cumulative_pnl.cummax()
+    daily_drawdown = cumulative_pnl - running_max
+
+    action_counts = records["position"].value_counts()
+
+    total_actions = len(records)
+    total_trades = records["trade"].sum()
+
+    gross_pnl = records["gross_reward"].sum()
+    ctd_cost = records["ctd_cost"].sum()
+    fut_cost = records["fut_cost"].sum()
+    basis_cost = records["basis_cost"].sum()
+
+    traded_records = records.loc[records["trade"]]
+
+    profitable_trades = traded_records["profit"].sum()
+    neutral_trades = traded_records["neutral"].sum()
+    losing_trades = traded_records["loss"].sum()
+
+    return {
+        "n_days": float(len(daily_pnls)),
+        "n_steps": float(len(records)),
+        "steps_per_day": float(len(records) / len(daily_pnls)),
+        # PnL
+        "gross_pnl": gross_pnl,
+        "net_pnl": records["reward"].sum(),
+        "cost": records["cost"].sum(),
+        "gross_pnl_per_day": daily_pnls["gross_pnl"].mean(),
+        "net_pnl_per_day": daily_pnls["net_pnl"].mean(),
+        "cost_per_day": daily_pnls["cost"].mean(),
+        # Daily returns
+        "gross_return_mean": gross_daily_returns.mean(),
+        "net_return_mean": daily_return_mean,
+        "net_return_std": daily_return_std,
+        # Annualized metrics
+        "annualized_return": daily_return_mean * _TRADING_DAYS,
+        "annualized_volatility": daily_return_std * _ANNUALIZATION,
+        # Risk-adjusted returns
+        "sharpe": sharpe,
+        "sortino": sortino,
+        # Monetary daily statistics
+        "daily_pnl_mean": daily_pnl_mean,
+        "daily_pnl_std": daily_pnl_std,
+        # Monetary drawdown
+        "max_drawdown": daily_drawdown.min(),
+        "worst_day": daily_pnl.min(),
+        "best_day": daily_pnl.max(),
+        "profitable_days": (daily_pnl > 0).mean(),
+        "neutral_days": (daily_pnl == 0).mean(),
+        "losing_days": (daily_pnl < 0).mean(),
+        # Actions
+        "short": float(action_counts.get(-1, 0)),
+        "flat": float(action_counts.get(0, 0)),
+        "long": float(action_counts.get(1, 0)),
+        "short_pct": action_counts.get(-1, 0) / total_actions,
+        "flat_pct": action_counts.get(0, 0) / total_actions,
+        "long_pct": action_counts.get(1, 0) / total_actions,
+        # Trades
+        "trades": float(total_trades),
+        "turnover": records["turnover"].sum(),
+        "profitable_trades": float(profitable_trades),
+        "neutral_trades": float(neutral_trades),
+        "losing_trades": float(losing_trades),
+        "win_rate": (profitable_trades / total_trades if total_trades != 0 else np.nan),
+        # Step returns
+        "positive_returns": (records["return"] > 0).mean(),
+        "zero_returns": (records["return"] == 0).mean(),
+        "negative_returns": (records["return"] < 0).mean(),
+        # Costs
+        "break_even_cost_per_trade": (gross_pnl / total_trades if total_trades != 0 else np.nan),
+        "ctd_cost_per_trade": (ctd_cost / total_trades if total_trades != 0 else np.nan),
+        "fut_cost_per_trade": (fut_cost / total_trades if total_trades != 0 else np.nan),
+        "basis_cost_per_trade": (basis_cost / total_trades if total_trades != 0 else np.nan),
+    }
+
+
+def aggregate_metrics(
+    metrics: dict[int, dict[str, float]],
+) -> pd.DataFrame:
+    data = pd.DataFrame.from_dict(
+        metrics,
+        orient="index",
+    )
+    data.index.name = "seed"
+
+    return pd.DataFrame(
+        {
+            "mean": data.mean(),
+            "std": data.std(),
+        }
+    )
+
+
+def summarize(
+    records: Records,
+) -> pd.DataFrame:
+    metrics = {seed: run_metrics(data) for seed, data in records.items()}
+
+    summary = aggregate_metrics(metrics)
+    summary.attrs["n_seeds"] = len(records)
+
+    return summary
+
+
+def compare_summaries(
+    summary_a: pd.DataFrame,
+    summary_b: pd.DataFrame,
+) -> pd.DataFrame:
+    excluded = {
+        "n_days",
+        "n_steps",
+        "steps_per_day",
+    }
+
+    metrics = [metric for metric in summary_a.index if metric not in excluded]
+
+    comparison = pd.DataFrame(
+        {
+            "run_a": summary_a.loc[metrics, "mean"],
+            "run_b": summary_b.loc[metrics, "mean"],
+        }
+    )
+
+    comparison["difference"] = comparison["run_a"] - comparison["run_b"]
+
+    # comparison["relative"] = (
+    #     comparison["difference"]
+    #     / comparison["run_a"].abs()
+    # )
+
+    comparison.index.name = "Metric"
+
+    return comparison
+
+
+def prepare_records(records: Records) -> Records:
+    return {seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()}
+
+
+def plot_pnl(records: Records, *, label: str | None = None, which: PnLType = "both") -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    net = pd.concat(
+        [records[seed]["cum_reward"].rename(seed) for seed in records],
+        axis=1,
+    )
+
+    gross = pd.concat(
+        [records[seed]["cum_gross_reward"].rename(seed) for seed in records],
+        axis=1,
+    )
+
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for k in PNL_TYPE_DICT[which]:
+        ax.plot(
+            means[k],
+            label=k.capitalize(),
+        )
+
+    if len(records) > 1:
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
+
+        for k in PNL_TYPE_DICT[which]:
+            ax.fill_between(
+                means[k].index,
+                means[k] - stds[k],
+                means[k] + stds[k],
+                alpha=0.2,
+            )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title("Cumulative PnL" if label is None else f"Cumulative PnL - {label}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.legend(loc="upper left")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_pnl_distribution(
+    records: Records,
+    *,
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    daily = pd.concat(
+        [agg_daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
+
+    values = daily.to_numpy().ravel()
+    max_abs = np.abs(values).max()
+
+    bins = np.linspace(
+        -max_abs,
+        max_abs,
+        31,
+    )
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    ax.hist(
+        daily.to_numpy().ravel(),
+        bins=bins,  # type: ignore
+    )
+
+    ax.set_xlabel("Daily PnL")
+    ax.set_ylabel("Count")
+    ax.set_title("Daily PnL Distribution" if label is None else f"Daily PnL Distribution - {label}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_daily_pnl(
+    records: Records,
+    *,
+    label: str | None = None,
+    which: PnLType = "net",
+) -> None:
+    config.default_plt()
+
+    net = pd.concat(
+        [agg_daily_pnl(data)["net_pnl"].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
+
+    gross = pd.concat(
+        [agg_daily_pnl(data)["gross_pnl"].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
+
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for pnl in PNL_TYPE_DICT[which]:
+        ax.plot(means[pnl], label=pnl.capitalize())
+
+    if len(records) > 1:
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
+
+        for pnl in PNL_TYPE_DICT[which]:
+            ax.fill_between(
+                means[pnl].index,
+                means[pnl] - stds[pnl],
+                means[pnl] + stds[pnl],
+                alpha=0.2,
+            )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Trading day")
+    ax.set_ylabel("€")
+    ax.set_title("Daily PnL" if label is None else f"Daily PnL - {label}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_drawdown(
+    records: Records,
+    *,
+    label: str | None = None,
+    which: PnLType = "net",
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    net = pd.concat(
+        [records[seed]["drawdown"].rename(seed) for seed in records],
+        axis=1,
+    )
+
+    gross = pd.concat(
+        [records[seed]["gross_drawdown"].rename(seed) for seed in records],
+        axis=1,
+    )
+
+    means = {
+        "gross": gross.mean(axis=1),
+        "net": net.mean(axis=1),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for k in PNL_TYPE_DICT[which]:
+        ax.plot(means[k], label=k.capitalize())
+
+    if len(records) > 1:
+        stds = {
+            "gross": gross.std(axis=1),
+            "net": net.std(axis=1),
+        }
+
+        for k in PNL_TYPE_DICT[which]:
+            ax.fill_between(
+                means[k].index,
+                means[k] - stds[k],
+                means[k] + stds[k],
+                alpha=0.2,
+            )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title("Drawdown" if label is None else f"Drawdown - {label}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.legend(loc="lower right")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_pnl_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    column = {
+        "net": "cum_reward",
+        "gross": "cum_gross_reward",
+    }[which]
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed, data in records.items():
+        ax.plot(
+            data[column],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"Cumulative {which.capitalize()} PnL per Seed"
+        if label is None
+        else f"Cumulative {which.capitalize()} PnL per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_daily_pnl_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    column = {
+        "net": "net_pnl",
+        "gross": "gross_pnl",
+    }[which]
+
+    daily = pd.concat(
+        [agg_daily_pnl(data)[column].rename(seed) for seed, data in records.items()],
+        axis=1,
+    )
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed in daily.columns:
+        ax.plot(
+            daily.index,
+            daily[seed],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Trading day")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"Daily {which.capitalize()} PnL per Seed"
+        if label is None
+        else f"Daily {which.capitalize()} PnL per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_drawdown_per_seed(
+    records: Records,
+    *,
+    which: Literal["net", "gross"] = "net",
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    column = {
+        "net": "drawdown",
+        "gross": "gross_drawdown",
+    }[which]
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed, data in records.items():
+        ax.plot(
+            data[column],
+            label=str(seed),
+            linewidth=0.7,
+        )
+
+    ax.axhline(
+        0,
+        linewidth=0.5,
+        color="black",
+        linestyle="--",
+    )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(
+        f"{which.capitalize()} Drawdown per Seed"
+        if label is None
+        else f"{which.capitalize()} Drawdown per Seed - {label}"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend(title="Seed")
+
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_action_series(
+    records: Records,
+    *,
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    records = _set_index(records, "timestamp")
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for seed, data in records.items():
+        ax.plot(
+            data["position"],
+            label=str(seed),
+        )
+
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Action")
+    ax.set_yticks([-1, 0, 1])
+    ax.set_yticklabels(["Short", "Flat", "Long"])
+    ax.set_title("Agent's Actions" if label is None else f"Agent's Actions - {label}")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if len(records) > 1:
+        ax.legend()
+
+    fig.tight_layout()
+    plt.show()
+
+
+def _plot_heatmap(
+    data: pd.DataFrame,
+    *,
+    value: str,
+    persistence_min: int,
+    date_tick_step: int,
+    title: str,
+) -> None:
+    config.default_plt()
+    data = data.copy()
+
+    data["timestamp"] = pd.to_datetime(data["timestamp"])
+
+    close = data.loc[data["terminal"], "timestamp"].iloc[0]
+    close_min = close.hour * 60 + close.minute
+
+    # data = data.loc[~data["terminal"]].copy()
+
+    data["date"] = data["timestamp"].dt.normalize()
+
+    data["time_min"] = (
+        data["timestamp"].dt.hour * 60
+        + data["timestamp"].dt.minute
+        + data["timestamp"].dt.second / 60
+    )
+
+    values = data.pivot(
+        index="date",
+        columns="time_min",
+        values=value,
+    ).sort_index()
+
+    assert isinstance(values.index, pd.DatetimeIndex)
+
+    if values.empty:
+        raise ValueError("Evaluation contains no non-terminal observations.")
+
+    times = values.columns.to_numpy(float)
+
+    edges = np.append(
+        times,
+        min(times[-1] + persistence_min, close_min),
+    )
+
+    patch_kwargs = {
+        "edgecolor": "black",
+        "linewidth": 0.5,
+    }
+
+    match value:
+        case "position":
+            matrix = values.to_numpy(float)
+
+            colors = [
+                "#ff0000",
+                "#ffffff",
+                "#008000",
+            ]
+
+            cmap = ListedColormap(colors)
+            norm = BoundaryNorm(
+                [-1.5, -0.5, 0.5, 1.5],
+                cmap.N,
+            )
+
+            legend = [
+                Patch(facecolor=colors[0], label="Short", **patch_kwargs),
+                Patch(facecolor=colors[1], label="Flat", **patch_kwargs),
+                Patch(facecolor=colors[2], label="Long", **patch_kwargs),
+            ]
+
+        case "reward":
+            matrix = values.to_numpy(float)
+            matrix = np.where(
+                matrix > 0,
+                1,
+                np.where(matrix < 0, -1, 0),
+            )
+
+            colors = [
+                "#ff0000",
+                "#ffffff",
+                "#008000",
+            ]
+
+            cmap = ListedColormap(colors)
+            norm = BoundaryNorm(
+                [-1.5, -0.5, 0.5, 1.5],
+                cmap.N,
+            )
+
+            legend = [
+                Patch(facecolor=colors[0], label="Negative", **patch_kwargs),
+                Patch(facecolor=colors[1], label="Zero", **patch_kwargs),
+                Patch(facecolor=colors[2], label="Positive", **patch_kwargs),
+            ]
+
+        case _:
+            raise ValueError(f"Unsupported heatmap value: {value!r}")
+
+    config.default_plt()
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_HEATMAP)
+
+    ax.pcolormesh(
+        edges,
+        np.arange(len(values) + 1),
+        np.ma.masked_invalid(matrix),
+        cmap=cmap,
+        norm=norm,
+        shading="flat",
+    )
+
+    ax.vlines(
+        edges,
+        0,
+        len(values),
+        linewidth=0.2,
+        alpha=0.6,
+        color="black",
+    )
+
+    # ax.hlines(
+    #     np.arange(len(values) + 1),
+    #     edges[0],
+    #     edges[-1],
+    #     linewidth=0.2,
+    #     alpha=0.4,
+    #     color="black",
+    # )
+
+    ticks = np.arange(
+        np.ceil(times[0] / 60) * 60,
+        close_min + 1,
+        60,
+    )
+
+    ax.set(
+        xticks=ticks,
+        xticklabels=[f"{int(t // 60):02d}:{int(t % 60):02d}" for t in ticks],
+        xlim=(times[0], close_min),
+        yticks=(
+            np.arange(
+                0,
+                len(values),
+                date_tick_step,
+            )
+            + 0.5
+        ),
+        yticklabels=(values.index[::date_tick_step].strftime("%Y-%m-%d")),
+        ylim=(len(values), 0),
+        xlabel="Time of day",
+        ylabel="Date",
+    )
+
+    ax.set_title(title, size=12)
+
+    ax.spines[["top", "right"]].set_visible(False)
+
+    ax.legend(
+        handles=legend,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        frameon=False,
+    )
+
+    fig.tight_layout(
+        rect=(0, 0, 0.90, 1),
+    )
+
+    plt.show()
+
+
+def plot_action_heatmaps(
+    records: Records,
+    *,
+    persistence_min: int,
+    date_tick_step: int = 10,
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    for seed, data in records.items():
+        title = f"Trading Heatmap - Seed {seed}"
+
+        if label is not None:
+            title = f"{title} - {label}"
+
+        _plot_heatmap(
+            data,
+            value="position",
+            persistence_min=persistence_min,
+            date_tick_step=date_tick_step,
+            title=title,
+        )
+
+
+def plot_reward_heatmaps(
+    records: Records,
+    *,
+    persistence_min: int,
+    date_tick_step: int = 10,
+    label: str | None = None,
+) -> None:
+    config.default_plt()
+    for seed, data in records.items():
+        title = f"Reward Heatmap - Seed {seed}"
+
+        if label is not None:
+            title = f"{title} - {label}"
+
+        _plot_heatmap(
+            data,
+            value="reward",
+            persistence_min=persistence_min,
+            date_tick_step=date_tick_step,
+            title=title,
+        )
+
+
+def plot_comparison_pnl(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+    which: Literal["net", "gross"] = "net",
+) -> None:
+    config.default_plt()
+
+    records_a = _set_index(records_a, "timestamp")
+    records_b = _set_index(records_b, "timestamp")
+
+    data = {
+        label_a: pd.concat(
+            [
+                records_a[seed]["cum_reward" if which == "net" else "cum_gross_reward"].rename(seed)
+                for seed in records_a
+            ],
+            axis=1,
+        ),
+        label_b: pd.concat(
+            [
+                records_b[seed]["cum_reward" if which == "net" else "cum_gross_reward"].rename(seed)
+                for seed in records_b
+            ],
+            axis=1,
+        ),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, pnl in data.items():
+        mean = pnl.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(pnl.columns) > 1:
+            std = pnl.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title(f"Cumulative {which.capitalize()} PnL")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_pnl_distribution(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+
+    daily_a = pd.concat(
+        [agg_daily_pnl(data)["net_pnl"] for data in records_a.values()],
+        ignore_index=True,
+    )
+
+    daily_b = pd.concat(
+        [agg_daily_pnl(data)["net_pnl"] for data in records_b.values()],
+        ignore_index=True,
+    )
+
+    values = pd.concat([daily_a, daily_b]).dropna()
+
+    max_abs = values.abs().max()
+
+    bins = np.linspace(
+        -max_abs,
+        max_abs,
+        31,
+    )
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(14, 5),
+        sharex=True,
+        sharey=True,
+    )
+
+    axes[0].hist(daily_a.dropna(), bins=bins)
+    axes[0].set_title(label_a)
+    axes[0].set_xlabel("Daily Net PnL")
+    axes[0].set_ylabel("Frequency")
+
+    axes[1].hist(daily_b.dropna(), bins=bins)
+    axes[1].set_title(label_b)
+    axes[1].set_xlabel("Daily Net PnL")
+
+    for ax in axes:
+        # ax.axvline(
+        #     0,
+        #     linewidth=0.5,
+        #     color="black",
+        #     linestyle="--",
+        # )
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    fig.suptitle("Daily Net PnL Distribution")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_daily_pnl(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+
+    daily_a = {seed: agg_daily_pnl(data)["net_pnl"] for seed, data in records_a.items()}
+    daily_b = {seed: agg_daily_pnl(data)["net_pnl"] for seed, data in records_b.items()}
+
+    data = {
+        label_a: pd.concat(daily_a, axis=1),
+        label_b: pd.concat(daily_b, axis=1),
+    }
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, pnl in data.items():
+        mean = pnl.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(pnl.columns) > 1:
+            std = pnl.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("€")
+    ax.set_title("Daily Net PnL")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
+def plot_comparison_drawdown(
+    records_a: Records,
+    records_b: Records,
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+) -> None:
+    config.default_plt()
+    records_a = _set_index(records_a, "timestamp")
+    records_b = _set_index(records_b, "timestamp")
+
+    data = {}
+
+    for label, records in [
+        (label_a, records_a),
+        (label_b, records_b),
+    ]:
+        drawdowns = pd.concat(
+            [records[seed]["drawdown"].rename(seed) for seed in records],
+            axis=1,
+        )
+        data[label] = drawdowns
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE_DEFAULT)
+
+    for label, drawdown in data.items():
+        mean = drawdown.mean(axis=1)
+        ax.plot(mean, label=label)
+
+        if len(drawdown.columns) > 1:
+            std = drawdown.std(axis=1)
+            ax.fill_between(
+                mean.index,
+                mean - std,
+                mean + std,
+                alpha=0.2,
+            )
+
+    ax.axhline(0, linewidth=0.5, color="black", linestyle="--")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("€")
+    ax.set_title("Drawdown")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    plt.show()
+
+
+def print_summary(
+    metrics: pd.DataFrame,
+    *,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    n = 30
+    n_seeds = metrics.attrs["n_seeds"]
+
+    n_days = metrics.loc["n_days", "mean"]
+    steps_per_day = metrics.loc["steps_per_day", "mean"]
+    n_steps = metrics.loc["n_steps", "mean"]
+
+    if metadata:
+        print("\nSettings:")
+        for key, value in metadata.items():
+            print(f"- {key + ':':<{n}} {value}")
+
+    # fmt: off
+    print("\nSummary:")
+    print(f"- {'Seeds:':<{n}} " f"{n_seeds:,.0f}")
+    print(f"- {'Trading days:':<{n}} " f"{n_days:,.0f}")
+    print(f"- {'Steps per day:':<{n}} " f"{steps_per_day:,.0f}")
+    print(f"- {'Total steps:':<{n}} " f"{n_steps:,.0f}")
+
+    print("\nPnL:")
+    print(f"- {'Gross PnL:':<{n}} " f"{_format_metric(metrics, 'gross_pnl')} €")
+    print(f"- {'Net PnL:':<{n}} " f"{_format_metric(metrics, 'net_pnl')} €")
+    print(f"- {'Cost:':<{n}} " f"{_format_metric(metrics, 'cost')} €")
+    print(f"- {'Gross PnL / day:':<{n}} " f"{_format_metric(metrics, 'gross_pnl_per_day')} €")
+    print(f"- {'Net PnL / day:':<{n}} " f"{_format_metric(metrics, 'net_pnl_per_day')} €")
+
+    print("\nRisk:")
+    print(f"- {'Daily PnL volatility:':<{n}} " f"{_format_metric(metrics, 'daily_pnl_std')} €")
+    print(f"- {'Annualized return:':<{n}} " f"{_format_percentage(metrics, 'annualized_return')}")
+    print(f"- {'Annualized volatility:':<{n}} " f"{_format_percentage(metrics, 'annualized_volatility')}")
+    print(f"- {'Sharpe ratio:':<{n}} " f"{_format_metric(metrics, 'sharpe')}")
+    print(f"- {'Sortino ratio:':<{n}} " f"{_format_metric(metrics, 'sortino')}")
+    print(f"- {'Maximum drawdown:':<{n}} " f"{_format_metric(metrics, 'max_drawdown')} €")
+    print(f"- {'Worst day:':<{n}} " f"{_format_metric(metrics, 'worst_day')} €")
+    print(f"- {'Best day:':<{n}} " f"{_format_metric(metrics, 'best_day')} €")
+    print(f"- {'Profitable days:':<{n}} " f"{_format_percentage(metrics, 'profitable_days')}")
+    print(f"- {'Losing days:':<{n}} " f"{_format_percentage(metrics, 'losing_days')}")
+
+    print("\nActions:")
+    print(f"- {'Short:':<{n}} " f"{_format_percentage(metrics, 'short_pct')}")
+    print(f"- {'Flat:':<{n}} " f"{_format_percentage(metrics, 'flat_pct')}")
+    print(f"- {'Long:':<{n}} " f"{_format_percentage(metrics, 'long_pct')}")
+
+    print("\nTrades:")
+    print(f"- {'Number of trades:':<{n}} " f"{_format_metric(metrics, 'trades')}")
+    print(f"- {'Turnover:':<{n}} " f"{_format_metric(metrics, 'turnover')}")
+    print(f"- {'Profitable trades:':<{n}} " f"{_format_metric(metrics, 'profitable_trades')}")
+    print(f"- {'Neutral trades:':<{n}} " f"{_format_metric(metrics, 'neutral_trades')}")
+    print(f"- {'Losing trades:':<{n}} " f"{_format_metric(metrics, 'losing_trades')}")
+    print(f"- {'Win rate:':<{n}} " f"{_format_percentage(metrics, 'win_rate')}")
+
+    print("\nReturns:")
+    print(f"- {'Positive returns:':<{n}} " f"{_format_percentage(metrics, 'positive_returns')}")
+    print(f"- {'Zero returns:':<{n}} " f"{_format_percentage(metrics, 'zero_returns')}")
+    print(f"- {'Negative returns:':<{n}} " f"{_format_percentage(metrics, 'negative_returns')}")
+
+    print("\nCost Analysis:")
+    print(f"- {'Break-even cost per trade:':<{n}} " f"{_format_metric(metrics, 'break_even_cost_per_trade')} €")
+    print(f"- {'CTD cost per trade:':<{n}} " f"{_format_metric(metrics, 'ctd_cost_per_trade')} €")
+    print(f"- {'FUT cost per trade:':<{n}} " f"{_format_metric(metrics, 'fut_cost_per_trade')} €")
+    print(f"- {'Basis cost per trade:':<{n}} " f"{_format_metric(metrics, 'basis_cost_per_trade')} €")
+    # fmt: on
+
+
+def _format_metric(
+    metrics: pd.DataFrame,
+    name: str,
+) -> str:
+    mean = metrics.loc[name, "mean"]
+
+    if metrics.attrs["n_seeds"] == 1:
+        return f"{mean:,.2f}"
+
+    std = metrics.loc[name, "std"]
+
+    if pd.isna(std):
+        return f"{mean:,.2f}"
+
+    return f"{mean:,.2f} ± {std:,.2f}"
+
+
+def _format_percentage(
+    metrics: pd.DataFrame,
+    name: str,
+) -> str:
+    mean = metrics.loc[name, "mean"] * 100  # type: ignore
+
+    if metrics.attrs["n_seeds"] == 1:
+        return f"{mean:.2f} %"
+
+    std = metrics.loc[name, "std"] * 100  # type: ignore
+
+    if pd.isna(std):
+        return f"{mean:.2f} %"
+
+    return f"{mean:.2f} ± {std:.2f} %"
+
+
+def _format_comparison(
+    comparison: pd.DataFrame,
+) -> pd.DataFrame:
+    formatted = comparison.astype(object)
+
+    euro_metrics = {
+        "gross_pnl",
+        "net_pnl",
+        "cost",
+        "gross_pnl_per_day",
+        "net_pnl_per_day",
+        "cost_per_day",
+        "daily_pnl_mean",
+        "daily_pnl_std",
+        "max_drawdown",
+        "worst_day",
+        "best_day",
+    }
+
+    percentage_metrics = {
+        "profitable_days",
+        "neutral_days",
+        "losing_days",
+        "short_pct",
+        "flat_pct",
+        "long_pct",
+        "win_rate",
+        "positive_rewards",
+        "zero_rewards",
+        "negative_rewards",
+    }
+
+    integer_metrics = {
+        "short",
+        "flat",
+        "long",
+        "trades",
+        "turnover",
+        "profitable_trades",
+        "neutral_trades",
+        "losing_trades",
+    }
+
+    ratio_metrics = {
+        "sharpe",
+        "sortino",
+    }
+
+    for metric in formatted.index:
+        if metric in euro_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(lambda x: f"€{x:,.2f}")
+
+        elif metric in percentage_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(
+                lambda x: f"{100 * x:.2f}%" if pd.notna(x) else "—"
+            )
+
+        elif metric in integer_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(lambda x: f"{x:,.0f}")
+
+        elif metric in ratio_metrics:
+            formatted.loc[metric] = comparison.loc[metric].map(
+                lambda x: f"{x:.2f}" if pd.notna(x) else "—"
+            )
+
+    # formatted["relative"] = comparison["Fve"].map(
+    #     lambda x: f"{100 * x:.2f}%"
+    #     if pd.notna(x)
+    #     else "—"
+    # )
+
+    return formatted
+
+
+def report(
+    records: Records,
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    metadata = {} if metadata is None else metadata
+
+    label = metadata.get("set")
+    persistence_min = metadata.get("persistence_min", 10)
+    which: PnLType = metadata.get("which", "both")
+
+    heatmap_records = {seed: derive_records(data) for seed, data in records.items()}
+
+    no_reset_records = {
+        seed: derive_records(remove_reset_observations(data)) for seed, data in records.items()
+    }
+
+    summary = summarize(no_reset_records)
+
+    print_summary(
+        summary,
+        metadata=metadata,
+    )
+
+    plot_pnl(
+        no_reset_records,
+        label=label,
+        which=which,
+    )
+
+    plot_pnl_distribution(
+        no_reset_records,
+        label=label,
+    )
+
+    plot_daily_pnl(
+        no_reset_records,
+        label=label,
+    )
+
+    plot_drawdown(
+        no_reset_records,
+        label=label,
+    )
+
+    if len(records) > 1:
+        plot_pnl_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
+
+        plot_daily_pnl_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
+
+        plot_drawdown_per_seed(
+            no_reset_records,
+            which="net",
+            label=label,
+        )
+
+    print()
+    print()
+    print("Action Heatmap:")
+
+    plot_action_heatmaps(
+        heatmap_records,
+        persistence_min=persistence_min,
+        label=label,
+    )
+
+    print()
+    print()
+    print("Reward Heatmap:")
+
+    plot_reward_heatmaps(
+        heatmap_records,
+        persistence_min=persistence_min,
+        label=label,
+    )
+
+
+def _set_index(records: Records, column: str) -> Records:
+    return {seed: record.set_index(column) for seed, record in records.items()}
+
+
+def load_metadata(
+    path: Path,
+    *,
+    batch_size: int,
+    clip_range: float,
+    seeds: list[int],
+    split: str,
+    env: Literal["random", "serial"] = "serial",
+) -> dict[str, Any]:
+    config_file = path / "config.json"
+
+    if not config_file.exists():
+        raise FileNotFoundError(config_file)
+
+    with config_file.open() as file:
+        config = json.load(file)
+
+    experiment = config["experiment"]
+    dataset = config["dataset"]
+    environment = config[f"env_{env}"]
+
+    return {
+        # Experiment
+        "split": split,
+        "split_month": experiment["split_month"],
+        "total_timesteps": experiment["total_timesteps"],
+        "batch_size": batch_size,
+        "clip_range": clip_range,
+        "normalize_market_obs": experiment["normalize_market_obs"],
+        # Dataset
+        "ticker": dataset["ticker"],
+        "contract_mode": dataset["contract_mode"],
+        "ctd_contracts": dataset["ctd_contracts"],
+        "market_set": dataset["market_set"],
+        "calendar_set": dataset["calendar_set"],
+        "calendar_enc_set": dataset["calendar_enc_set"],
+        # Environment
+        "reset_mode": environment["reset_mode"],
+        "price_mode": environment["price_mode"],
+        "persistence_min": environment["persistence_min"],
+        "position_encoding": environment["position_encoding"],
+        "trajectory_min": environment["trajectory_min"],
+        # Seeds
+        "seeds": seeds,
+    }
+
+
+def compare_metadata(
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    keys = sorted(
+        set(metadata_a) | set(metadata_b),
+    )
+
+    different = []
+    same = []
+
+    for key in keys:
+        value_a = metadata_a.get(key)
+        value_b = metadata_b.get(key)
+
+        if value_a == value_b:
+            same.append(
+                {
+                    "parameter": key,
+                    "value": value_a,
+                }
+            )
+        else:
+            different.append(
+                {
+                    "parameter": key,
+                    "run_a": value_a,
+                    "run_b": value_b,
+                }
+            )
+
+    return (
+        pd.DataFrame(different),
+        pd.DataFrame(same),
+    )
+
+
+def print_metadata_comparison(
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+) -> None:
+    different, same = compare_metadata(
+        metadata_a,
+        metadata_b,
+    )
+
+    different = different.set_index("parameter")
+    same = same.set_index("parameter")
+
+    print("Configuration Comparison")
+
+    print("\nDifferent:")
+    display(different if not different.empty else pd.DataFrame())
+
+    print("\nSame:")
+    display(same if not same.empty else pd.DataFrame())
+
+
+def compare_report(
+    records_a: Records,
+    records_b: Records,
+    metadata_a: dict[str, Any],
+    metadata_b: dict[str, Any],
+    *,
+    label_a: str = "Run A",
+    label_b: str = "Run B",
+    which: Literal["net", "gross"] = "net",
+) -> None:
+    records_a = prepare_records(records_a)
+    records_b = prepare_records(records_b)
+
+    summary_a = summarize(records_a)
+    summary_b = summarize(records_b)
+
+    print_metadata_comparison(
+        metadata_a,
+        metadata_b,
+    )
+
+    comparison = compare_summaries(
+        summary_a,
+        summary_b,
+    )
+
+    print("\nPerformance Comparison:")
+    display(_format_comparison(comparison))
+
+    plot_comparison_pnl(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+        which=which,
+    )
+
+    plot_comparison_daily_pnl(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )
+
+    plot_comparison_drawdown(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )
+
+    plot_comparison_pnl_distribution(
+        records_a,
+        records_b,
+        label_a=label_a,
+        label_b=label_b,
+    )

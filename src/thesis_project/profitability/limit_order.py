@@ -127,7 +127,7 @@ def load_records(
     run: int,
     batch_size: int = 64,
     clip_range: float = 0.2,
-) -> rl.report.Records:
+) -> rl.report_trading.Records:
     root = config.RES_EXP_DIR / ticker / "rl"
     folder = f"run-{run:03d}"
     path = root / folder
@@ -135,7 +135,7 @@ def load_records(
     with open(path / "config.json", "r") as f:
         settings = json.load(f)
 
-    records_train = rl.report.load_records(
+    records_train = rl.report_trading.load_records(
         path,
         batch_size=batch_size,
         clip_range=clip_range,
@@ -143,7 +143,7 @@ def load_records(
         split="train",
     )
 
-    records_test = rl.report.load_records(
+    records_test = rl.report_trading.load_records(
         path,
         batch_size=batch_size,
         clip_range=clip_range,
@@ -151,7 +151,7 @@ def load_records(
         split="test",
     )
 
-    records: rl.report.Records = {}
+    records: rl.report_trading.Records = {}
     for seed in settings["seeds"]:
         record_train = records_train[seed]
         record_test = records_test[seed]
