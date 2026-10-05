@@ -129,7 +129,7 @@ def _prepare_record(records: pd.DataFrame) -> pd.DataFrame:
 
     terminal["execution_time_sec"] = (
         terminal["execution_time"] - terminal["opening_time"]
-    ).dt.total_seconds()
+    ).dt.total_seconds()  # type: ignore
 
     return terminal.reset_index(drop=True)
 
