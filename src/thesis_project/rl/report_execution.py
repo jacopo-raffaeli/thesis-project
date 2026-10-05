@@ -123,9 +123,9 @@ def _prepare_record(records: pd.DataFrame) -> pd.DataFrame:
     if terminal["episode"].duplicated().any():
         raise ValueError("Multiple terminal observations found for an episode")
 
-    opening_times = data.groupby("episode", sort=False)["timestamp"].first().rename("opening_time")
+    opening_times = data.groupby("episode", sort=False)["timestamp"].first()
 
-    terminal = terminal.join(opening_times, on="episode")
+    terminal["opening_time"] = terminal["episode"].map(opening_times)
 
     terminal["execution_time_sec"] = (
         terminal["execution_time"] - terminal["opening_time"]
@@ -147,7 +147,7 @@ def _execution_improvement(
     """Execution improvement relative to the benchmark, in ticks."""
     if side == "bid":
         return (records["benchmark_price"] - records["execution_price"]) / tick_size
-    else:
+    if side == "ask":
         return (records["execution_price"] - records["benchmark_price"]) / tick_size
 
 
@@ -267,7 +267,7 @@ def _format_percentage(
     metrics: pd.DataFrame,
     name: str,
 ) -> str:
-    mean = metrics.loc[name, "mean"] * 100
+    mean = metrics.loc[name, "mean"] * 100  # type: ignore
 
     if metrics.attrs["n_seeds"] == 1:
         return f"{mean:.2f}%"
@@ -277,7 +277,7 @@ def _format_percentage(
     if pd.isna(std):
         return f"{mean:.2f}%"
 
-    return f"{mean:.2f} ± {std * 100:.2f}%"
+    return f"{mean:.2f} ± {std * 100:.2f}%"  # type: ignore
 
 
 def format_summary_table(
@@ -322,7 +322,7 @@ def format_summary_table(
 
     for label, metric, metric_type in rows:
         for side, column in (("bid", "Bid"), ("ask", "Ask")):
-            summary = summaries[side]
+            summary = summaries[side]  # type: ignore
 
             if metric_type == "percentage":
                 value = _format_percentage(summary, metric)
@@ -386,7 +386,7 @@ def plot_execution_improvement(
     )
 
     status_colors = {
-        "market": "tab:blue",
+        "market": "tab:orange",
         "limit": "tab:green",
         "forced": "tab:red",
     }
@@ -470,12 +470,12 @@ def report(
     label = None if metadata is None else metadata.get("split")
 
     print_summary(
-        summaries,
+        summaries,  # type: ignore
         metadata=metadata,
     )
 
     plot_execution_improvement(
-        prepared,
+        prepared,  # type: ignore
         tick_size=tick_size,
         label=label,
     )
