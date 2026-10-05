@@ -7,7 +7,7 @@ from . import evaluation_execution as evaluation_execution
 from . import evaluation_trading as evaluation_trading
 from . import features as features
 from . import policies as policies
-from . import report_evaluation as report_evaluation
+from . import report_execution as report_execution
 from . import report_trading as report_trading
 from . import train_execution as train_execution
 from . import train_trading as train_trading
