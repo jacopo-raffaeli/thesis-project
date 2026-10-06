@@ -201,7 +201,7 @@ class ExecutionEnv(gym.Env, ABC):
                 dtype=self.config.obs_dtype
             ),
             "market_price": np.asarray(
-                [self._get_market_price(current_time)],
+                [market_price],
                 dtype=self.config.obs_dtype,
             ),
             "benchmark_distance": np.asarray([benchmark_distance], dtype=self.config.obs_dtype),
