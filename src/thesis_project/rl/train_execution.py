@@ -37,13 +37,13 @@ def train_model(
         seed=seed,
         batch_size=batch_size,
         clip_range=clip_range,
-        # tensorboard_log=tensorboard_log,
+        tensorboard_log=tensorboard_log,
     )
 
     model.learn(
         total_timesteps=total_timesteps,
         progress_bar=True,
-        # tb_log_name=tb_log_name,
+        tb_log_name=tb_log_name,
     )
 
     return model
@@ -130,24 +130,24 @@ def main() -> None:
     experiment_config = ExperimentConfig(
         split_month="2022-10",
         normalize_market_obs=True,
-        n_seeds=1,
-        total_timesteps=10_000,
-        batch_sizes=(64,),
-        clip_ranges=(0.2,),
+        # n_seeds=1,
+        # total_timesteps=10_000,
+        # batch_sizes=(64,),
+        # clip_ranges=(0.2,),
     )
 
     dataset_config = rl.dataset.DatasetConfig(
         ticker="fbtp",
         ctd_contracts=1.0,
         contract_mode="round",
-        market_set="dummy",
+        market_set="xgb_cls",
         calendar_set="default",
         calendar_enc_set="default",
     )
 
     horizon_min = 10
     step_sec = 10
-    max_n_tick = 5
+    max_n_tick = 10
     tick_size = 0.01
 
     env_config_random = ExecutionEnvConfig(
@@ -221,28 +221,28 @@ def main() -> None:
         seeds=seeds,
     )
 
-    for side in get_args(config.LobSide):
-        for batch_size, clip_range in product(
-            experiment_config.batch_sizes, experiment_config.clip_ranges
-        ):
-            Parallel(
-                n_jobs=len(seeds),
-                backend="loky",
-            )(
-                delayed(train_evaluate)(
-                    dataset_train,
-                    dataset_test,
-                    env_config_random,
-                    env_config_serial,
-                    experiment_config,
-                    side,
-                    path,
-                    batch_size,
-                    clip_range,
-                    seed,
-                )
-                for seed in seeds
+    n_jobs = len(seeds) * len(get_args(config.LobSide))
+    for batch_size, clip_range in product(
+        experiment_config.batch_sizes, experiment_config.clip_ranges
+    ):
+        Parallel(
+            n_jobs=n_jobs,
+            backend="loky",
+        )(
+            delayed(train_evaluate)(
+                dataset_train,
+                dataset_test,
+                env_config_random,
+                env_config_serial,
+                experiment_config,
+                side,
+                path,
+                batch_size,
+                clip_range,
+                seed,
             )
+            for seed, side in product(seeds, get_args(config.LobSide))
+        )
 
 
 if __name__ == "__main__":
