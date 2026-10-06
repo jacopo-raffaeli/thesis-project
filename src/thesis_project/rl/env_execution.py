@@ -94,6 +94,12 @@ class ExecutionEnv(gym.Env, ABC):
                 shape=(1,),
                 dtype=self.config.obs_dtype,
             ),
+            "benchmark_distance": gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(1,),
+                dtype=self.config.obs_dtype,
+            ),
             "steps_remaining": gym.spaces.Box(
                 low=0,
                 high=self.config.n_steps,
@@ -187,6 +193,8 @@ class ExecutionEnv(gym.Env, ABC):
     def _get_observation(self) -> dict[str, np.ndarray]:
         ep_dataset = self._get_ep_dataset()
         current_time = self._get_current_time()
+        market_price = self._get_market_price(current_time)
+        benchmark_distance = self._get_benchmark_distance(market_price)
 
         observation = {
             "market": ep_dataset.market_features.loc[current_time].to_numpy(
@@ -196,6 +204,7 @@ class ExecutionEnv(gym.Env, ABC):
                 [self._get_market_price(current_time)],
                 dtype=self.config.obs_dtype,
             ),
+            "benchmark_distance": np.asarray([benchmark_distance], dtype=self.config.obs_dtype),
             "steps_remaining": np.asarray(
                 [self.steps_remaining],
                 dtype=self.config.obs_dtype,
@@ -597,6 +606,12 @@ class ExecutionEnv(gym.Env, ABC):
     def _get_reward(self) -> int:
         """Return the reward for the completed execution."""
 
+    @abstractmethod
+    def _get_benchmark_distance(self, market_price: float) -> float:
+        """Return the current market price relative to the opening benchmark,
+        measured in ticks and expressed as execution improvement.
+        """
+
     # Properties
     @property
     def _closing_time(self) -> pd.Timestamp:
@@ -697,6 +712,9 @@ class BidExecutionEnv(ExecutionEnv):
 
         return round((self.benchmark_price - execution_price) / self.config.tick_size)
 
+    def _get_benchmark_distance(self, market_price: float) -> float:
+        return (self.benchmark_price - market_price) / self.config.tick_size
+
 
 class AskExecutionEnv(ExecutionEnv):
     """Execution environment for selling the CTD using passive ask orders."""
@@ -760,6 +778,9 @@ class AskExecutionEnv(ExecutionEnv):
             execution_price = result.execution_price
 
         return round((execution_price - self.benchmark_price) / self.config.tick_size)
+
+    def _get_benchmark_distance(self, market_price: float) -> float:
+        return (market_price - self.benchmark_price) / self.config.tick_size
 
 
 if __name__ == "__main__":
