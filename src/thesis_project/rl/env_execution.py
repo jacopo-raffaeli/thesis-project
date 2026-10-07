@@ -1,4 +1,3 @@
-import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -21,8 +20,7 @@ ExecutionStatus = Literal[
 @dataclass(frozen=True, slots=True)
 class ExecutionRequest:
     side: config.LobSide
-    date: datetime.date
-    time: datetime.time
+    timestamp: pd.Timestamp
     quantity: float
 
     def __post_init__(self):
