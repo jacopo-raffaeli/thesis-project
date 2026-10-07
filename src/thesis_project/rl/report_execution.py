@@ -150,6 +150,8 @@ def _execution_improvement(
     if side == "ask":
         return (records["execution_price"] - records["benchmark_price"]) / tick_size
 
+    raise ValueError(f"Unknown execution side: {side}")
+
 
 def _passive_quote_distances(
     records: pd.DataFrame,
@@ -234,7 +236,12 @@ def summarize(
     tick_size: float,
 ) -> pd.DataFrame:
     metrics = {
-        seed: run_metrics(data, side=side, tick_size=tick_size) for seed, data in records.items()
+        seed: run_metrics(
+            data,
+            side=side,
+            tick_size=tick_size,
+        )
+        for seed, data in records.items()
     }
 
     summary = aggregate_metrics(metrics)
@@ -403,17 +410,14 @@ def plot_execution_improvement(
             tick_size=tick_size,
         )
 
-        data = data.sort_values(["seed", "episode"]).reset_index(drop=True)
-        data["plot_episode"] = np.arange(1, len(data) + 1)
-
         for status, color in status_colors.items():
             subset = data.loc[data["status"] == status]
 
             ax.scatter(
-                subset["plot_episode"],
+                subset["opening_time"],
                 subset["execution_improvement"],
                 s=10,
-                alpha=0.6,
+                alpha=0.4,
                 color=color,
                 label=status.capitalize(),
             )
@@ -425,7 +429,7 @@ def plot_execution_improvement(
             linestyle="--",
         )
 
-        ax.set_xlabel("Episode")
+        ax.set_xlabel("Opening Time")
         ax.set_title(side.capitalize())
 
         ax.spines["top"].set_visible(False)
@@ -436,6 +440,234 @@ def plot_execution_improvement(
     axes[0].set_ylabel("Execution improvement (ticks)")
 
     title = "Execution Improvement per Episode"
+    if label is not None:
+        title += f" - {label}"
+
+    fig.suptitle(title)
+    fig.tight_layout()
+
+    plt.show()
+
+
+def _distribution_bins(
+    values: pd.Series,
+    *,
+    bin_width: int,
+) -> np.ndarray:
+    """Create integer-aligned bins with zero as a bin boundary."""
+    if bin_width <= 0 or not isinstance(bin_width, int):
+        raise ValueError("bin_width must be a positive integer")
+
+    values = values.dropna()
+
+    if values.empty:
+        return np.array([-bin_width, 0, bin_width], dtype=float)
+
+    minimum = int(np.floor(values.min() / bin_width) * bin_width)
+    maximum = int(np.ceil(values.max() / bin_width) * bin_width)
+
+    if minimum == maximum:
+        minimum -= bin_width
+        maximum += bin_width
+
+    if minimum > 0:
+        minimum = 0
+
+    if maximum < 0:
+        maximum = 0
+
+    return np.arange(
+        minimum,
+        maximum + bin_width,
+        bin_width,
+        dtype=float,
+    )
+
+
+def _plot_distribution(
+    ax: plt.Axes,  # type: ignore
+    values: pd.Series,
+    *,
+    bins: np.ndarray,
+    color: str,
+    label: str,
+    alpha: float,
+) -> None:
+    """Plot a normalized execution-improvement distribution."""
+    values = values.dropna()
+
+    if values.empty:
+        return
+
+    # weights = np.full(
+    #     len(values),
+    #     1 / len(values),
+    # )
+
+    ax.hist(
+        values,
+        bins=bins,  # type: ignore
+        # weights=weights,
+        color=color,
+        alpha=alpha,
+        label=label,
+        density=True,
+    )
+
+
+def plot_execution_improvement_distributions(
+    records: ExecutionRecords,
+    *,
+    tick_size: float,
+    bin_width: int = 1,
+    label: str | None = None,
+) -> None:
+    """Plot execution-improvement distributions by execution status."""
+    config.default_plt()
+
+    prepared = {side: prepare_records(records[side]) for side in ("bid", "ask")}
+
+    status_colors = {
+        "market": "tab:orange",
+        "limit": "tab:green",
+        "forced": "tab:red",
+    }
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(14, 5),
+        sharey=True,
+    )
+
+    for ax, side in zip(axes, ("bid", "ask")):
+        data = pd.concat(
+            prepared[side].values(),
+            ignore_index=True,
+        )
+
+        data["execution_improvement"] = _execution_improvement(
+            data,
+            side=side,
+            tick_size=tick_size,
+        )
+
+        bins = _distribution_bins(
+            data["execution_improvement"],
+            bin_width=bin_width,
+        )
+
+        for status, color in status_colors.items():
+            values = data.loc[
+                data["status"] == status,
+                "execution_improvement",
+            ]
+
+            _plot_distribution(
+                ax,
+                values,
+                bins=bins,
+                color=color,
+                label=status.capitalize(),
+                alpha=0.45,
+            )
+
+        ax.axvline(
+            0,
+            linewidth=0.5,
+            color="black",
+            linestyle="--",
+        )
+
+        ax.set_xlabel("Execution improvement (ticks)")
+        ax.set_title(side.capitalize())
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        ax.legend(loc="best")
+
+    # axes[0].set_ylabel("Probability")
+
+    # for ax in axes:
+    #     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+
+    title = "Execution Improvement Distribution by Status"
+    if label is not None:
+        title += f" - {label}"
+
+    fig.suptitle(title)
+    fig.tight_layout()
+
+    plt.show()
+
+
+def plot_execution_improvement_overall(
+    records: ExecutionRecords,
+    *,
+    tick_size: float,
+    bin_width: int = 1,
+    label: str | None = None,
+) -> None:
+    """Plot the overall execution-improvement distribution."""
+    config.default_plt()
+
+    prepared = {side: prepare_records(records[side]) for side in ("bid", "ask")}
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(14, 5),
+        sharey=True,
+    )
+
+    for ax, side in zip(axes, ("bid", "ask")):
+        data = pd.concat(
+            prepared[side].values(),
+            ignore_index=True,
+        )
+
+        data["execution_improvement"] = _execution_improvement(
+            data,
+            side=side,
+            tick_size=tick_size,
+        )
+
+        bins = _distribution_bins(
+            data["execution_improvement"],
+            bin_width=bin_width,
+        )
+
+        _plot_distribution(
+            ax,
+            data["execution_improvement"],
+            bins=bins,
+            color="tab:blue",
+            label="Overall",
+            alpha=1,
+        )
+
+        ax.axvline(
+            0,
+            linewidth=0.5,
+            color="black",
+            linestyle="--",
+        )
+
+        ax.set_xlabel("Execution improvement (ticks)")
+        ax.set_title(side.capitalize())
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        ax.legend(loc="best")
+
+    # axes[0].set_ylabel("Probability")
+
+    # for ax in axes:
+    #     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
+
+    title = "Overall Execution Improvement Distribution"
     if label is not None:
         title += f" - {label}"
 
@@ -475,6 +707,18 @@ def report(
     )
 
     plot_execution_improvement(
+        prepared,  # type: ignore
+        tick_size=tick_size,
+        label=label,
+    )
+
+    plot_execution_improvement_distributions(
+        prepared,  # type: ignore
+        tick_size=tick_size,
+        label=label,
+    )
+
+    plot_execution_improvement_overall(
         prepared,  # type: ignore
         tick_size=tick_size,
         label=label,
