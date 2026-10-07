@@ -33,6 +33,7 @@ def train_model(
 ) -> PPO:
     model = PPO(
         policy="MultiInputPolicy",
+        gamma=1,
         env=env,
         seed=seed,
         batch_size=batch_size,
